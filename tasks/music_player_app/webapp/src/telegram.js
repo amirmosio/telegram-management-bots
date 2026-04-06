@@ -755,3 +755,200 @@ export async function findOrCreatePlaylistGroup() {
     }
     return null;
 }
+
+// ════════════════════════════════════
+//  MUSIC SEARCH (via @moozikestan_bot)
+// ════════════════════════════════════
+
+export async function ensureBotInGroup(groupId) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    try {
+        const bot = await client.getEntity('moozikestan_bot');
+        await client.invoke(new Api.channels.InviteToChannel({
+            channel: entity,
+            users: [bot],
+        }));
+    } catch (e) {
+        if (!e.message?.includes('USER_ALREADY_PARTICIPANT')) {
+            console.warn('Bot invite:', e.message);
+        }
+    }
+}
+
+// Rename General topic (id=1) to "Search" — called once during init
+export async function renameGeneralToSearch(groupId) {
+    if (localStorage.getItem('general_renamed')) return;
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    try {
+        await client.invoke(new Api.channels.EditForumTopic({
+            channel: entity,
+            topicId: 1,
+            title: 'Search 🔎',
+        }));
+    } catch (e) {
+        console.warn('Rename General failed:', e.message);
+    }
+    localStorage.setItem('general_renamed', '1');
+}
+
+// Send search query, poll for the bot's text response, parse the result list
+export async function searchMusic(groupId, query) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+
+    // Send in the Search topic (General renamed, id=1)
+    const sent = await client.sendMessage(entity, {
+        message: '/' + query,
+        replyTo: 1,
+    });
+
+    // Poll for the bot's text reply (contains the result list)
+    const sentId = sent.id;
+    const startTime = Date.now();
+    const delays = [1500, 2000, 2500, 3000, 3000, 3000, 3000];
+    let attempt = 0;
+
+    while (Date.now() - startTime < 25000) {
+        const delay = delays[Math.min(attempt, delays.length - 1)];
+        await new Promise(r => setTimeout(r, delay));
+        attempt++;
+
+        try {
+            // Fetch recent messages — try both with and without replyTo
+            // (some GramJS builds don't filter by replyTo correctly)
+            for await (const msg of client.iterMessages(entity, { limit: 30 })) {
+                if (msg.id <= sentId) break;
+                const text = msg.message || '';
+                console.log(`[search] poll msg #${msg.id}: ${text.substring(0, 80)}...`);
+                if (text.includes('/dl_') || text.includes('/dlc_')) {
+                    console.log('[search] Found bot response, parsing...');
+                    return _parseSearchResults(text);
+                }
+            }
+        } catch (e) {
+            console.warn('Search poll error:', e.message);
+        }
+    }
+
+    return [];
+}
+
+// Parse the bot's result list text into structured items
+function _parseSearchResults(text) {
+    const results = [];
+    // Match lines like: "10. BASS TEST 1 - Racon..." followed by "/dl_XXXX" or "/dlc_XXXX"
+    const blocks = text.split(/‎?-{5,}/); // split by dashed separators
+
+    for (const block of blocks) {
+        const dlMatch = block.match(/\/(dl_\w+|dlc_\w+)/);
+        if (!dlMatch) continue;
+
+        const dlCmd = '/' + dlMatch[1];
+
+        // Extract number + title line: "10. Title - Artist..."
+        const titleMatch = block.match(/(?:🎯\s*)?(\d+)\.\s*(.+)/);
+        if (!titleMatch) continue;
+
+        const rank = parseInt(titleMatch[1]);
+        const rawTitle = titleMatch[2].trim();
+
+        // Extract duration
+        const durMatch = block.match(/🕒\s*(\d+):(\d+)/);
+        const duration = durMatch ? parseInt(durMatch[1]) * 60 + parseInt(durMatch[2]) : 0;
+
+        // Extract size
+        const sizeMatch = block.match(/💾\s*([\d.]+)\s*MB/);
+        const sizeMB = sizeMatch ? parseFloat(sizeMatch[1]) : 0;
+
+        // Extract bitrate
+        const brMatch = block.match(/📀\s*(\d+)/);
+        const bitrate = brMatch ? parseInt(brMatch[1]) : 0;
+
+        // Split title into artist - title if possible
+        let title = rawTitle;
+        let artist = '';
+        for (const sep of [' - ', ' – ', ' — ']) {
+            if (rawTitle.includes(sep)) {
+                const parts = rawTitle.split(sep);
+                artist = parts[0].trim();
+                title = parts.slice(1).join(sep).trim();
+                break;
+            }
+        }
+
+        results.push({ rank, title, artist, duration, sizeMB, bitrate, dlCmd });
+    }
+
+    // Sort by rank (1 = best)
+    results.sort((a, b) => a.rank - b.rank);
+    return results;
+}
+
+// Cache of dlCmd -> track meta (so we don't re-request)
+const _dlCache = {};
+
+// Download a specific track by sending /dl_XXX command, wait for audio
+// If the track was already downloaded before, return cached result
+export async function downloadSearchResult(groupId, dlCmd) {
+    // Check if we already have this track
+    if (_dlCache[dlCmd]) return _dlCache[dlCmd];
+
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+
+    // First scan recent messages in search topic for an existing audio matching this dlCmd
+    try {
+        for await (const msg of client.iterMessages(entity, { limit: 50 })) {
+            // Check if this message was a reply to our dlCmd
+            const meta = _extractAudioMeta(msg);
+            if (meta) {
+                // Check if the previous message is the dlCmd text
+                const prevMsgs = await client.getMessages(entity, { ids: [msg.id - 1] });
+                const prev = prevMsgs?.[0];
+                if (prev && (prev.message || '').trim() === dlCmd) {
+                    _msgCache[`${groupId}:${msg.id}`] = msg;
+                    _dlCache[dlCmd] = meta;
+                    return meta;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Scan existing failed:', e.message);
+    }
+
+    // Not found — send the download command
+    const sent = await client.sendMessage(entity, {
+        message: dlCmd,
+        replyTo: 1,
+    });
+
+    // Poll for the audio file response
+    const sentId = sent.id;
+    const startTime = Date.now();
+    const delays = [2000, 2500, 3000, 3000, 3000, 3000, 3000];
+    let attempt = 0;
+
+    while (Date.now() - startTime < 30000) {
+        const delay = delays[Math.min(attempt, delays.length - 1)];
+        await new Promise(r => setTimeout(r, delay));
+        attempt++;
+
+        try {
+            for await (const msg of client.iterMessages(entity, { limit: 10 })) {
+                if (msg.id <= sentId) break;
+                const meta = _extractAudioMeta(msg);
+                if (meta) {
+                    _msgCache[`${groupId}:${msg.id}`] = msg;
+                    _dlCache[dlCmd] = meta;
+                    return meta;
+                }
+            }
+        } catch (e) {
+            console.warn('Download poll error:', e.message);
+        }
+    }
+
+    return null;
+}

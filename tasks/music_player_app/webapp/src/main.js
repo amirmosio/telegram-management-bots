@@ -34,6 +34,10 @@ let repeatOn = false;
 
 let activeTab = 'playlists';
 
+// Search state
+let searchTracks = [];
+let _searchAbort = null;
+
 // Artwork/lyrics save state
 let currentArtworkFromInternet = false;
 let currentLyricsFromInternet = false;
@@ -75,6 +79,10 @@ const playlistsContainer = $('playlists-container');
 const playlistTracksSearch = $('playlist-tracks-search');
 const playlistTracksContainer = $('playlist-tracks-container');
 
+const tabSearch = $('tab-search');
+const searchQuery = $('search-query');
+const searchResultsContainer = $('search-results-container');
+
 const trackTitleEl = $('track-title');
 const trackArtistEl = $('track-artist');
 const lyricsContent = $('lyrics-content');
@@ -114,6 +122,8 @@ function switchTab(name) {
     } else if (name === 'playlists') {
         if (currentPlaylistTopicId !== null) showPlaylistTracks();
         else tabPlaylists.classList.add('active');
+    } else if (name === 'search') {
+        tabSearch.classList.add('active');
     }
 }
 
@@ -312,6 +322,103 @@ function createGroupElement(g, onClick) {
 }
 
 // ══════════════════════════════════════
+//  SEARCH TAB
+// ══════════════════════════════════════
+searchQuery.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); performSearch(); }
+});
+$('btn-search-go').addEventListener('click', performSearch);
+
+async function performSearch() {
+    const query = searchQuery.value.trim();
+    if (!query || !playlistGroupId) return;
+
+    if (_searchAbort) _searchAbort.cancelled = true;
+    const thisSearch = { cancelled: false };
+    _searchAbort = thisSearch;
+
+    searchTracks = [];
+    searchResultsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+
+    try {
+        // Ensure bot is in the group (once)
+        // Ensure bot is invited and General topic is renamed (once each)
+        if (!localStorage.getItem('bot_invited')) {
+            await tg.ensureBotInGroup(playlistGroupId);
+            localStorage.setItem('bot_invited', '1');
+        }
+        if (thisSearch.cancelled) return;
+
+        await tg.renameGeneralToSearch(playlistGroupId);
+        if (thisSearch.cancelled) return;
+
+        // Search and get the parsed result list
+        const results = await tg.searchMusic(playlistGroupId, query);
+        if (thisSearch.cancelled) return;
+
+        if (results.length === 0) {
+            searchResultsContainer.innerHTML = '<div class="lyrics-placeholder">No results found</div>';
+            return;
+        }
+
+        // Render the result list for user to pick from
+        renderSearchResults(results, thisSearch);
+    } catch (e) {
+        if (thisSearch.cancelled) return;
+        console.error('Search failed:', e);
+        searchResultsContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
+    }
+}
+
+function renderSearchResults(results, searchRef) {
+    searchResultsContainer.innerHTML = '';
+    for (const item of results) {
+        const el = document.createElement('div');
+        el.className = 'track-item';
+        const subtitle = [item.artist, formatTime(item.duration)].filter(Boolean).join(' · ');
+        el.innerHTML = `
+            <div class="track-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>
+            <div class="track-info"><div class="track-name">${item.title}</div><div class="track-artist">${subtitle}</div></div>
+            <span class="track-duration">${item.bitrate ? item.bitrate + 'k' : ''}</span>`;
+
+        el.addEventListener('click', () => downloadAndPlay(item, searchRef));
+        searchResultsContainer.appendChild(el);
+    }
+}
+
+async function downloadAndPlay(item, searchRef) {
+    // Show loading on the clicked item
+    const items = searchResultsContainer.querySelectorAll('.track-item');
+    items.forEach(el => el.classList.remove('active'));
+    const idx = [...items].findIndex(el => el.querySelector('.track-name')?.textContent === item.title);
+    if (idx >= 0) {
+        items[idx].classList.add('active');
+        items[idx].querySelector('.track-placeholder').innerHTML = '<div class="loading"></div>';
+    }
+
+    try {
+        const track = await tg.downloadSearchResult(playlistGroupId, item.dlCmd);
+        if (searchRef?.cancelled) return;
+
+        if (!track) {
+            showToast('Download failed');
+            if (idx >= 0) items[idx].querySelector('.track-placeholder').innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+            return;
+        }
+
+        // Restore icon on the item
+        if (idx >= 0) items[idx].querySelector('.track-placeholder').innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+
+        // Play the downloaded track (fromPlaylist=false so + button shows)
+        startPlayback([track], playlistGroupId, 1, 0, false);
+        closePanel();
+    } catch (e) {
+        console.error('Download failed:', e);
+        showToast('Download failed');
+    }
+}
+
+// ══════════════════════════════════════
 //  RENDER TRACKS
 // ══════════════════════════════════════
 function renderTracksInto(container, trackList, filter, context) {
@@ -416,6 +523,10 @@ async function playTrack(index) {
     const track = playerTracks[index];
     currentTrackId = track.id;
 
+    // ── Stop previous track immediately ──
+    audio.pause();
+    audio.src = '';
+
     // ── Instant UI reset ──
     updateSidebarHighlight();
     _updateAddButton();
@@ -445,13 +556,21 @@ async function playTrack(index) {
     currentArtworkFromInternet = false;
     currentLyricsFromInternet = false;
 
+    // ── Show loading on play button ──
+    btnPlay.classList.add('loading-audio');
+    iconPlay.style.display = 'none';
+    iconPause.style.display = 'none';
+
     // ── Launch audio, lyrics, artwork ALL in parallel ──
     const audioPromise = tg.getTrackBlobUrl(playerGroupId, track.id, playerTopicId).then(blobUrl => {
         if (_playGeneration !== gen) return; // stale
+        btnPlay.classList.remove('loading-audio');
         audio.src = blobUrl;
         audio.play().catch(() => {});
     }).catch(() => {
         if (_playGeneration !== gen) return;
+        btnPlay.classList.remove('loading-audio');
+        iconPlay.style.display = 'block';
         showToast('Failed to download track');
         lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
     });

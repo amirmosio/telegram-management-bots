@@ -71462,7 +71462,148 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
-  var import_process4, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _phoneCodeHash;
+  async function ensureBotInGroup(groupId) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    try {
+      const bot = await client.getEntity("moozikestan_bot");
+      await client.invoke(new import_tl.Api.channels.InviteToChannel({
+        channel: entity,
+        users: [bot]
+      }));
+    } catch (e2) {
+      if (!e2.message?.includes("USER_ALREADY_PARTICIPANT")) {
+        console.warn("Bot invite:", e2.message);
+      }
+    }
+  }
+  async function renameGeneralToSearch(groupId) {
+    if (localStorage.getItem("general_renamed")) return;
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    try {
+      await client.invoke(new import_tl.Api.channels.EditForumTopic({
+        channel: entity,
+        topicId: 1,
+        title: "Search \u{1F50E}"
+      }));
+    } catch (e2) {
+      console.warn("Rename General failed:", e2.message);
+    }
+    localStorage.setItem("general_renamed", "1");
+  }
+  async function searchMusic(groupId, query) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    const sent = await client.sendMessage(entity, {
+      message: "/" + query,
+      replyTo: 1
+    });
+    const sentId = sent.id;
+    const startTime = Date.now();
+    const delays = [1500, 2e3, 2500, 3e3, 3e3, 3e3, 3e3];
+    let attempt = 0;
+    while (Date.now() - startTime < 25e3) {
+      const delay = delays[Math.min(attempt, delays.length - 1)];
+      await new Promise((r2) => setTimeout(r2, delay));
+      attempt++;
+      try {
+        for await (const msg of client.iterMessages(entity, { limit: 30 })) {
+          if (msg.id <= sentId) break;
+          const text = msg.message || "";
+          console.log(`[search] poll msg #${msg.id}: ${text.substring(0, 80)}...`);
+          if (text.includes("/dl_") || text.includes("/dlc_")) {
+            console.log("[search] Found bot response, parsing...");
+            return _parseSearchResults(text);
+          }
+        }
+      } catch (e2) {
+        console.warn("Search poll error:", e2.message);
+      }
+    }
+    return [];
+  }
+  function _parseSearchResults(text) {
+    const results = [];
+    const blocks = text.split(/‎?-{5,}/);
+    for (const block of blocks) {
+      const dlMatch = block.match(/\/(dl_\w+|dlc_\w+)/);
+      if (!dlMatch) continue;
+      const dlCmd = "/" + dlMatch[1];
+      const titleMatch = block.match(/(?:🎯\s*)?(\d+)\.\s*(.+)/);
+      if (!titleMatch) continue;
+      const rank = parseInt(titleMatch[1]);
+      const rawTitle = titleMatch[2].trim();
+      const durMatch = block.match(/🕒\s*(\d+):(\d+)/);
+      const duration = durMatch ? parseInt(durMatch[1]) * 60 + parseInt(durMatch[2]) : 0;
+      const sizeMatch = block.match(/💾\s*([\d.]+)\s*MB/);
+      const sizeMB = sizeMatch ? parseFloat(sizeMatch[1]) : 0;
+      const brMatch = block.match(/📀\s*(\d+)/);
+      const bitrate = brMatch ? parseInt(brMatch[1]) : 0;
+      let title = rawTitle;
+      let artist = "";
+      for (const sep of [" - ", " \u2013 ", " \u2014 "]) {
+        if (rawTitle.includes(sep)) {
+          const parts = rawTitle.split(sep);
+          artist = parts[0].trim();
+          title = parts.slice(1).join(sep).trim();
+          break;
+        }
+      }
+      results.push({ rank, title, artist, duration, sizeMB, bitrate, dlCmd });
+    }
+    results.sort((a2, b) => a2.rank - b.rank);
+    return results;
+  }
+  async function downloadSearchResult(groupId, dlCmd) {
+    if (_dlCache[dlCmd]) return _dlCache[dlCmd];
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    try {
+      for await (const msg of client.iterMessages(entity, { limit: 50 })) {
+        const meta = _extractAudioMeta(msg);
+        if (meta) {
+          const prevMsgs = await client.getMessages(entity, { ids: [msg.id - 1] });
+          const prev = prevMsgs?.[0];
+          if (prev && (prev.message || "").trim() === dlCmd) {
+            _msgCache[`${groupId}:${msg.id}`] = msg;
+            _dlCache[dlCmd] = meta;
+            return meta;
+          }
+        }
+      }
+    } catch (e2) {
+      console.warn("Scan existing failed:", e2.message);
+    }
+    const sent = await client.sendMessage(entity, {
+      message: dlCmd,
+      replyTo: 1
+    });
+    const sentId = sent.id;
+    const startTime = Date.now();
+    const delays = [2e3, 2500, 3e3, 3e3, 3e3, 3e3, 3e3];
+    let attempt = 0;
+    while (Date.now() - startTime < 3e4) {
+      const delay = delays[Math.min(attempt, delays.length - 1)];
+      await new Promise((r2) => setTimeout(r2, delay));
+      attempt++;
+      try {
+        for await (const msg of client.iterMessages(entity, { limit: 10 })) {
+          if (msg.id <= sentId) break;
+          const meta = _extractAudioMeta(msg);
+          if (meta) {
+            _msgCache[`${groupId}:${msg.id}`] = msg;
+            _dlCache[dlCmd] = meta;
+            return meta;
+          }
+        }
+      } catch (e2) {
+        console.warn("Download poll error:", e2.message);
+      }
+    }
+    return null;
+  }
+  var import_process4, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _phoneCodeHash, _dlCache;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71486,6 +71627,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       _blobCache = {};
       _thumbBlobCache = {};
       _phoneCodeHash = null;
+      _dlCache = {};
     }
   });
 
@@ -71936,6 +72078,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       var shuffleOn = false;
       var repeatOn = false;
       var activeTab = "playlists";
+      var searchTracks = [];
+      var _searchAbort = null;
       var currentArtworkFromInternet = false;
       var currentLyricsFromInternet = false;
       var pendingArtSource = null;
@@ -71966,6 +72110,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       var playlistsContainer = $("playlists-container");
       var playlistTracksSearch = $("playlist-tracks-search");
       var playlistTracksContainer = $("playlist-tracks-container");
+      var tabSearch = $("tab-search");
+      var searchQuery = $("search-query");
+      var searchResultsContainer = $("search-results-container");
       var trackTitleEl = $("track-title");
       var trackArtistEl = $("track-artist");
       var lyricsContent = $("lyrics-content");
@@ -71998,6 +72145,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         } else if (name === "playlists") {
           if (currentPlaylistTopicId !== null) showPlaylistTracks();
           else tabPlaylists.classList.add("active");
+        } else if (name === "search") {
+          tabSearch.classList.add("active");
         }
       }
       var browseSearchTimeout = null;
@@ -72183,6 +72332,80 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         el.addEventListener("click", () => onClick(g));
         return el;
       }
+      searchQuery.addEventListener("keydown", (e2) => {
+        if (e2.key === "Enter") {
+          e2.preventDefault();
+          performSearch();
+        }
+      });
+      $("btn-search-go").addEventListener("click", performSearch);
+      async function performSearch() {
+        const query = searchQuery.value.trim();
+        if (!query || !playlistGroupId) return;
+        if (_searchAbort) _searchAbort.cancelled = true;
+        const thisSearch = { cancelled: false };
+        _searchAbort = thisSearch;
+        searchTracks = [];
+        searchResultsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+        try {
+          if (!localStorage.getItem("bot_invited")) {
+            await ensureBotInGroup(playlistGroupId);
+            localStorage.setItem("bot_invited", "1");
+          }
+          if (thisSearch.cancelled) return;
+          await renameGeneralToSearch(playlistGroupId);
+          if (thisSearch.cancelled) return;
+          const results = await searchMusic(playlistGroupId, query);
+          if (thisSearch.cancelled) return;
+          if (results.length === 0) {
+            searchResultsContainer.innerHTML = '<div class="lyrics-placeholder">No results found</div>';
+            return;
+          }
+          renderSearchResults(results, thisSearch);
+        } catch (e2) {
+          if (thisSearch.cancelled) return;
+          console.error("Search failed:", e2);
+          searchResultsContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
+        }
+      }
+      function renderSearchResults(results, searchRef) {
+        searchResultsContainer.innerHTML = "";
+        for (const item of results) {
+          const el = document.createElement("div");
+          el.className = "track-item";
+          const subtitle = [item.artist, formatTime(item.duration)].filter(Boolean).join(" \xB7 ");
+          el.innerHTML = `
+            <div class="track-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>
+            <div class="track-info"><div class="track-name">${item.title}</div><div class="track-artist">${subtitle}</div></div>
+            <span class="track-duration">${item.bitrate ? item.bitrate + "k" : ""}</span>`;
+          el.addEventListener("click", () => downloadAndPlay(item, searchRef));
+          searchResultsContainer.appendChild(el);
+        }
+      }
+      async function downloadAndPlay(item, searchRef) {
+        const items = searchResultsContainer.querySelectorAll(".track-item");
+        items.forEach((el) => el.classList.remove("active"));
+        const idx = [...items].findIndex((el) => el.querySelector(".track-name")?.textContent === item.title);
+        if (idx >= 0) {
+          items[idx].classList.add("active");
+          items[idx].querySelector(".track-placeholder").innerHTML = '<div class="loading"></div>';
+        }
+        try {
+          const track = await downloadSearchResult(playlistGroupId, item.dlCmd);
+          if (searchRef?.cancelled) return;
+          if (!track) {
+            showToast("Download failed");
+            if (idx >= 0) items[idx].querySelector(".track-placeholder").innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+            return;
+          }
+          if (idx >= 0) items[idx].querySelector(".track-placeholder").innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+          startPlayback([track], playlistGroupId, 1, 0, false);
+          closePanel();
+        } catch (e2) {
+          console.error("Download failed:", e2);
+          showToast("Download failed");
+        }
+      }
       function renderTracksInto(container, trackList, filter, context) {
         container.innerHTML = "";
         let list = trackList;
@@ -72274,6 +72497,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         currentTrackIndex = index;
         const track = playerTracks[index];
         currentTrackId = track.id;
+        audio.pause();
+        audio.src = "";
         updateSidebarHighlight();
         _updateAddButton();
         trackTitleEl.textContent = track.title;
@@ -72298,13 +72523,19 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         pendingLyricsSource = null;
         currentArtworkFromInternet = false;
         currentLyricsFromInternet = false;
+        btnPlay.classList.add("loading-audio");
+        iconPlay.style.display = "none";
+        iconPause.style.display = "none";
         const audioPromise = getTrackBlobUrl(playerGroupId, track.id, playerTopicId).then((blobUrl) => {
           if (_playGeneration !== gen) return;
+          btnPlay.classList.remove("loading-audio");
           audio.src = blobUrl;
           audio.play().catch(() => {
           });
         }).catch(() => {
           if (_playGeneration !== gen) return;
+          btnPlay.classList.remove("loading-audio");
+          iconPlay.style.display = "block";
           showToast("Failed to download track");
           lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
         });

@@ -49,6 +49,7 @@
             <div id="panel-tabs">
                 <button class="tab" data-tab="browse">Browse</button>
                 <button class="tab active" data-tab="playlists">Playlists</button>
+                <button class="tab" data-tab="search">Search</button>
             </div>
 
             <!-- Sub-header (back button + title) -->
@@ -96,6 +97,17 @@
                     <input id="playlist-tracks-search" type="text" placeholder="Search tracks..." autocomplete="off">
                 </div>
                 <div id="playlist-tracks-container"></div>
+            </div>
+
+            <!-- SEARCH TAB -->
+            <div id="tab-search" class="tab-content">
+                <div class="search-bar" style="position:relative">
+                    <input id="search-query" type="text" placeholder="Search music..." autocomplete="off" style="padding-right:40px">
+                    <button id="btn-search-go" style="position:absolute;right:18px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--accent);cursor:pointer;padding:4px" title="Search">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    </button>
+                </div>
+                <div id="search-results-container"></div>
             </div>
         </div>
 
