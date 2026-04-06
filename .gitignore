@@ -1,0 +1,16 @@
+.env
+*.session
+*.session-journal
+__pycache__/
+venv/
+downloads/
+music_cache/
+build/
+dist/
+*.spec
+*.dmg
+.DS_Store
+node_modules/
+*.pem
+*.key
+.claude/

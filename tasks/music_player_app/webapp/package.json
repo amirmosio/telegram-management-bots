@@ -1,0 +1,27 @@
+{
+  "name": "webapp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs && npx serve ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "browser-id3-writer": "^6.3.1",
+    "buffer": "^6.0.3",
+    "crypto-browserify": "^3.12.1",
+    "events": "^3.3.0",
+    "input": "^1.0.1",
+    "stream-browserify": "^3.0.0",
+    "telegram": "^2.26.22",
+    "util": "^0.12.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

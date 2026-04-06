@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Music Player</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- LOGIN SCREEN -->
+    <div id="login-screen" style="display:none">
+        <div class="login-content">
+            <div class="login-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+            </div>
+            <h2>Music Player</h2>
+            <p class="login-hint">Sign in with your Telegram account</p>
+
+            <!-- Step 1: Phone -->
+            <div id="login-step-phone">
+                <input id="login-phone" type="tel" placeholder="+1234567890" autocomplete="tel">
+                <button id="btn-send-code" class="login-btn">Send Code</button>
+            </div>
+
+            <!-- Step 2: Code -->
+            <div id="login-step-code" style="display:none">
+                <p class="login-hint" id="login-code-hint">Code sent to your phone</p>
+                <input id="login-code" type="text" placeholder="12345" autocomplete="one-time-code" inputmode="numeric">
+                <button id="btn-verify-code" class="login-btn">Verify</button>
+            </div>
+
+            <!-- Step 3: 2FA -->
+            <div id="login-step-2fa" style="display:none">
+                <p class="login-hint">Two-factor authentication required</p>
+                <input id="login-password" type="password" placeholder="Password" autocomplete="current-password">
+                <button id="btn-verify-2fa" class="login-btn">Verify</button>
+            </div>
+
+            <div id="login-error" class="login-error"></div>
+            <div id="login-loading" style="display:none"><div class="loading"></div></div>
+        </div>
+    </div>
+
+    <!-- MAIN APP -->
+    <div id="app" style="display:none">
+        <!-- Side Panel -->
+        <div id="side-panel">
+            <!-- Tabs -->
+            <div id="panel-tabs">
+                <button class="tab" data-tab="browse">Browse</button>
+                <button class="tab active" data-tab="playlists">Playlists</button>
+            </div>
+
+            <!-- Sub-header (back button + title) -->
+            <div class="panel-header" id="panel-subheader" style="display:none">
+                <button id="btn-back" class="icon-btn" title="Back">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 18l-6-6 6-6"/>
+                    </svg>
+                </button>
+                <span id="panel-title"></span>
+                <button id="btn-close-panel" class="icon-btn" title="Close">&times;</button>
+            </div>
+
+            <!-- BROWSE TAB -->
+            <div id="tab-browse" class="tab-content">
+                <!-- Group search -->
+                <div class="search-bar">
+                    <input id="browse-search" type="text" placeholder="Search channels & groups..." autocomplete="off">
+                </div>
+                <div id="browse-groups"></div>
+            </div>
+
+            <!-- BROWSE TRACKS (sub-view of Browse) -->
+            <div id="tab-browse-tracks" class="tab-content">
+                <div class="search-bar">
+                    <input id="browse-tracks-search" type="text" placeholder="Search tracks..." autocomplete="off">
+                </div>
+                <div id="browse-tracks-container"></div>
+            </div>
+
+            <!-- PLAYLISTS TAB -->
+            <div id="tab-playlists" class="tab-content active">
+                <div id="playlists-actions">
+                    <button id="btn-new-playlist" class="playlist-action-btn accent">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                        New Playlist
+                    </button>
+                </div>
+                <div id="playlists-container"></div>
+            </div>
+
+            <!-- PLAYLIST TRACKS (sub-view of Playlists) -->
+            <div id="tab-playlist-tracks" class="tab-content">
+                <div class="search-bar">
+                    <input id="playlist-tracks-search" type="text" placeholder="Search tracks..." autocomplete="off">
+                </div>
+                <div id="playlist-tracks-container"></div>
+            </div>
+        </div>
+
+        <!-- Main Player -->
+        <div id="player">
+            <div id="top-bar">
+                <button id="btn-show-panel" class="icon-btn" title="Browse">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                </button>
+                <span id="now-playing-label">Music Player</span>
+                <div></div>
+            </div>
+
+            <div id="artwork">
+                <div id="artwork-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                    </svg>
+                </div>
+                <img id="artwork-img" style="display:none" alt="Album art">
+                <div id="artwork-overlay">
+                    <div id="track-info">
+                        <div id="track-title">No track loaded</div>
+                        <div id="track-artist">Browse a channel to start</div>
+                    </div>
+                    <button id="btn-add-playing" class="overlay-add-btn" title="Add to playlist">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div id="source-bar">
+                <button id="btn-save-meta" class="source-btn" style="display:none">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/></svg>
+                    <span id="save-meta-label"></span>
+                </button>
+            </div>
+
+            <div id="lyrics-container">
+                <div id="lyrics-content">
+                    <div class="lyrics-placeholder">Lyrics will appear here</div>
+                </div>
+            </div>
+
+            <div id="progress-section">
+                <span id="time-current">0:00</span>
+                <div id="progress-bar">
+                    <div id="progress-buffered"></div>
+                    <div id="progress-fill"></div>
+                    <div id="progress-handle"></div>
+                </div>
+                <span id="time-total">0:00</span>
+            </div>
+
+            <div id="controls">
+                <button id="btn-shuffle" class="control-btn control-btn-sm" title="Shuffle">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                </button>
+                <button id="btn-prev" class="control-btn" title="Previous">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                </button>
+                <button id="btn-play" class="control-btn play-btn" title="Play">
+                    <svg id="icon-play" width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                    <svg id="icon-pause" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+                <button id="btn-next" class="control-btn" title="Next">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                </button>
+                <button id="btn-repeat" class="control-btn control-btn-sm" title="Repeat">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Playlist picker modal -->
+    <div id="playlist-modal" style="display:none">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3>Add to playlist</h3>
+            <div id="modal-playlists"></div>
+            <button id="modal-cancel" class="text-btn">Cancel</button>
+        </div>
+    </div>
+
+    <div id="overlay"></div>
+    <audio id="audio-element" preload="auto"></audio>
+    <script>
+    // Unregister stale service worker from old backend
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+    }
+    </script>
+    <script src="app.bundle.js"></script>
+</body>
+</html>
