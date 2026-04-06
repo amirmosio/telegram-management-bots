@@ -26,24 +26,12 @@ export async function searchLyrics(title, artist = '', duration = 0) {
     }
 
     // Run ALL sources in parallel, then pick the best result
-    console.log(`[lyrics] Searching for: "${t}" by "${a}"`);
     const results = await Promise.allSettled([
         tryLrclib(t, a),
         tryMusixmatch(t, a),
-        tryGenius(t, a),
         tryLyricsOvh(t, a),
         tryChartLyrics(t, a),
     ]);
-
-    const sourceNames = ['lrclib', 'musixmatch', 'genius', 'lyrics.ovh', 'chartlyrics'];
-    results.forEach((r, i) => {
-        if (r.status === 'fulfilled') {
-            const v = r.value;
-            console.log(`[lyrics] ${sourceNames[i]}: synced=${!!v.synced} plain=${!!v.plain}`);
-        } else {
-            console.log(`[lyrics] ${sourceNames[i]}: REJECTED`, r.reason);
-        }
-    });
 
     // Prefer synced lyrics, then plain. Among ties, prefer earlier sources (order above).
     let bestSynced = null;
@@ -186,59 +174,6 @@ async function _getMxmToken() {
         }
     } catch { /* ignore */ }
     return null;
-}
-
-async function tryGenius(title, artist) {
-    const result = { synced: null, plain: null, source: 'genius.com' };
-    try {
-        const q = artist ? `${artist} ${title}` : title;
-
-        // Try original query, then romanized via Google Translate if non-Latin
-        let songUrl = await _geniusSearch(q);
-        if (!songUrl && hasNonLatin(q)) {
-            const romanized = await romanize(q);
-            if (romanized && romanized !== q) {
-                songUrl = await _geniusSearch(romanized);
-            }
-        }
-        if (!songUrl) return result;
-
-        // Scrape lyrics from Genius page via CORS proxy
-        const pageResp = await corsFetch(songUrl);
-        if (!pageResp) return result;
-        const html = await pageResp.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-
-        const containers = doc.querySelectorAll('[data-lyrics-container="true"]');
-        if (containers.length === 0) return result;
-
-        const lines = [];
-        for (const container of containers) {
-            container.innerHTML = container.innerHTML.replace(/<br\s*\/?>/gi, '\n');
-            const text = container.textContent.trim();
-            if (text) lines.push(text);
-        }
-
-        const plain = lines.join('\n').trim();
-        if (plain.length > 20) {
-            result.plain = plain;
-        }
-    } catch { /* ignore */ }
-    return result;
-}
-
-async function _geniusSearch(query) {
-    try {
-        const url = `https://genius.com/api/search?q=${encodeURIComponent(query)}`;
-        const resp = await corsFetch(url);
-        if (!resp) return null;
-        const data = await resp.json();
-        const hits = data?.response?.hits || [];
-        for (const h of hits) {
-            if (h.result?.url && h.type === 'song') return h.result.url;
-        }
-        return hits[0]?.result?.url || null;
-    } catch { return null; }
 }
 
 function hasNonLatin(str) {

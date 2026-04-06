@@ -1,28 +1,21 @@
 /**
- * CORS proxy with automatic fallback.
- * Tries multiple free proxies in order until one works.
+ * CORS proxy — uses our own server proxy.
+ * Falls back to direct fetch for APIs that support CORS natively.
  */
-
-const PROXIES = [
-    url => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
-    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-];
 
 const TIMEOUT = 10000;
 
-export function corsUrl(url) {
-    return PROXIES[0](url);
+function getProxyBase() {
+    // Use same origin /proxy endpoint
+    return `${window.location.origin}/proxy?url=`;
 }
 
-export async function corsFetch(url, opts = {}) {
-    for (const makeUrl of PROXIES) {
-        try {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), TIMEOUT);
-            const resp = await fetch(makeUrl(url), { ...opts, signal: controller.signal })
-                .finally(() => clearTimeout(timer));
-            if (resp.ok) return resp;
-        } catch { /* try next proxy */ }
-    }
-    return null;
+export function corsFetch(url, opts = {}) {
+    const proxyUrl = getProxyBase() + encodeURIComponent(url);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT);
+    return fetch(proxyUrl, { ...opts, signal: controller.signal })
+        .then(resp => resp.ok ? resp : null)
+        .catch(() => null)
+        .finally(() => clearTimeout(timer));
 }

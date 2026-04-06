@@ -71490,27 +71490,20 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   });
 
   // src/cors-proxy.js
-  async function corsFetch(url, opts = {}) {
-    for (const makeUrl of PROXIES) {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), TIMEOUT);
-        const resp = await fetch(makeUrl(url), { ...opts, signal: controller.signal }).finally(() => clearTimeout(timer));
-        if (resp.ok) return resp;
-      } catch {
-      }
-    }
-    return null;
+  function getProxyBase() {
+    return `${window.location.origin}/proxy?url=`;
   }
-  var import_process5, PROXIES, TIMEOUT;
+  function corsFetch(url, opts = {}) {
+    const proxyUrl = getProxyBase() + encodeURIComponent(url);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT);
+    return fetch(proxyUrl, { ...opts, signal: controller.signal }).then((resp) => resp.ok ? resp : null).catch(() => null).finally(() => clearTimeout(timer));
+  }
+  var import_process5, TIMEOUT;
   var init_cors_proxy = __esm({
     "src/cors-proxy.js"() {
       init_define_process_env();
       import_process5 = __toESM(require_process());
-      PROXIES = [
-        (url) => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`,
-        (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
-      ];
       TIMEOUT = 1e4;
     }
   });
@@ -71528,23 +71521,12 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       cache[key] = cached;
       return cached;
     }
-    console.log(`[lyrics] Searching for: "${t2}" by "${a2}"`);
     const results = await Promise.allSettled([
       tryLrclib(t2, a2),
       tryMusixmatch(t2, a2),
-      tryGenius(t2, a2),
       tryLyricsOvh(t2, a2),
       tryChartLyrics(t2, a2)
     ]);
-    const sourceNames = ["lrclib", "musixmatch", "genius", "lyrics.ovh", "chartlyrics"];
-    results.forEach((r2, i2) => {
-      if (r2.status === "fulfilled") {
-        const v = r2.value;
-        console.log(`[lyrics] ${sourceNames[i2]}: synced=${!!v.synced} plain=${!!v.plain}`);
-      } else {
-        console.log(`[lyrics] ${sourceNames[i2]}: REJECTED`, r2.reason);
-      }
-    });
     let bestSynced = null;
     let bestPlain = null;
     for (const r2 of results) {
@@ -71667,53 +71649,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     } catch {
     }
     return null;
-  }
-  async function tryGenius(title, artist) {
-    const result = { synced: null, plain: null, source: "genius.com" };
-    try {
-      const q = artist ? `${artist} ${title}` : title;
-      let songUrl = await _geniusSearch(q);
-      if (!songUrl && hasNonLatin(q)) {
-        const romanized = await romanize(q);
-        if (romanized && romanized !== q) {
-          songUrl = await _geniusSearch(romanized);
-        }
-      }
-      if (!songUrl) return result;
-      const pageResp = await corsFetch(songUrl);
-      if (!pageResp) return result;
-      const html = await pageResp.text();
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      const containers = doc.querySelectorAll('[data-lyrics-container="true"]');
-      if (containers.length === 0) return result;
-      const lines = [];
-      for (const container of containers) {
-        container.innerHTML = container.innerHTML.replace(/<br\s*\/?>/gi, "\n");
-        const text = container.textContent.trim();
-        if (text) lines.push(text);
-      }
-      const plain = lines.join("\n").trim();
-      if (plain.length > 20) {
-        result.plain = plain;
-      }
-    } catch {
-    }
-    return result;
-  }
-  async function _geniusSearch(query) {
-    try {
-      const url = `https://genius.com/api/search?q=${encodeURIComponent(query)}`;
-      const resp = await corsFetch(url);
-      if (!resp) return null;
-      const data = await resp.json();
-      const hits = data?.response?.hits || [];
-      for (const h of hits) {
-        if (h.result?.url && h.type === "song") return h.result.url;
-      }
-      return hits[0]?.result?.url || null;
-    } catch {
-      return null;
-    }
   }
   function hasNonLatin(str) {
     return /[^\u0000-\u007F]/.test(str);
