@@ -72110,7 +72110,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       var playlistsContainer = $("playlists-container");
       var playlistTracksSearch = $("playlist-tracks-search");
       var playlistTracksContainer = $("playlist-tracks-container");
-      var tabSearch = $("tab-search");
+      var fabSearch = $("fab-search");
+      var searchOverlay = $("search-overlay");
       var searchQuery = $("search-query");
       var searchResultsContainer = $("search-results-container");
       var trackTitleEl = $("track-title");
@@ -72145,8 +72146,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         } else if (name === "playlists") {
           if (currentPlaylistTopicId !== null) showPlaylistTracks();
           else tabPlaylists.classList.add("active");
-        } else if (name === "search") {
-          tabSearch.classList.add("active");
         }
       }
       var browseSearchTimeout = null;
@@ -72332,6 +72331,20 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         el.addEventListener("click", () => onClick(g));
         return el;
       }
+      function openSearch() {
+        searchOverlay.classList.add("open");
+        fabSearch.classList.add("hidden");
+        setTimeout(() => searchQuery.focus(), 350);
+      }
+      function closeSearch() {
+        searchOverlay.classList.remove("open");
+        fabSearch.classList.remove("hidden");
+      }
+      fabSearch.addEventListener("click", openSearch);
+      $("search-overlay-close").addEventListener("click", closeSearch);
+      document.addEventListener("keydown", (e2) => {
+        if (e2.key === "Escape" && searchOverlay.classList.contains("open")) closeSearch();
+      });
       searchQuery.addEventListener("keydown", (e2) => {
         if (e2.key === "Enter") {
           e2.preventDefault();
@@ -72400,7 +72413,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           }
           if (idx >= 0) items[idx].querySelector(".track-placeholder").innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
           startPlayback([track], playlistGroupId, 1, 0, false);
-          closePanel();
+          closeSearch();
         } catch (e2) {
           console.error("Download failed:", e2);
           showToast("Download failed");

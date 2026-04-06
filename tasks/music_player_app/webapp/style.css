@@ -192,7 +192,7 @@ html, body {
 
 /* ── Group/Playlist containers ── */
 #browse-groups, #browse-tracks-container, #playlists-container,
-#playlist-tracks-container, #search-results-container, #pg-results {
+#playlist-tracks-container, #pg-results {
     flex: 1;
     overflow-y: auto;
     padding: 4px 0;
@@ -734,8 +734,83 @@ html, body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Search FAB ── */
+#fab-search {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 16px var(--accent-glow);
+    z-index: 30;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
+}
+#fab-search:hover { transform: scale(1.08); box-shadow: 0 6px 24px var(--accent-glow); }
+#fab-search:active { transform: scale(0.95); }
+#fab-search.hidden { opacity: 0; pointer-events: none; }
+
+/* ── Search Overlay ── */
+/* Desktop: bubble popup near FAB */
+#search-overlay {
+    position: fixed;
+    bottom: 90px;
+    right: 24px;
+    width: 400px;
+    max-height: 500px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    transform: scale(0.8) translateY(10px);
+    transform-origin: bottom right;
+    opacity: 0;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+    pointer-events: none;
+}
+#search-overlay.open {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+#search-overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+#search-overlay-header .search-bar { padding: 0; }
+#search-overlay-header .search-bar input { margin: 0; }
+/* Hide back arrow on desktop */
+#search-overlay-close { display: none; }
+#search-results-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+}
+
 /* ── Mobile ── */
 @media (max-width: 700px) {
+    #fab-search { bottom: 100px; right: 16px; width: 48px; height: 48px; }
+    #search-overlay {
+        inset: 0; bottom: 0; right: 0; width: 100%; max-height: 100%;
+        border-radius: 0; border: none;
+        background: var(--bg-primary);
+        transform: translateY(100%); transform-origin: bottom center;
+    }
+    #search-overlay.open { transform: translateY(0); }
+    #search-overlay-close { display: flex; }
     #side-panel {
         position: fixed; left: -320px; top: 0; bottom: 0;
         transition: left 0.3s ease; z-index: 20;

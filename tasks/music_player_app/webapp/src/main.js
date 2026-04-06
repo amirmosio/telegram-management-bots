@@ -79,7 +79,8 @@ const playlistsContainer = $('playlists-container');
 const playlistTracksSearch = $('playlist-tracks-search');
 const playlistTracksContainer = $('playlist-tracks-container');
 
-const tabSearch = $('tab-search');
+const fabSearch = $('fab-search');
+const searchOverlay = $('search-overlay');
 const searchQuery = $('search-query');
 const searchResultsContainer = $('search-results-container');
 
@@ -122,8 +123,6 @@ function switchTab(name) {
     } else if (name === 'playlists') {
         if (currentPlaylistTopicId !== null) showPlaylistTracks();
         else tabPlaylists.classList.add('active');
-    } else if (name === 'search') {
-        tabSearch.classList.add('active');
     }
 }
 
@@ -322,8 +321,24 @@ function createGroupElement(g, onClick) {
 }
 
 // ══════════════════════════════════════
-//  SEARCH TAB
+//  SEARCH (FAB + OVERLAY)
 // ══════════════════════════════════════
+function openSearch() {
+    searchOverlay.classList.add('open');
+    fabSearch.classList.add('hidden');
+    setTimeout(() => searchQuery.focus(), 350);
+}
+function closeSearch() {
+    searchOverlay.classList.remove('open');
+    fabSearch.classList.remove('hidden');
+}
+
+fabSearch.addEventListener('click', openSearch);
+$('search-overlay-close').addEventListener('click', closeSearch);
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && searchOverlay.classList.contains('open')) closeSearch();
+});
+
 searchQuery.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); performSearch(); }
 });
@@ -411,7 +426,7 @@ async function downloadAndPlay(item, searchRef) {
 
         // Play the downloaded track (fromPlaylist=false so + button shows)
         startPlayback([track], playlistGroupId, 1, 0, false);
-        closePanel();
+        closeSearch();
     } catch (e) {
         console.error('Download failed:', e);
         showToast('Download failed');
