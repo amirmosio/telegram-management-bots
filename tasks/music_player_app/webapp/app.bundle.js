@@ -72345,6 +72345,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       document.addEventListener("keydown", (e2) => {
         if (e2.key === "Escape" && searchOverlay.classList.contains("open")) closeSearch();
       });
+      document.addEventListener("click", (e2) => {
+        if (searchOverlay.classList.contains("open") && !searchOverlay.contains(e2.target) && e2.target !== fabSearch) closeSearch();
+      });
       searchQuery.addEventListener("keydown", (e2) => {
         if (e2.key === "Enter") {
           e2.preventDefault();

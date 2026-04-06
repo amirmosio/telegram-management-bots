@@ -338,6 +338,9 @@ $('search-overlay-close').addEventListener('click', closeSearch);
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && searchOverlay.classList.contains('open')) closeSearch();
 });
+document.addEventListener('click', (e) => {
+    if (searchOverlay.classList.contains('open') && !searchOverlay.contains(e.target) && e.target !== fabSearch) closeSearch();
+});
 
 searchQuery.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); performSearch(); }
