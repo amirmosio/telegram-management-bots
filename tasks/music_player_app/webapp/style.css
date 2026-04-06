@@ -753,6 +753,7 @@ html, body {
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
 }
+#fab-search * { pointer-events: none; }
 #fab-search:hover { transform: scale(1.08); box-shadow: 0 6px 24px var(--accent-glow); }
 #fab-search:active { transform: scale(0.95); }
 #fab-search.hidden { opacity: 0; pointer-events: none; }
