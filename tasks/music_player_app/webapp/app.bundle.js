@@ -72633,12 +72633,44 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       audio.addEventListener("play", () => {
         iconPlay.style.display = "none";
         iconPause.style.display = "block";
+        updateMediaSession();
+        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
       });
       audio.addEventListener("pause", () => {
         iconPlay.style.display = "block";
         iconPause.style.display = "none";
+        if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
       });
       audio.addEventListener("ended", onTrackEnded);
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.setActionHandler("play", () => {
+          audio.play().catch(() => {
+          });
+        });
+        navigator.mediaSession.setActionHandler("pause", () => {
+          audio.pause();
+        });
+        navigator.mediaSession.setActionHandler("nexttrack", () => nextTrack());
+        navigator.mediaSession.setActionHandler("previoustrack", () => prevTrack());
+        try {
+          navigator.mediaSession.setActionHandler("seekto", (d) => {
+            if (d.seekTime != null && audio.duration) audio.currentTime = d.seekTime;
+          });
+        } catch (e2) {
+        }
+        try {
+          navigator.mediaSession.setActionHandler("seekbackward", (d) => {
+            audio.currentTime = Math.max(0, audio.currentTime - (d.seekOffset || 10));
+          });
+        } catch (e2) {
+        }
+        try {
+          navigator.mediaSession.setActionHandler("seekforward", (d) => {
+            audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d.seekOffset || 10));
+          });
+        } catch (e2) {
+        }
+      }
       function updateMediaSession() {
         if (!("mediaSession" in navigator)) return;
         const track = playerTracks[currentTrackIndex];
@@ -72653,26 +72685,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           artist: track.artist || "Unknown",
           album: "",
           artwork: artworkList
-        });
-        navigator.mediaSession.setActionHandler("play", () => {
-          audio.play().catch(() => {
-          });
-        });
-        navigator.mediaSession.setActionHandler("pause", () => {
-          audio.pause();
-        });
-        navigator.mediaSession.setActionHandler("nexttrack", nextTrack);
-        navigator.mediaSession.setActionHandler("previoustrack", prevTrack);
-        navigator.mediaSession.setActionHandler("seekto", (details) => {
-          if (details.seekTime != null && audio.duration) {
-            audio.currentTime = details.seekTime;
-          }
-        });
-        navigator.mediaSession.setActionHandler("seekbackward", (details) => {
-          audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10));
-        });
-        navigator.mediaSession.setActionHandler("seekforward", (details) => {
-          audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (details.seekOffset || 10));
         });
       }
       function updateMediaPositionState() {

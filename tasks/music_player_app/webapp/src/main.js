@@ -658,13 +658,31 @@ btnRepeat.addEventListener('click', () => { repeatOn = !repeatOn; btnRepeat.clas
 btnPlay.addEventListener('click', togglePlay);
 $('btn-next').addEventListener('click', nextTrack);
 $('btn-prev').addEventListener('click', prevTrack);
-audio.addEventListener('play', () => { iconPlay.style.display = 'none'; iconPause.style.display = 'block'; });
-audio.addEventListener('pause', () => { iconPlay.style.display = 'block'; iconPause.style.display = 'none'; });
+audio.addEventListener('play', () => {
+    iconPlay.style.display = 'none'; iconPause.style.display = 'block';
+    updateMediaSession();
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+});
+audio.addEventListener('pause', () => {
+    iconPlay.style.display = 'block'; iconPause.style.display = 'none';
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+});
 audio.addEventListener('ended', onTrackEnded);
 
 // ══════════════════════════════════════
 //  MEDIA SESSION API (OS controls)
 // ══════════════════════════════════════
+// Register action handlers once at startup (iOS needs early registration)
+if ('mediaSession' in navigator) {
+    navigator.mediaSession.setActionHandler('play', () => { audio.play().catch(() => {}); });
+    navigator.mediaSession.setActionHandler('pause', () => { audio.pause(); });
+    navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
+    navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
+    try { navigator.mediaSession.setActionHandler('seekto', (d) => { if (d.seekTime != null && audio.duration) audio.currentTime = d.seekTime; }); } catch (e) {}
+    try { navigator.mediaSession.setActionHandler('seekbackward', (d) => { audio.currentTime = Math.max(0, audio.currentTime - (d.seekOffset || 10)); }); } catch (e) {}
+    try { navigator.mediaSession.setActionHandler('seekforward', (d) => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d.seekOffset || 10)); }); } catch (e) {}
+}
+
 function updateMediaSession() {
     if (!('mediaSession' in navigator)) return;
     const track = playerTracks[currentTrackIndex];
@@ -681,22 +699,6 @@ function updateMediaSession() {
         artist: track.artist || 'Unknown',
         album: '',
         artwork: artworkList,
-    });
-
-    navigator.mediaSession.setActionHandler('play', () => { audio.play().catch(() => {}); });
-    navigator.mediaSession.setActionHandler('pause', () => { audio.pause(); });
-    navigator.mediaSession.setActionHandler('nexttrack', nextTrack);
-    navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
-    navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime != null && audio.duration) {
-            audio.currentTime = details.seekTime;
-        }
-    });
-    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-        audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10));
-    });
-    navigator.mediaSession.setActionHandler('seekforward', (details) => {
-        audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (details.seekOffset || 10));
     });
 }
 
