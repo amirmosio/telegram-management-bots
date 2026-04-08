@@ -668,48 +668,80 @@ async function _playWithRetry(gen) {
     }
 }
 
-// Download track in chunks and start playback as early as possible.
-// Plays from a partial blob after the first chunk, then swaps to the full blob when done.
-let _partialPlayback = false; // true while playing from partial blob (prevents 'ended' advancing)
+// Get SW controller, waiting for it if it's activating
+async function _getSWController() {
+    if (!navigator.serviceWorker) return null;
+    if (navigator.serviceWorker.controller) return navigator.serviceWorker.controller;
+    // SW might be activating — wait for it to claim this page
+    try {
+        await navigator.serviceWorker.ready;
+        if (navigator.serviceWorker.controller) return navigator.serviceWorker.controller;
+        // Wait for controllerchange (from clients.claim())
+        return await new Promise(resolve => {
+            const onCtrl = () => { clearTimeout(t); resolve(navigator.serviceWorker.controller); };
+            const t = setTimeout(() => {
+                navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
+                resolve(null);
+            }, 3000);
+            navigator.serviceWorker.addEventListener('controllerchange', onCtrl, { once: true });
+        });
+    } catch (e) { return null; }
+}
 
+// Download track and start playback.
+// Uses SW streaming if available (audio plays after first chunk).
+// Falls back to full download + blob URL.
 async function _downloadAndPlay(track, gen) {
     const gId = playerGroupId;
     const mime = track.mime_type || 'audio/mpeg';
+    const fileSize = track.file_size || 0;
 
-    const chunks = [];
-    let started = false;
-    let partialUrl = null;
-
-    for await (const chunk of tg.iterTrackDownload(gId, track.id)) {
-        if (_playGeneration !== gen) return;
-        chunks.push(chunk);
-
-        // Start playback after first chunk (~512KB ≈ 13s of MP3 at 320kbps)
-        if (!started) {
-            console.log('[player] first chunk received (' + chunk.byteLength + ' bytes), starting playback');
-            const partial = new Blob(chunks, { type: mime });
-            partialUrl = URL.createObjectURL(partial);
-            audio.src = partialUrl;
-            _partialPlayback = true;
-            _playWithRetry(gen);
-            started = true;
-        }
-    }
+    const sw = await _getSWController();
     if (_playGeneration !== gen) return;
 
-    // Build final blob and cache it
-    const finalBlob = new Blob(chunks, { type: mime });
-    const finalUrl = tg.cacheTrackBlob(gId, track.id, finalBlob);
-    console.log('[player] download done:', chunks.length, 'chunks,', finalBlob.size, 'bytes');
+    if (sw) {
+        // ── SW streaming: pipe chunks via MessageChannel ──
+        console.log('[player] SW streaming: setting up');
+        const blobKey = `${gId}:${track.id}`;
+        const channel = new MessageChannel();
+        sw.postMessage({ type: 'audio-stream', key: blobKey }, [channel.port2]);
 
-    // Swap to full blob, preserving playback position
-    _partialPlayback = false;
-    if (partialUrl) URL.revokeObjectURL(partialUrl);
-    const time = audio.currentTime;
-    const wasPlaying = !audio.paused;
-    audio.src = finalUrl;
-    audio.currentTime = time;
-    if (wasPlaying) audio.play().catch(() => {});
+        const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` +
+            (fileSize ? `&size=${fileSize}` : '');
+        audio.src = streamUrl;
+        _playWithRetry(gen);
+
+        const chunks = [];
+        try {
+            for await (const chunk of tg.iterTrackDownload(gId, track.id)) {
+                if (_playGeneration !== gen) {
+                    channel.port1.postMessage({ done: true }); channel.port1.close();
+                    return;
+                }
+                chunks.push(chunk);
+                console.log('[player] chunk', chunks.length, '(' + chunk.byteLength + ' bytes)');
+                channel.port1.postMessage({ chunk: chunk.buffer });
+            }
+            channel.port1.postMessage({ done: true });
+            channel.port1.close();
+        } catch (e) {
+            try { channel.port1.postMessage({ error: e.message }); channel.port1.close(); } catch (_) {}
+            throw e;
+        }
+
+        if (_playGeneration === gen && chunks.length > 0) {
+            const blob = new Blob(chunks, { type: mime });
+            tg.cacheTrackBlob(gId, track.id, blob);
+            console.log('[player] streamed & cached:', chunks.length, 'chunks,', blob.size, 'bytes');
+        }
+    } else {
+        // ── Fallback: full download then play ──
+        console.log('[player] no SW, full download');
+        const blobUrl = await tg.getTrackBlobUrl(gId, track.id, playerTopicId);
+        if (_playGeneration !== gen) return;
+        audio.src = blobUrl;
+        _playWithRetry(gen);
+    }
 }
 
 function nextTrack() {
@@ -736,7 +768,6 @@ function prevTrack() {
 }
 
 function onTrackEnded() {
-    if (_partialPlayback) return; // still downloading — full blob will be swapped in soon
     if (repeatOn) { audio.currentTime = 0; audio.play().catch(() => {}); }
     else nextTrack();
 }

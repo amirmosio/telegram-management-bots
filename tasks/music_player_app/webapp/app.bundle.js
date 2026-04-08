@@ -71049,6 +71049,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     _tracksCache[cacheKey] = tracks;
     return tracks;
   }
+  function getCachedTracks(groupId, topicId = null) {
+    return _tracksCache[_trackCacheKey(groupId, topicId)] || [];
+  }
   function invalidateCache(groupId, topicId = null) {
     const key = _trackCacheKey(groupId, topicId);
     delete _tracksCache[key];
@@ -71102,6 +71105,19 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         yield new Uint8Array(chunk);
       }
     }
+  }
+  async function getTrackBlobUrl(groupId, trackId, topicId = null) {
+    const url = await getCachedTrackUrl(groupId, trackId);
+    if (url) return url;
+    const msg = _msgCache[`${groupId}:${trackId}`];
+    if (!msg) throw new Error("Track not in cache");
+    await _ensureConnected();
+    const buffer = await client.downloadMedia(msg);
+    if (!buffer) throw new Error("Download failed");
+    const track = getCachedTracks(groupId, topicId).find((t2) => t2.id === trackId);
+    const mime = track?.mime_type || "audio/mpeg";
+    const blob = new Blob([buffer], { type: mime });
+    return cacheTrackBlob(groupId, trackId, blob);
   }
   async function getThumbBlobUrl(groupId, trackId) {
     const key = `thumb:${groupId}:${trackId}`;
@@ -72760,38 +72776,75 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           }
         }
       }
-      var _partialPlayback = false;
+      async function _getSWController() {
+        if (!navigator.serviceWorker) return null;
+        if (navigator.serviceWorker.controller) return navigator.serviceWorker.controller;
+        try {
+          await navigator.serviceWorker.ready;
+          if (navigator.serviceWorker.controller) return navigator.serviceWorker.controller;
+          return await new Promise((resolve) => {
+            const onCtrl = () => {
+              clearTimeout(t2);
+              resolve(navigator.serviceWorker.controller);
+            };
+            const t2 = setTimeout(() => {
+              navigator.serviceWorker.removeEventListener("controllerchange", onCtrl);
+              resolve(null);
+            }, 3e3);
+            navigator.serviceWorker.addEventListener("controllerchange", onCtrl, { once: true });
+          });
+        } catch (e2) {
+          return null;
+        }
+      }
       async function _downloadAndPlay(track, gen) {
         const gId = playerGroupId;
         const mime = track.mime_type || "audio/mpeg";
-        const chunks = [];
-        let started = false;
-        let partialUrl = null;
-        for await (const chunk of iterTrackDownload(gId, track.id)) {
-          if (_playGeneration !== gen) return;
-          chunks.push(chunk);
-          if (!started) {
-            console.log("[player] first chunk received (" + chunk.byteLength + " bytes), starting playback");
-            const partial = new Blob(chunks, { type: mime });
-            partialUrl = URL.createObjectURL(partial);
-            audio.src = partialUrl;
-            _partialPlayback = true;
-            _playWithRetry(gen);
-            started = true;
-          }
-        }
+        const fileSize = track.file_size || 0;
+        const sw = await _getSWController();
         if (_playGeneration !== gen) return;
-        const finalBlob = new Blob(chunks, { type: mime });
-        const finalUrl = cacheTrackBlob(gId, track.id, finalBlob);
-        console.log("[player] download done:", chunks.length, "chunks,", finalBlob.size, "bytes");
-        _partialPlayback = false;
-        if (partialUrl) URL.revokeObjectURL(partialUrl);
-        const time = audio.currentTime;
-        const wasPlaying = !audio.paused;
-        audio.src = finalUrl;
-        audio.currentTime = time;
-        if (wasPlaying) audio.play().catch(() => {
-        });
+        if (sw) {
+          console.log("[player] SW streaming: setting up");
+          const blobKey = `${gId}:${track.id}`;
+          const channel = new MessageChannel();
+          sw.postMessage({ type: "audio-stream", key: blobKey }, [channel.port2]);
+          const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` + (fileSize ? `&size=${fileSize}` : "");
+          audio.src = streamUrl;
+          _playWithRetry(gen);
+          const chunks = [];
+          try {
+            for await (const chunk of iterTrackDownload(gId, track.id)) {
+              if (_playGeneration !== gen) {
+                channel.port1.postMessage({ done: true });
+                channel.port1.close();
+                return;
+              }
+              chunks.push(chunk);
+              console.log("[player] chunk", chunks.length, "(" + chunk.byteLength + " bytes)");
+              channel.port1.postMessage({ chunk: chunk.buffer });
+            }
+            channel.port1.postMessage({ done: true });
+            channel.port1.close();
+          } catch (e2) {
+            try {
+              channel.port1.postMessage({ error: e2.message });
+              channel.port1.close();
+            } catch (_) {
+            }
+            throw e2;
+          }
+          if (_playGeneration === gen && chunks.length > 0) {
+            const blob = new Blob(chunks, { type: mime });
+            cacheTrackBlob(gId, track.id, blob);
+            console.log("[player] streamed & cached:", chunks.length, "chunks,", blob.size, "bytes");
+          }
+        } else {
+          console.log("[player] no SW, full download");
+          const blobUrl = await getTrackBlobUrl(gId, track.id, playerTopicId);
+          if (_playGeneration !== gen) return;
+          audio.src = blobUrl;
+          _playWithRetry(gen);
+        }
       }
       function nextTrack() {
         if (playerTracks.length === 0) return;
@@ -72819,7 +72872,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
       }
       function onTrackEnded() {
-        if (_partialPlayback) return;
         if (repeatOn) {
           audio.currentTime = 0;
           audio.play().catch(() => {
