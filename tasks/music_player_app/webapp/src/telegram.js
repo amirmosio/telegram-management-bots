@@ -429,17 +429,68 @@ export function invalidateCache(groupId, topicId = null) {
 //  AUDIO DOWNLOAD / STREAMING
 // ════════════════════════════════════
 
-export async function getTrackBlobUrl(groupId, trackId, topicId = null) {
+// Check memory + IDB cache, return blob URL or null
+export async function getCachedTrackUrl(groupId, trackId) {
     const blobKey = `${groupId}:${trackId}`;
     if (_blobCache[blobKey]) return _blobCache[blobKey];
 
-    // Check IndexedDB cache
     const cached = await idbGet('audio', blobKey);
     if (cached) {
         const url = URL.createObjectURL(cached);
         _blobCache[blobKey] = url;
         return url;
     }
+    return null;
+}
+
+// Cache a completed blob and store in IDB
+export function cacheTrackBlob(groupId, trackId, blob) {
+    const blobKey = `${groupId}:${trackId}`;
+    const url = URL.createObjectURL(blob);
+    _blobCache[blobKey] = url;
+    idbPut('audio', blobKey, blob);
+    return url;
+}
+
+// Async generator: yields Uint8Array chunks for a track via iterDownload
+export async function* iterTrackDownload(groupId, trackId) {
+    const msg = _msgCache[`${groupId}:${trackId}`];
+    if (!msg) throw new Error('Track not in cache');
+
+    const doc = msg.media?.document;
+    if (!doc) throw new Error('No document in message');
+
+    await _ensureConnected();
+
+    const inputLocation = new Api.InputDocumentFileLocation({
+        id: doc.id,
+        accessHash: doc.accessHash,
+        fileReference: doc.fileReference,
+        thumbSize: '',
+    });
+
+    const iter = client.iterDownload({
+        file: inputLocation,
+        requestSize: 512 * 1024,  // 512KB chunks (max allowed)
+        fileSize: doc.size,
+        dcId: doc.dcId,
+    });
+
+    for await (const chunk of iter) {
+        // Buffer.buffer may reference a larger shared ArrayBuffer;
+        // slice to get a clean copy with its own backing store
+        if (chunk.byteOffset !== undefined && chunk.byteLength !== undefined) {
+            yield new Uint8Array(chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength));
+        } else {
+            yield new Uint8Array(chunk);
+        }
+    }
+}
+
+// Full download fallback (used when SW streaming unavailable)
+export async function getTrackBlobUrl(groupId, trackId, topicId = null) {
+    const url = await getCachedTrackUrl(groupId, trackId);
+    if (url) return url;
 
     const msg = _msgCache[`${groupId}:${trackId}`];
     if (!msg) throw new Error('Track not in cache');
@@ -452,12 +503,7 @@ export async function getTrackBlobUrl(groupId, trackId, topicId = null) {
     const mime = track?.mime_type || 'audio/mpeg';
     const blob = new Blob([buffer], { type: mime });
 
-    // Store in IndexedDB for persistence
-    idbPut('audio', blobKey, blob);
-
-    const url = URL.createObjectURL(blob);
-    _blobCache[blobKey] = url;
-    return url;
+    return cacheTrackBlob(groupId, trackId, blob);
 }
 
 export async function getThumbBlobUrl(groupId, trackId) {

@@ -71061,15 +71061,54 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
     }
   }
-  async function getTrackBlobUrl(groupId, trackId, topicId = null) {
+  async function getCachedTrackUrl(groupId, trackId) {
     const blobKey = `${groupId}:${trackId}`;
     if (_blobCache[blobKey]) return _blobCache[blobKey];
     const cached = await idbGet("audio", blobKey);
     if (cached) {
-      const url2 = URL.createObjectURL(cached);
-      _blobCache[blobKey] = url2;
-      return url2;
+      const url = URL.createObjectURL(cached);
+      _blobCache[blobKey] = url;
+      return url;
     }
+    return null;
+  }
+  function cacheTrackBlob(groupId, trackId, blob) {
+    const blobKey = `${groupId}:${trackId}`;
+    const url = URL.createObjectURL(blob);
+    _blobCache[blobKey] = url;
+    idbPut("audio", blobKey, blob);
+    return url;
+  }
+  async function* iterTrackDownload(groupId, trackId) {
+    const msg = _msgCache[`${groupId}:${trackId}`];
+    if (!msg) throw new Error("Track not in cache");
+    const doc = msg.media?.document;
+    if (!doc) throw new Error("No document in message");
+    await _ensureConnected();
+    const inputLocation = new import_tl.Api.InputDocumentFileLocation({
+      id: doc.id,
+      accessHash: doc.accessHash,
+      fileReference: doc.fileReference,
+      thumbSize: ""
+    });
+    const iter = client.iterDownload({
+      file: inputLocation,
+      requestSize: 512 * 1024,
+      // 512KB chunks (max allowed)
+      fileSize: doc.size,
+      dcId: doc.dcId
+    });
+    for await (const chunk of iter) {
+      if (chunk.byteOffset !== void 0 && chunk.byteLength !== void 0) {
+        yield new Uint8Array(chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength));
+      } else {
+        yield new Uint8Array(chunk);
+      }
+    }
+  }
+  async function getTrackBlobUrl(groupId, trackId, topicId = null) {
+    const url = await getCachedTrackUrl(groupId, trackId);
+    if (url) return url;
     const msg = _msgCache[`${groupId}:${trackId}`];
     if (!msg) throw new Error("Track not in cache");
     await _ensureConnected();
@@ -71078,10 +71117,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     const track = getCachedTracks(groupId, topicId).find((t2) => t2.id === trackId);
     const mime = track?.mime_type || "audio/mpeg";
     const blob = new Blob([buffer], { type: mime });
-    idbPut("audio", blobKey, blob);
-    const url = URL.createObjectURL(blob);
-    _blobCache[blobKey] = url;
-    return url;
+    return cacheTrackBlob(groupId, trackId, blob);
   }
   async function getThumbBlobUrl(groupId, trackId) {
     const key = `thumb:${groupId}:${trackId}`;
@@ -72198,6 +72234,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       var isSeeking = false;
       var shuffleOn = false;
       var repeatOn = false;
+      var shuffleHistory = [];
       var activeTab = "playlists";
       var searchTracks = [];
       var _searchAbort = null;
@@ -72637,6 +72674,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         playerGroupId = gId;
         playerTopicId = topicId;
         playingFromPlaylist = fromPlaylist;
+        shuffleHistory = [];
         playTrack(index);
       }
       var _isLoadingAudio = false;
@@ -72676,30 +72714,102 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         btnPlay.classList.add("loading-audio");
         iconPlay.style.display = "none";
         iconPause.style.display = "none";
+        const clearSpinner = () => {
+          if (_playGeneration !== gen) return;
+          btnPlay.classList.remove("loading-audio");
+          _isLoadingAudio = false;
+          audio.removeEventListener("playing", clearSpinner);
+          audio.removeEventListener("error", onAudioError);
+        };
+        const onAudioError = () => {
+          if (_playGeneration !== gen) return;
+          clearSpinner();
+          iconPlay.style.display = "block";
+        };
+        audio.addEventListener("playing", clearSpinner, { once: true });
+        audio.addEventListener("error", onAudioError, { once: true });
         updateMediaSession();
         fetchLyricsForTrack(track, gen);
         fetchArtworkForTrack(track, gen);
         try {
-          const blobUrl = await getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
+          const cachedUrl = await getCachedTrackUrl(playerGroupId, track.id);
           if (_playGeneration !== gen) return;
-          audio.src = blobUrl;
-          audio.play().catch(() => {
-          });
+          if (cachedUrl) {
+            audio.src = cachedUrl;
+            audio.play().catch(() => {
+            });
+          } else {
+            const sw = navigator.serviceWorker?.controller;
+            if (sw) {
+              _streamViaServiceWorker(track, gen);
+            } else {
+              const blobUrl = await getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
+              if (_playGeneration !== gen) return;
+              audio.src = blobUrl;
+              audio.play().catch(() => {
+              });
+            }
+          }
         } catch (e2) {
           if (_playGeneration !== gen) return;
+          clearSpinner();
           iconPlay.style.display = "block";
           showToast("Failed to load track");
           lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
-        } finally {
+        }
+      }
+      async function _streamViaServiceWorker(track, gen) {
+        const gId = playerGroupId;
+        const blobKey = `${gId}:${track.id}`;
+        const mime = track.mime_type || "audio/mpeg";
+        const fileSize = track.file_size || 0;
+        const sw = navigator.serviceWorker.controller;
+        const channel = new MessageChannel();
+        sw.postMessage(
+          { type: "audio-stream", key: blobKey },
+          [channel.port2]
+        );
+        const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` + (fileSize ? `&size=${fileSize}` : "");
+        audio.src = streamUrl;
+        audio.play().catch(() => {
+        });
+        const chunks = [];
+        let cancelled = false;
+        channel.port1.onmessage = (event) => {
+          if (event.data?.cancel) cancelled = true;
+        };
+        try {
+          for await (const chunk of iterTrackDownload(gId, track.id)) {
+            if (_playGeneration !== gen || cancelled) {
+              channel.port1.postMessage({ done: true });
+              channel.port1.close();
+              return;
+            }
+            chunks.push(chunk);
+            channel.port1.postMessage({ chunk: chunk.buffer });
+          }
+          channel.port1.postMessage({ done: true });
+          channel.port1.close();
           if (_playGeneration === gen) {
+            const blob = new Blob(chunks, { type: mime });
+            cacheTrackBlob(gId, track.id, blob);
+          }
+        } catch (e2) {
+          if (_playGeneration !== gen) return;
+          channel.port1.postMessage({ error: e2.message });
+          channel.port1.close();
+          if (_isLoadingAudio) {
             btnPlay.classList.remove("loading-audio");
             _isLoadingAudio = false;
+            iconPlay.style.display = "block";
+            showToast("Failed to load track");
           }
         }
       }
       function nextTrack() {
         if (playerTracks.length === 0) return;
         if (shuffleOn) {
+          shuffleHistory.push(currentTrackIndex);
           let rand;
           do {
             rand = Math.floor(Math.random() * playerTracks.length);
@@ -72715,12 +72825,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           audio.currentTime = 0;
           return;
         }
-        if (shuffleOn) {
-          let rand;
-          do {
-            rand = Math.floor(Math.random() * playerTracks.length);
-          } while (rand === currentTrackIndex && playerTracks.length > 1);
-          playTrack(rand);
+        if (shuffleOn && shuffleHistory.length > 0) {
+          playTrack(shuffleHistory.pop());
         } else {
           playTrack((currentTrackIndex - 1 + playerTracks.length) % playerTracks.length);
         }

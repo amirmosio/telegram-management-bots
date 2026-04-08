@@ -31,6 +31,7 @@ let activeLyricIndex = -1;
 let isSeeking = false;
 let shuffleOn = false;
 let repeatOn = false;
+let shuffleHistory = []; // stack of previously played indices for shuffle-back
 
 let activeTab = 'playlists';
 
@@ -545,6 +546,7 @@ function startPlayback(trackList, gId, topicId, index, fromPlaylist) {
     playerGroupId = gId;
     playerTopicId = topicId;
     playingFromPlaylist = fromPlaylist;
+    shuffleHistory = [];
     playTrack(index);
 }
 
@@ -599,25 +601,118 @@ async function playTrack(index) {
     iconPlay.style.display = 'none';
     iconPause.style.display = 'none';
 
+    // Clear spinner as soon as audio actually starts playing
+    const clearSpinner = () => {
+        if (_playGeneration !== gen) return;
+        btnPlay.classList.remove('loading-audio');
+        _isLoadingAudio = false;
+        audio.removeEventListener('playing', clearSpinner);
+        audio.removeEventListener('error', onAudioError);
+    };
+    const onAudioError = () => {
+        if (_playGeneration !== gen) return;
+        clearSpinner();
+        iconPlay.style.display = 'block';
+    };
+    audio.addEventListener('playing', clearSpinner, { once: true });
+    audio.addEventListener('error', onAudioError, { once: true });
+
     // ── Launch audio, lyrics, artwork ALL in parallel ──
     updateMediaSession();
     fetchLyricsForTrack(track, gen);
     fetchArtworkForTrack(track, gen);
 
     try {
-        const blobUrl = await tg.getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
-        if (_playGeneration !== gen) return; // stale — a different track was requested
-        audio.src = blobUrl;
-        audio.play().catch(() => {});
+        // 1. Check memory + IDB cache (instant playback)
+        const cachedUrl = await tg.getCachedTrackUrl(playerGroupId, track.id);
+        if (_playGeneration !== gen) return;
+
+        if (cachedUrl) {
+            audio.src = cachedUrl;
+            audio.play().catch(() => {});
+        } else {
+            // 2. Stream via Service Worker if available, else full download
+            const sw = navigator.serviceWorker?.controller;
+            if (sw) {
+                // _streamViaServiceWorker sets audio.src and starts piping chunks.
+                // It resolves when download finishes, but audio plays earlier via 'playing' event.
+                _streamViaServiceWorker(track, gen);
+            } else {
+                const blobUrl = await tg.getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
+                if (_playGeneration !== gen) return;
+                audio.src = blobUrl;
+                audio.play().catch(() => {});
+            }
+        }
     } catch (e) {
         if (_playGeneration !== gen) return;
+        clearSpinner();
         iconPlay.style.display = 'block';
         showToast('Failed to load track');
         lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
-    } finally {
+    }
+}
+
+// Stream audio through Service Worker — starts playback as chunks arrive.
+// Runs in the background (not awaited by playTrack) so the spinner clears
+// as soon as the audio 'playing' event fires.
+async function _streamViaServiceWorker(track, gen) {
+    const gId = playerGroupId;
+    const blobKey = `${gId}:${track.id}`;
+    const mime = track.mime_type || 'audio/mpeg';
+    const fileSize = track.file_size || 0;
+    const sw = navigator.serviceWorker.controller;
+
+    // Set up MessageChannel — post port to SW before setting audio.src
+    const channel = new MessageChannel();
+    sw.postMessage(
+        { type: 'audio-stream', key: blobKey },
+        [channel.port2]
+    );
+
+    // Point audio element at the SW streaming endpoint
+    const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` +
+        (fileSize ? `&size=${fileSize}` : '');
+    audio.src = streamUrl;
+    audio.play().catch(() => {});
+
+    // Download chunks and pipe to SW while collecting for cache
+    const chunks = [];
+    let cancelled = false;
+
+    channel.port1.onmessage = (event) => {
+        if (event.data?.cancel) cancelled = true;
+    };
+
+    try {
+        for await (const chunk of tg.iterTrackDownload(gId, track.id)) {
+            if (_playGeneration !== gen || cancelled) {
+                channel.port1.postMessage({ done: true });
+                channel.port1.close();
+                return;
+            }
+            chunks.push(chunk);
+            // Send chunk to SW (structured clone copies the ArrayBuffer)
+            channel.port1.postMessage({ chunk: chunk.buffer });
+        }
+        channel.port1.postMessage({ done: true });
+        channel.port1.close();
+
+        // Cache the complete file in IDB for next time
         if (_playGeneration === gen) {
+            const blob = new Blob(chunks, { type: mime });
+            tg.cacheTrackBlob(gId, track.id, blob);
+        }
+    } catch (e) {
+        if (_playGeneration !== gen) return;
+        channel.port1.postMessage({ error: e.message });
+        channel.port1.close();
+        // If audio hasn't started playing yet, show error
+        if (_isLoadingAudio) {
             btnPlay.classList.remove('loading-audio');
             _isLoadingAudio = false;
+            iconPlay.style.display = 'block';
+            showToast('Failed to load track');
         }
     }
 }
@@ -625,6 +720,7 @@ async function playTrack(index) {
 function nextTrack() {
     if (playerTracks.length === 0) return;
     if (shuffleOn) {
+        shuffleHistory.push(currentTrackIndex);
         let rand;
         do { rand = Math.floor(Math.random() * playerTracks.length); }
         while (rand === currentTrackIndex && playerTracks.length > 1);
@@ -637,11 +733,8 @@ function nextTrack() {
 function prevTrack() {
     if (playerTracks.length === 0) return;
     if (audio.currentTime > 3) { audio.currentTime = 0; return; }
-    if (shuffleOn) {
-        let rand;
-        do { rand = Math.floor(Math.random() * playerTracks.length); }
-        while (rand === currentTrackIndex && playerTracks.length > 1);
-        playTrack(rand);
+    if (shuffleOn && shuffleHistory.length > 0) {
+        playTrack(shuffleHistory.pop());
     } else {
         playTrack((currentTrackIndex - 1 + playerTracks.length) % playerTracks.length);
     }
