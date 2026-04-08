@@ -4,7 +4,7 @@
  */
 import * as tg from './telegram.js';
 import { searchLyrics, parseTrackInfo } from './lyrics.js';
-import { searchArtwork, getArtworkSource } from './artwork.js';
+import { searchArtwork } from './artwork.js';
 
 // ══════════════════════════════════════
 //  STATE
@@ -40,18 +40,7 @@ let activeTab = 'playlists';
 let searchTracks = [];
 let _searchAbort = null;
 
-// Artwork/lyrics save state
-let currentArtworkFromInternet = false;
-let currentLyricsFromInternet = false;
-let pendingArtSource = null;
-let pendingLyricsSource = null;
 let pendingAddTrack = null;
-
-// Track IDs that have already been saved (persisted in localStorage)
-const _savedTrackIds = new Set(JSON.parse(localStorage.getItem('saved_track_ids') || '[]'));
-function _persistSavedIds() {
-    localStorage.setItem('saved_track_ids', JSON.stringify([..._savedTrackIds]));
-}
 
 // ══════════════════════════════════════
 //  SHARE LINK ENCODING
@@ -606,13 +595,6 @@ async function playTrack(index) {
     artworkIcon.style.display = 'flex';
     artworkImg.style.display = 'none';
     artworkImg.src = '';
-    $('btn-save-meta').style.display = 'none';
-    $('btn-save-meta').classList.remove('saved');
-    pendingArtSource = null;
-    pendingLyricsSource = null;
-    currentArtworkFromInternet = false;
-    currentLyricsFromInternet = false;
-
     // ── Show loading spinner on play button ──
     btnPlay.classList.add('loading-audio');
     iconPlay.style.display = 'none';
@@ -851,26 +833,15 @@ function updateMediaPositionState() {
 //  LYRICS
 // ══════════════════════════════════════
 async function fetchLyricsForTrack(track, gen) {
-    const alreadySaved = _savedTrackIds.has(track.id);
     try {
         const result = await searchLyrics(track.title, track.artist, track.duration);
-        if (_playGeneration !== gen) return; // stale — user switched tracks
+        if (_playGeneration !== gen) return;
         if (result.synced && result.synced.length > 0) {
             syncedLyrics = result.synced;
             renderSyncedLyrics();
-            if (result.source && !alreadySaved) {
-                currentLyricsFromInternet = true;
-                pendingLyricsSource = result.source;
-                updateSaveButton();
-            }
         } else if (result.plain) {
             syncedLyrics = [];
             renderPlainLyrics(result.plain);
-            if (result.source && !alreadySaved) {
-                currentLyricsFromInternet = true;
-                pendingLyricsSource = result.source;
-                updateSaveButton();
-            }
         } else {
             syncedLyrics = [];
             lyricsContent.innerHTML = '<div class="lyrics-placeholder">No lyrics available</div>';
@@ -924,26 +895,15 @@ function updateLyricsHighlight() {
 // ══════════════════════════════════════
 //  ARTWORK
 // ══════════════════════════════════════
-function updateSaveButton() {
-    const btn = $('btn-save-meta');
-    const label = $('save-meta-label');
-    const parts = [];
-    if (pendingArtSource) parts.push(`image: ${pendingArtSource}`);
-    if (pendingLyricsSource) parts.push(`lyrics: ${pendingLyricsSource}`);
-    if (parts.length > 0) { label.textContent = parts.join(' · ') + ' · save'; btn.style.display = 'flex'; }
-    else btn.style.display = 'none';
-}
-
 async function fetchArtworkForTrack(track, gen) {
     const artworkIcon = $('artwork-icon');
     const artworkImg = $('artwork-img');
-    const alreadySaved = _savedTrackIds.has(track.id);
 
     // Try embedded thumbnail first
     if (track.has_thumb) {
         try {
             const thumbUrl = await tg.getThumbBlobUrl(playerGroupId, track.id);
-            if (_playGeneration !== gen) return; // stale
+            if (_playGeneration !== gen) return;
             if (thumbUrl) {
                 artworkImg.src = thumbUrl;
                 artworkImg.onload = () => { if (_playGeneration !== gen) return; artworkIcon.style.display = 'none'; artworkImg.style.display = 'block'; updateMediaSession(); };
@@ -958,7 +918,7 @@ async function fetchArtworkForTrack(track, gen) {
     try {
         const { title, artist } = parseTrackInfo(track.title, track.artist);
         const url = await searchArtwork(title, artist);
-        if (_playGeneration !== gen) return; // stale
+        if (_playGeneration !== gen) return;
         if (url) {
             artworkImg.src = url;
             artworkImg.onload = () => {
@@ -966,70 +926,11 @@ async function fetchArtworkForTrack(track, gen) {
                 artworkIcon.style.display = 'none';
                 artworkImg.style.display = 'block';
                 updateMediaSession();
-                if (!alreadySaved) {
-                    currentArtworkFromInternet = true;
-                    pendingArtSource = getArtworkSource(url);
-                    updateSaveButton();
-                }
             };
             artworkImg.onerror = () => { if (_playGeneration !== gen) return; artworkIcon.style.display = 'flex'; artworkImg.style.display = 'none'; };
         }
     } catch (e) { /* no artwork */ }
 }
-
-// Save button — embeds artwork + lyrics into file and re-uploads via GramJS
-$('btn-save-meta').addEventListener('click', async () => {
-    const btn = $('btn-save-meta');
-    if (btn.classList.contains('saving')) return;
-    if (playerTracks.length === 0 || currentTrackIndex < 0) return;
-
-    btn.classList.add('saving');
-    $('save-meta-label').textContent = 'saving...';
-
-    const track = playerTracks[currentTrackIndex];
-    try {
-        const artUrl = currentArtworkFromInternet ? ($('artwork-img').src || null) : null;
-        const result = await tg.saveTrackMetadata(playerGroupId, track.id, playerTopicId, {
-            artworkUrl: artUrl,
-            syncedLyrics: currentLyricsFromInternet ? syncedLyrics : null,
-            plainLyrics: null,
-        });
-        if (result.saved) {
-            const parts = [];
-            if (pendingArtSource) parts.push('artwork');
-            if (pendingLyricsSource) parts.push('lyrics');
-            showToast((parts.join(' & ') || 'Metadata') + ' saved');
-            $('save-meta-label').textContent = 'saved';
-            btn.classList.add('saved');
-            pendingArtSource = null;
-            pendingLyricsSource = null;
-            currentArtworkFromInternet = false;
-            currentLyricsFromInternet = false;
-            setTimeout(() => { btn.style.display = 'none'; }, 1500);
-
-            if (result.new_id) {
-                currentTrackId = result.new_id;
-                playerTracks[currentTrackIndex] = {
-                    ...track,
-                    id: result.new_id,
-                    has_thumb: !!artUrl || track.has_thumb,
-                };
-                // Remember which tracks have been saved so we don't show the button again
-                _savedTrackIds.add(result.new_id);
-            }
-            _savedTrackIds.add(track.id);
-            _persistSavedIds();
-        } else {
-            showToast('Failed to save');
-            updateSaveButton();
-        }
-    } catch (e) {
-        console.error('Save failed:', e);
-        showToast('Failed to save: ' + e.message);
-        updateSaveButton();
-    }
-    btn.classList.remove('saving');
-});
 
 // ══════════════════════════════════════
 //  ADD TO PLAYLIST

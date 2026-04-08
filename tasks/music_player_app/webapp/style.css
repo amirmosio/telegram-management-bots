@@ -580,30 +580,6 @@ html, body {
     z-index: 2;
 }
 
-/* ── Source / Save Bar ── */
-#source-bar {
-    display: flex; gap: 8px;
-    width: 100%; max-width: 420px;
-    flex-shrink: 0;
-    margin-bottom: 8px;
-    justify-content: center;
-}
-
-.source-btn {
-    display: flex; align-items: center; gap: 6px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    color: var(--text-secondary);
-    font-size: 12px; cursor: pointer;
-    padding: 6px 12px;
-    border-radius: 20px;
-    transition: all 0.15s;
-    white-space: nowrap;
-}
-
-.source-btn:hover { color: var(--accent); border-color: var(--accent); background: rgba(82,136,193,0.08); }
-.source-btn.saving { opacity: 0.5; pointer-events: none; }
-.source-btn.saved { color: var(--accent); border-color: var(--accent); }
 
 .overlay-add-btn {
     display: flex; align-items: center; justify-content: center;
@@ -1023,26 +999,4 @@ html, body {
     .control-btn-sm.active { color: var(--accent); }
     .play-btn { background: var(--accent); color: #fff; }
 
-    /* Source/save bar */
-    #source-bar {
-        position: relative;
-        z-index: 4;
-        max-width: 100%;
-        padding: 0 16px;
-        margin-bottom: 4px;
-    }
-
-    .source-btn {
-        background: rgba(255,255,255,0.1);
-        border-color: rgba(255,255,255,0.2);
-        color: rgba(255,255,255,0.7);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-    }
-
-    .source-btn:hover {
-        background: rgba(255,255,255,0.18);
-        border-color: rgba(255,255,255,0.35);
-        color: #fff;
-    }
 }
