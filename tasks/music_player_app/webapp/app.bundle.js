@@ -72219,6 +72219,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       var shuffleOn = false;
       var repeatOn = false;
       var shuffleHistory = [];
+      var _wakeLock = null;
       var activeTab = "playlists";
       var searchTracks = [];
       var _searchAbort = null;
@@ -72662,6 +72663,26 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         playTrack(index);
       }
       var _isLoadingAudio = false;
+      async function _requestWakeLock() {
+        if (_wakeLock || !("wakeLock" in navigator)) return;
+        try {
+          _wakeLock = await navigator.wakeLock.request("screen");
+        } catch (e2) {
+        }
+        _wakeLock?.addEventListener("release", () => {
+          _wakeLock = null;
+        });
+      }
+      function _releaseWakeLock() {
+        if (_wakeLock) {
+          _wakeLock.release().catch(() => {
+          });
+          _wakeLock = null;
+        }
+      }
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && !audio.paused) _requestWakeLock();
+      });
       async function playTrack(index) {
         if (index < 0 || index >= playerTracks.length) return;
         const gen = ++_playGeneration;
@@ -72670,7 +72691,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         const track = playerTracks[index];
         currentTrackId = track.id;
         audio.pause();
-        audio.src = "";
         updateSidebarHighlight();
         _updateAddButton();
         trackTitleEl.textContent = track.title;
@@ -72702,6 +72722,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           if (_playGeneration !== gen) return;
           btnPlay.classList.remove("loading-audio");
           _isLoadingAudio = false;
+          _requestWakeLock();
         };
         audio.addEventListener("playing", onPlaying, { once: true });
         updateMediaSession();
@@ -72711,10 +72732,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           const cachedUrl = await getCachedTrackUrl(playerGroupId, track.id);
           if (_playGeneration !== gen) return;
           if (cachedUrl) {
+            console.log("[player] cached \u2192", track.title);
             audio.src = cachedUrl;
-            audio.play().catch(() => {
-            });
+            await _playWithRetry(gen);
           } else {
+            console.log("[player] downloading \u2192", track.title);
             await _downloadAndPlay(track, gen);
           }
         } catch (e2) {
@@ -72727,6 +72749,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
         }
       }
+      async function _playWithRetry(gen) {
+        for (let i2 = 0; i2 < 3; i2++) {
+          if (_playGeneration !== gen) return;
+          try {
+            await audio.play();
+            return;
+          } catch (e2) {
+            if (i2 < 2) await new Promise((r2) => setTimeout(r2, 200));
+          }
+        }
+      }
       async function _downloadAndPlay(track, gen) {
         const gId = playerGroupId;
         const mime = track.mime_type || "audio/mpeg";
@@ -72735,16 +72768,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         let streamActive = false;
         const sw = navigator.serviceWorker?.controller;
         if (sw) {
+          console.log("[player] SW streaming: setting up");
           const blobKey = `${gId}:${track.id}`;
           channel = new MessageChannel();
           sw.postMessage({ type: "audio-stream", key: blobKey }, [channel.port2]);
           const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` + (fileSize ? `&size=${fileSize}` : "");
           audio.src = streamUrl;
-          audio.play().catch(() => {
-          });
+          _playWithRetry(gen);
           streamActive = true;
           audio.addEventListener("error", () => {
             if (!streamActive) return;
+            console.log("[player] SW streaming failed, falling back to blob");
             streamActive = false;
             try {
               channel.port1.close();
@@ -72752,9 +72786,14 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
             }
             channel = null;
           }, { once: true });
+        } else {
+          console.log("[player] no SW controller, using full download");
         }
         const chunks = [];
+        let chunkCount = 0;
         for await (const chunk of iterTrackDownload(gId, track.id)) {
+          if (chunkCount === 0) console.log("[player] first chunk received (" + chunk.byteLength + " bytes)");
+          chunkCount++;
           if (_playGeneration !== gen) {
             if (channel) {
               try {
@@ -72783,10 +72822,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
         const blob = new Blob(chunks, { type: mime });
         cacheTrackBlob(gId, track.id, blob);
+        console.log("[player] download done:", chunkCount, "chunks,", blob.size, "bytes, stream=" + streamActive);
         if (!streamActive) {
+          console.log("[player] playing from blob (fallback)");
           audio.src = URL.createObjectURL(blob);
-          audio.play().catch(() => {
-          });
+          _playWithRetry(gen);
         }
       }
       function nextTrack() {
@@ -72850,11 +72890,13 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         iconPause.style.display = "block";
         updateMediaSession();
         if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+        _requestWakeLock();
       });
       audio.addEventListener("pause", () => {
         iconPlay.style.display = "block";
         iconPause.style.display = "none";
         if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
+        if (!_isLoadingAudio) _releaseWakeLock();
       });
       audio.addEventListener("ended", onTrackEnded);
       if ("mediaSession" in navigator) {

@@ -32,6 +32,7 @@ let isSeeking = false;
 let shuffleOn = false;
 let repeatOn = false;
 let shuffleHistory = []; // stack of previously played indices for shuffle-back
+let _wakeLock = null; // Screen Wake Lock to keep playback alive in background
 
 let activeTab = 'playlists';
 
@@ -552,6 +553,20 @@ function startPlayback(trackList, gId, topicId, index, fromPlaylist) {
 
 let _isLoadingAudio = false;
 
+// ── Wake Lock: keeps CPU/network alive while audio plays in background ──
+async function _requestWakeLock() {
+    if (_wakeLock || !('wakeLock' in navigator)) return;
+    try { _wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { /* non-critical */ }
+    // Re-acquire when tab becomes visible again (lock is auto-released on visibility change)
+    _wakeLock?.addEventListener('release', () => { _wakeLock = null; });
+}
+function _releaseWakeLock() {
+    if (_wakeLock) { _wakeLock.release().catch(() => {}); _wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !audio.paused) _requestWakeLock();
+});
+
 async function playTrack(index) {
     if (index < 0 || index >= playerTracks.length) return;
 
@@ -563,9 +578,11 @@ async function playTrack(index) {
     const track = playerTracks[index];
     currentTrackId = track.id;
 
-    // ── Stop previous track immediately ──
+    // ── Stop previous track ──
+    // IMPORTANT: Do NOT clear audio.src here. Clearing it destroys the browser
+    // audio session, which prevents play() from working when the screen is locked
+    // or the app is in the background. The new src assignment below replaces it.
     audio.pause();
-    audio.src = '';
 
     // ── Instant UI reset ──
     updateSidebarHighlight();
@@ -606,6 +623,7 @@ async function playTrack(index) {
         if (_playGeneration !== gen) return;
         btnPlay.classList.remove('loading-audio');
         _isLoadingAudio = false;
+        _requestWakeLock();
     };
     audio.addEventListener('playing', onPlaying, { once: true });
 
@@ -620,10 +638,12 @@ async function playTrack(index) {
         if (_playGeneration !== gen) return;
 
         if (cachedUrl) {
+            console.log('[player] cached →', track.title);
             audio.src = cachedUrl;
-            audio.play().catch(() => {});
+            await _playWithRetry(gen);
         } else {
             // 2. Try streaming via SW, with fallback to full download
+            console.log('[player] downloading →', track.title);
             await _downloadAndPlay(track, gen);
         }
     } catch (e) {
@@ -634,6 +654,17 @@ async function playTrack(index) {
         iconPlay.style.display = 'block';
         showToast('Failed to load track');
         lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
+    }
+}
+
+// Retry audio.play() — on mobile background, the first attempt may be rejected
+// because the browser hasn't fully committed the new source yet.
+async function _playWithRetry(gen) {
+    for (let i = 0; i < 3; i++) {
+        if (_playGeneration !== gen) return;
+        try { await audio.play(); return; } catch (e) {
+            if (i < 2) await new Promise(r => setTimeout(r, 200));
+        }
     }
 }
 
@@ -650,6 +681,7 @@ async function _downloadAndPlay(track, gen) {
 
     // ── Set up SW streaming if available ──
     if (sw) {
+        console.log('[player] SW streaming: setting up');
         const blobKey = `${gId}:${track.id}`;
         channel = new MessageChannel();
         sw.postMessage({ type: 'audio-stream', key: blobKey }, [channel.port2]);
@@ -657,21 +689,27 @@ async function _downloadAndPlay(track, gen) {
         const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` +
             (fileSize ? `&size=${fileSize}` : '');
         audio.src = streamUrl;
-        audio.play().catch(() => {});
+        _playWithRetry(gen);
         streamActive = true;
 
         // If audio errors (e.g. old SW returning 404), mark streaming as failed
         audio.addEventListener('error', () => {
             if (!streamActive) return;
+            console.log('[player] SW streaming failed, falling back to blob');
             streamActive = false;
             try { channel.port1.close(); } catch (e) {}
             channel = null;
         }, { once: true });
+    } else {
+        console.log('[player] no SW controller, using full download');
     }
 
     // ── Download all chunks (piped to SW if streaming, collected for fallback) ──
     const chunks = [];
+    let chunkCount = 0;
     for await (const chunk of tg.iterTrackDownload(gId, track.id)) {
+        if (chunkCount === 0) console.log('[player] first chunk received (' + chunk.byteLength + ' bytes)');
+        chunkCount++;
         if (_playGeneration !== gen) {
             if (channel) { try { channel.port1.postMessage({ done: true }); channel.port1.close(); } catch (e) {} }
             return;
@@ -692,10 +730,13 @@ async function _downloadAndPlay(track, gen) {
     const blob = new Blob(chunks, { type: mime });
     tg.cacheTrackBlob(gId, track.id, blob);
 
+    console.log('[player] download done:', chunkCount, 'chunks,', blob.size, 'bytes, stream=' + streamActive);
+
     // If streaming didn't work, play from the completed blob
     if (!streamActive) {
+        console.log('[player] playing from blob (fallback)');
         audio.src = URL.createObjectURL(blob);
-        audio.play().catch(() => {});
+        _playWithRetry(gen);
     }
 }
 
@@ -747,10 +788,13 @@ audio.addEventListener('play', () => {
     iconPlay.style.display = 'none'; iconPause.style.display = 'block';
     updateMediaSession();
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+    _requestWakeLock();
 });
 audio.addEventListener('pause', () => {
     iconPlay.style.display = 'block'; iconPause.style.display = 'none';
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+    // Release wake lock only if user explicitly paused (not during track transitions)
+    if (!_isLoadingAudio) _releaseWakeLock();
 });
 audio.addEventListener('ended', onTrackEnded);
 
