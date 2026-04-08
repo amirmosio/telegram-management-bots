@@ -72601,9 +72601,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         playingFromPlaylist = fromPlaylist;
         playTrack(index);
       }
+      var _isLoadingAudio = false;
       async function playTrack(index) {
         if (index < 0 || index >= playerTracks.length) return;
         const gen = ++_playGeneration;
+        _isLoadingAudio = true;
         currentTrackIndex = index;
         const track = playerTracks[index];
         currentTrackId = track.id;
@@ -72637,22 +72639,25 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         iconPlay.style.display = "none";
         iconPause.style.display = "none";
         updateMediaSession();
-        const audioPromise = getTrackBlobUrl(playerGroupId, track.id, playerTopicId).then((blobUrl) => {
+        fetchLyricsForTrack(track, gen);
+        fetchArtworkForTrack(track, gen);
+        try {
+          const blobUrl = await getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
           if (_playGeneration !== gen) return;
-          btnPlay.classList.remove("loading-audio");
           audio.src = blobUrl;
           audio.play().catch(() => {
           });
-        }).catch(() => {
+        } catch (e2) {
           if (_playGeneration !== gen) return;
-          btnPlay.classList.remove("loading-audio");
           iconPlay.style.display = "block";
-          showToast("Failed to download track");
+          showToast("Failed to load track");
           lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
-        });
-        fetchLyricsForTrack(track, gen);
-        fetchArtworkForTrack(track, gen);
-        await audioPromise;
+        } finally {
+          if (_playGeneration === gen) {
+            btnPlay.classList.remove("loading-audio");
+            _isLoadingAudio = false;
+          }
+        }
       }
       function nextTrack() {
         if (playerTracks.length === 0) return;
@@ -72689,21 +72694,10 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           });
         } else nextTrack();
       }
-      var _isDownloading = false;
-      async function togglePlay() {
-        if (!audio.src && currentTrackId && playerTracks.length > 0 && !_isDownloading) {
-          _isDownloading = true;
-          const track = playerTracks[currentTrackIndex];
-          showToast("Downloading...");
-          try {
-            const blobUrl = await getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
-            audio.src = blobUrl;
-            audio.play().catch(() => {
-            });
-          } catch (e2) {
-            showToast("Download failed");
-          }
-          _isDownloading = false;
+      function togglePlay() {
+        if (_isLoadingAudio) return;
+        if (!audio.src && currentTrackIndex >= 0 && playerTracks.length > 0) {
+          playTrack(currentTrackIndex);
           return;
         }
         if (!audio.src) return;

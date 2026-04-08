@@ -532,11 +532,14 @@ function startPlayback(trackList, gId, topicId, index, fromPlaylist) {
     playTrack(index);
 }
 
+let _isLoadingAudio = false;
+
 async function playTrack(index) {
     if (index < 0 || index >= playerTracks.length) return;
 
     // Bump generation so any in-flight fetches for the previous track are ignored
     const gen = ++_playGeneration;
+    _isLoadingAudio = true;
 
     currentTrackIndex = index;
     const track = playerTracks[index];
@@ -575,32 +578,32 @@ async function playTrack(index) {
     currentArtworkFromInternet = false;
     currentLyricsFromInternet = false;
 
-    // ── Show loading on play button ──
+    // ── Show loading spinner on play button ──
     btnPlay.classList.add('loading-audio');
     iconPlay.style.display = 'none';
     iconPause.style.display = 'none';
 
     // ── Launch audio, lyrics, artwork ALL in parallel ──
-    // Update media session immediately for lock screen display
     updateMediaSession();
-
-    const audioPromise = tg.getTrackBlobUrl(playerGroupId, track.id, playerTopicId).then(blobUrl => {
-        if (_playGeneration !== gen) return; // stale
-        btnPlay.classList.remove('loading-audio');
-        audio.src = blobUrl;
-        audio.play().catch(() => {});
-    }).catch(() => {
-        if (_playGeneration !== gen) return;
-        btnPlay.classList.remove('loading-audio');
-        iconPlay.style.display = 'block';
-        showToast('Failed to download track');
-        lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
-    });
-
     fetchLyricsForTrack(track, gen);
     fetchArtworkForTrack(track, gen);
 
-    await audioPromise;
+    try {
+        const blobUrl = await tg.getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
+        if (_playGeneration !== gen) return; // stale — a different track was requested
+        audio.src = blobUrl;
+        audio.play().catch(() => {});
+    } catch (e) {
+        if (_playGeneration !== gen) return;
+        iconPlay.style.display = 'block';
+        showToast('Failed to load track');
+        lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
+    } finally {
+        if (_playGeneration === gen) {
+            btnPlay.classList.remove('loading-audio');
+            _isLoadingAudio = false;
+        }
+    }
 }
 
 function nextTrack() {
@@ -633,21 +636,11 @@ function onTrackEnded() {
     else nextTrack();
 }
 
-let _isDownloading = false;
-async function togglePlay() {
-    // If no audio loaded but we have a restored track, download it first
-    if (!audio.src && currentTrackId && playerTracks.length > 0 && !_isDownloading) {
-        _isDownloading = true;
-        const track = playerTracks[currentTrackIndex];
-        showToast('Downloading...');
-        try {
-            const blobUrl = await tg.getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
-            audio.src = blobUrl;
-            audio.play().catch(() => {});
-        } catch (e) {
-            showToast('Download failed');
-        }
-        _isDownloading = false;
+function togglePlay() {
+    if (_isLoadingAudio) return; // already downloading, ignore extra clicks
+    // If no audio loaded but we have a restored track, trigger full playTrack
+    if (!audio.src && currentTrackIndex >= 0 && playerTracks.length > 0) {
+        playTrack(currentTrackIndex);
         return;
     }
     if (!audio.src) return;
