@@ -668,76 +668,48 @@ async function _playWithRetry(gen) {
     }
 }
 
-// Download track and start playback.
-// Tries SW streaming first (audio plays after first chunk). Falls back to full download.
+// Download track in chunks and start playback as early as possible.
+// Plays from a partial blob after the first chunk, then swaps to the full blob when done.
+let _partialPlayback = false; // true while playing from partial blob (prevents 'ended' advancing)
+
 async function _downloadAndPlay(track, gen) {
     const gId = playerGroupId;
     const mime = track.mime_type || 'audio/mpeg';
-    const fileSize = track.file_size || 0;
 
-    let channel = null;
-    let streamActive = false;
-    const sw = navigator.serviceWorker?.controller;
-
-    // ── Set up SW streaming if available ──
-    if (sw) {
-        console.log('[player] SW streaming: setting up');
-        const blobKey = `${gId}:${track.id}`;
-        channel = new MessageChannel();
-        sw.postMessage({ type: 'audio-stream', key: blobKey }, [channel.port2]);
-
-        const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` +
-            (fileSize ? `&size=${fileSize}` : '');
-        audio.src = streamUrl;
-        _playWithRetry(gen);
-        streamActive = true;
-
-        // If audio errors (e.g. old SW returning 404), mark streaming as failed
-        audio.addEventListener('error', () => {
-            if (!streamActive) return;
-            console.log('[player] SW streaming failed, falling back to blob');
-            streamActive = false;
-            try { channel.port1.close(); } catch (e) {}
-            channel = null;
-        }, { once: true });
-    } else {
-        console.log('[player] no SW controller, using full download');
-    }
-
-    // ── Download all chunks (piped to SW if streaming, collected for fallback) ──
     const chunks = [];
-    let chunkCount = 0;
+    let started = false;
+    let partialUrl = null;
+
     for await (const chunk of tg.iterTrackDownload(gId, track.id)) {
-        if (chunkCount === 0) console.log('[player] first chunk received (' + chunk.byteLength + ' bytes)');
-        chunkCount++;
-        if (_playGeneration !== gen) {
-            if (channel) { try { channel.port1.postMessage({ done: true }); channel.port1.close(); } catch (e) {} }
-            return;
-        }
+        if (_playGeneration !== gen) return;
         chunks.push(chunk);
-        if (streamActive && channel) {
-            try { channel.port1.postMessage({ chunk: chunk.buffer }); } catch (e) {}
+
+        // Start playback after first chunk (~512KB ≈ 13s of MP3 at 320kbps)
+        if (!started) {
+            console.log('[player] first chunk received (' + chunk.byteLength + ' bytes), starting playback');
+            const partial = new Blob(chunks, { type: mime });
+            partialUrl = URL.createObjectURL(partial);
+            audio.src = partialUrl;
+            _partialPlayback = true;
+            _playWithRetry(gen);
+            started = true;
         }
     }
     if (_playGeneration !== gen) return;
 
-    // Close stream
-    if (channel) {
-        try { channel.port1.postMessage({ done: true }); channel.port1.close(); } catch (e) {}
-    }
+    // Build final blob and cache it
+    const finalBlob = new Blob(chunks, { type: mime });
+    const finalUrl = tg.cacheTrackBlob(gId, track.id, finalBlob);
+    console.log('[player] download done:', chunks.length, 'chunks,', finalBlob.size, 'bytes');
 
-    // Cache complete file in IDB
-    const blob = new Blob(chunks, { type: mime });
-    tg.cacheTrackBlob(gId, track.id, blob);
-
-    console.log('[player] download done:', chunkCount, 'chunks,', blob.size, 'bytes, stream=' + streamActive);
-
-    // If streaming didn't work, play from the completed blob
-    if (!streamActive) {
-        console.log('[player] playing from blob (fallback)');
-        audio.src = URL.createObjectURL(blob);
-        _playWithRetry(gen);
-    }
+    // Swap to full blob, preserving playback position
+    _partialPlayback = false;
+    if (partialUrl) URL.revokeObjectURL(partialUrl);
+    const time = audio.currentTime;
+    const wasPlaying = !audio.paused;
+    audio.src = finalUrl;
+    audio.currentTime = time;
+    if (wasPlaying) audio.play().catch(() => {});
 }
 
 function nextTrack() {
@@ -764,6 +736,7 @@ function prevTrack() {
 }
 
 function onTrackEnded() {
+    if (_partialPlayback) return; // still downloading — full blob will be swapped in soon
     if (repeatOn) { audio.currentTime = 0; audio.play().catch(() => {}); }
     else nextTrack();
 }

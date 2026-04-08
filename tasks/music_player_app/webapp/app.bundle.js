@@ -72760,74 +72760,38 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           }
         }
       }
+      var _partialPlayback = false;
       async function _downloadAndPlay(track, gen) {
         const gId = playerGroupId;
         const mime = track.mime_type || "audio/mpeg";
-        const fileSize = track.file_size || 0;
-        let channel = null;
-        let streamActive = false;
-        const sw = navigator.serviceWorker?.controller;
-        if (sw) {
-          console.log("[player] SW streaming: setting up");
-          const blobKey = `${gId}:${track.id}`;
-          channel = new MessageChannel();
-          sw.postMessage({ type: "audio-stream", key: blobKey }, [channel.port2]);
-          const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` + (fileSize ? `&size=${fileSize}` : "");
-          audio.src = streamUrl;
-          _playWithRetry(gen);
-          streamActive = true;
-          audio.addEventListener("error", () => {
-            if (!streamActive) return;
-            console.log("[player] SW streaming failed, falling back to blob");
-            streamActive = false;
-            try {
-              channel.port1.close();
-            } catch (e2) {
-            }
-            channel = null;
-          }, { once: true });
-        } else {
-          console.log("[player] no SW controller, using full download");
-        }
         const chunks = [];
-        let chunkCount = 0;
+        let started = false;
+        let partialUrl = null;
         for await (const chunk of iterTrackDownload(gId, track.id)) {
-          if (chunkCount === 0) console.log("[player] first chunk received (" + chunk.byteLength + " bytes)");
-          chunkCount++;
-          if (_playGeneration !== gen) {
-            if (channel) {
-              try {
-                channel.port1.postMessage({ done: true });
-                channel.port1.close();
-              } catch (e2) {
-              }
-            }
-            return;
-          }
+          if (_playGeneration !== gen) return;
           chunks.push(chunk);
-          if (streamActive && channel) {
-            try {
-              channel.port1.postMessage({ chunk: chunk.buffer });
-            } catch (e2) {
-            }
+          if (!started) {
+            console.log("[player] first chunk received (" + chunk.byteLength + " bytes), starting playback");
+            const partial = new Blob(chunks, { type: mime });
+            partialUrl = URL.createObjectURL(partial);
+            audio.src = partialUrl;
+            _partialPlayback = true;
+            _playWithRetry(gen);
+            started = true;
           }
         }
         if (_playGeneration !== gen) return;
-        if (channel) {
-          try {
-            channel.port1.postMessage({ done: true });
-            channel.port1.close();
-          } catch (e2) {
-          }
-        }
-        const blob = new Blob(chunks, { type: mime });
-        cacheTrackBlob(gId, track.id, blob);
-        console.log("[player] download done:", chunkCount, "chunks,", blob.size, "bytes, stream=" + streamActive);
-        if (!streamActive) {
-          console.log("[player] playing from blob (fallback)");
-          audio.src = URL.createObjectURL(blob);
-          _playWithRetry(gen);
-        }
+        const finalBlob = new Blob(chunks, { type: mime });
+        const finalUrl = cacheTrackBlob(gId, track.id, finalBlob);
+        console.log("[player] download done:", chunks.length, "chunks,", finalBlob.size, "bytes");
+        _partialPlayback = false;
+        if (partialUrl) URL.revokeObjectURL(partialUrl);
+        const time = audio.currentTime;
+        const wasPlaying = !audio.paused;
+        audio.src = finalUrl;
+        audio.currentTime = time;
+        if (wasPlaying) audio.play().catch(() => {
+        });
       }
       function nextTrack() {
         if (playerTracks.length === 0) return;
@@ -72855,6 +72819,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
       }
       function onTrackEnded() {
+        if (_partialPlayback) return;
         if (repeatOn) {
           audio.currentTime = 0;
           audio.play().catch(() => {
