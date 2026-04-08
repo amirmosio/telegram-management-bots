@@ -688,9 +688,12 @@ export async function archiveChat(groupId) {
     await _ensureConnected();
     const entity = await _getEntity(groupId);
     try {
+        const inputPeer = _isChannel(entity)
+            ? new Api.InputPeerChannel({ channelId: entity.id, accessHash: entity.accessHash })
+            : new Api.InputPeerChat({ chatId: entity.id });
         await client.invoke(new Api.folders.EditPeerFolders({
             folderPeers: [new Api.InputFolderPeer({
-                peer: entity,
+                peer: inputPeer,
                 folderId: 1, // 1 = archive folder
             })],
         }));

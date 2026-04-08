@@ -71133,9 +71133,10 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     await _ensureConnected();
     const entity = await _getEntity(groupId);
     try {
+      const inputPeer = _isChannel(entity) ? new import_tl.Api.InputPeerChannel({ channelId: entity.id, accessHash: entity.accessHash }) : new import_tl.Api.InputPeerChat({ chatId: entity.id });
       await client.invoke(new import_tl.Api.folders.EditPeerFolders({
         folderPeers: [new import_tl.Api.InputFolderPeer({
-          peer: entity,
+          peer: inputPeer,
           folderId: 1
           // 1 = archive folder
         })]
