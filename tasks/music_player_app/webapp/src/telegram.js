@@ -78,6 +78,19 @@ export async function checkAuth() {
     return { logged_in: false };
 }
 
+export async function getMyProfilePhoto() {
+    await _ensureConnected();
+    try {
+        const me = await client.getMe();
+        const photo = await client.downloadProfilePhoto(me);
+        if (photo && photo.length > 0) {
+            const blob = new Blob([photo], { type: 'image/jpeg' });
+            return URL.createObjectURL(blob);
+        }
+    } catch (e) { /* no photo */ }
+    return null;
+}
+
 let _phoneCodeHash = null;
 
 export async function sendCode(phone) {

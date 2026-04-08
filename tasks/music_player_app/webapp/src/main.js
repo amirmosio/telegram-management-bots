@@ -1258,6 +1258,7 @@ $('btn-verify-code').addEventListener('click', async () => {
     const result = await tg.verifyCode(loginPhone, code);
     if (result.logged_in) {
         showApp();
+        setUserProfile(result.user);
         initAfterLogin();
     } else if (result.needs_2fa) {
         $('login-step-code').style.display = 'none';
@@ -1277,6 +1278,7 @@ $('btn-verify-2fa').addEventListener('click', async () => {
     const result = await tg.verify2FA(password);
     if (result.logged_in) {
         showApp();
+        setUserProfile(result.user);
         initAfterLogin();
     } else {
         showLoginError(result.error || 'Verification failed');
@@ -1379,11 +1381,23 @@ window.addEventListener('appinstalled', () => {
 // ══════════════════════════════════════
 //  BOOT
 // ══════════════════════════════════════
+function setUserProfile(user) {
+    const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'User';
+    $('user-name').textContent = name;
+    // Load avatar asynchronously
+    tg.getMyProfilePhoto().then(url => {
+        if (url) {
+            $('user-avatar').innerHTML = `<img src="${url}" alt="">`;
+        }
+    }).catch(() => {});
+}
+
 (async function boot() {
     try {
         const auth = await tg.checkAuth();
         if (auth.logged_in) {
             showApp();
+            setUserProfile(auth.user);
             initAfterLogin();
         } else {
             showLogin();

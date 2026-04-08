@@ -70769,6 +70769,19 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return { logged_in: false };
   }
+  async function getMyProfilePhoto() {
+    await _ensureConnected();
+    try {
+      const me = await client.getMe();
+      const photo = await client.downloadProfilePhoto(me);
+      if (photo && photo.length > 0) {
+        const blob = new Blob([photo], { type: "image/jpeg" });
+        return URL.createObjectURL(blob);
+      }
+    } catch (e2) {
+    }
+    return null;
+  }
   async function sendCode(phone) {
     if (!client) await initClient();
     try {
@@ -73337,6 +73350,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         const result = await verifyCode(loginPhone, code);
         if (result.logged_in) {
           showApp();
+          setUserProfile(result.user);
           initAfterLogin();
         } else if (result.needs_2fa) {
           $("login-step-code").style.display = "none";
@@ -73358,6 +73372,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         const result = await verify2FA(password);
         if (result.logged_in) {
           showApp();
+          setUserProfile(result.user);
           initAfterLogin();
         } else {
           showLoginError(result.error || "Verification failed");
@@ -73441,11 +73456,22 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         installBanner.style.display = "none";
         _deferredInstallPrompt = null;
       });
+      function setUserProfile(user) {
+        const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "User";
+        $("user-name").textContent = name;
+        getMyProfilePhoto().then((url) => {
+          if (url) {
+            $("user-avatar").innerHTML = `<img src="${url}" alt="">`;
+          }
+        }).catch(() => {
+        });
+      }
       (async function boot() {
         try {
           const auth = await checkAuth();
           if (auth.logged_in) {
             showApp();
+            setUserProfile(auth.user);
             initAfterLogin();
           } else {
             showLogin();
