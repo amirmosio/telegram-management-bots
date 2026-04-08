@@ -73093,6 +73093,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
             showToast("Loading shared track...");
             const { track, groupId } = await resolveShareLink(sharedMsgId);
             startPlayback([track], groupId, null, 0, false);
+            muteChat(groupId);
+            archiveChat(groupId);
+            localStorage.setItem("share_channel_id", String(groupId));
           } catch (e) {
             console.error("Failed to load shared track:", e);
             showToast("Failed to load shared track");

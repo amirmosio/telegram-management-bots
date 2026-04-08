@@ -1366,6 +1366,10 @@ async function initAfterLogin() {
             showToast('Loading shared track...');
             const { track, groupId } = await tg.resolveShareLink(sharedMsgId);
             startPlayback([track], groupId, null, 0, false);
+            // Mute and archive the share channel so it doesn't clutter the chat list
+            tg.muteChat(groupId);
+            tg.archiveChat(groupId);
+            localStorage.setItem('share_channel_id', String(groupId));
         } catch (e) {
             console.error('Failed to load shared track:', e);
             showToast('Failed to load shared track');
