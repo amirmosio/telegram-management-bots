@@ -71129,6 +71129,21 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       console.warn("Failed to mute chat:", e.message);
     }
   }
+  async function archiveChat(groupId) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    try {
+      await client.invoke(new import_tl.Api.folders.EditPeerFolders({
+        folderPeers: [new import_tl.Api.InputFolderPeer({
+          peer: entity,
+          folderId: 1
+          // 1 = archive folder
+        })]
+      }));
+    } catch (e) {
+      console.warn("Failed to archive chat:", e.message);
+    }
+  }
   async function findOrCreateShareChannel() {
     await _ensureConnected();
     try {
@@ -72726,12 +72741,15 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
             shareChannelId = channel.id;
             localStorage.setItem("share_channel_id", String(channel.id));
             muteChat(channel.id);
+            archiveChat(channel.id);
           }
+          const parsedShareId = parseInt(shareChannelId, 10);
           const { link } = await shareTrack(
-            parseInt(shareChannelId, 10),
+            parsedShareId,
             playerGroupId,
             track.id
           );
+          archiveChat(parsedShareId);
           const appUrl = window.location.origin + window.location.pathname;
           const msgId = link.split("/").pop();
           const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
@@ -73060,7 +73078,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
         const cachedShareId = localStorage.getItem("share_channel_id");
         if (cachedShareId) {
-          muteChat(parseInt(cachedShareId, 10));
+          const shareId = parseInt(cachedShareId, 10);
+          muteChat(shareId);
+          archiveChat(shareId);
         }
         await restoreSession();
         const params = new URLSearchParams(window.location.search);

@@ -997,14 +997,19 @@ btnShare.addEventListener('click', async () => {
             shareChannelId = channel.id;
             localStorage.setItem('share_channel_id', String(channel.id));
             tg.muteChat(channel.id); // mute on first use
+            tg.archiveChat(channel.id); // archive on first use
         }
 
         // Forward the track
+        const parsedShareId = parseInt(shareChannelId, 10);
         const { link } = await tg.shareTrack(
-            parseInt(shareChannelId, 10),
+            parsedShareId,
             playerGroupId,
             track.id
         );
+
+        // Re-archive after sharing (forwarding unarchives the chat)
+        tg.archiveChat(parsedShareId);
 
         // Build web app link with encoded track ID
         const appUrl = window.location.origin + window.location.pathname;
@@ -1339,10 +1344,12 @@ async function initAfterLogin() {
         console.error('Failed to get playlist group:', e);
     }
 
-    // Ensure share channel is muted too (if user has used it before)
+    // Ensure share channel is muted and archived (if user has used it before)
     const cachedShareId = localStorage.getItem('share_channel_id');
     if (cachedShareId) {
-        tg.muteChat(parseInt(cachedShareId, 10)); // fire-and-forget
+        const shareId = parseInt(cachedShareId, 10);
+        tg.muteChat(shareId);    // fire-and-forget
+        tg.archiveChat(shareId); // fire-and-forget
     }
 
     // Restore session AFTER playlistGroupId is set

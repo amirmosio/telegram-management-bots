@@ -684,6 +684,21 @@ export async function muteChat(groupId) {
     }
 }
 
+export async function archiveChat(groupId) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    try {
+        await client.invoke(new Api.folders.EditPeerFolders({
+            folderPeers: [new Api.InputFolderPeer({
+                peer: entity,
+                folderId: 1, // 1 = archive folder
+            })],
+        }));
+    } catch (e) {
+        console.warn('Failed to archive chat:', e.message);
+    }
+}
+
 // ════════════════════════════════════
 //  SHARE CHANNEL MANAGEMENT
 // ════════════════════════════════════
