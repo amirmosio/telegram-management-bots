@@ -580,6 +580,9 @@ async function playTrack(index) {
     iconPause.style.display = 'none';
 
     // ── Launch audio, lyrics, artwork ALL in parallel ──
+    // Update media session immediately for lock screen display
+    updateMediaSession();
+
     const audioPromise = tg.getTrackBlobUrl(playerGroupId, track.id, playerTopicId).then(blobUrl => {
         if (_playGeneration !== gen) return; // stale
         btnPlay.classList.remove('loading-audio');
@@ -658,6 +661,56 @@ $('btn-prev').addEventListener('click', prevTrack);
 audio.addEventListener('play', () => { iconPlay.style.display = 'none'; iconPause.style.display = 'block'; });
 audio.addEventListener('pause', () => { iconPlay.style.display = 'block'; iconPause.style.display = 'none'; });
 audio.addEventListener('ended', onTrackEnded);
+
+// ══════════════════════════════════════
+//  MEDIA SESSION API (OS controls)
+// ══════════════════════════════════════
+function updateMediaSession() {
+    if (!('mediaSession' in navigator)) return;
+    const track = playerTracks[currentTrackIndex];
+    if (!track) return;
+
+    const artworkImg = $('artwork-img');
+    const artworkList = [];
+    if (artworkImg && artworkImg.src && artworkImg.style.display !== 'none') {
+        artworkList.push({ src: artworkImg.src, sizes: '512x512', type: 'image/jpeg' });
+    }
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title || 'Unknown',
+        artist: track.artist || 'Unknown',
+        album: '',
+        artwork: artworkList,
+    });
+
+    navigator.mediaSession.setActionHandler('play', () => { audio.play().catch(() => {}); });
+    navigator.mediaSession.setActionHandler('pause', () => { audio.pause(); });
+    navigator.mediaSession.setActionHandler('nexttrack', nextTrack);
+    navigator.mediaSession.setActionHandler('previoustrack', prevTrack);
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime != null && audio.duration) {
+            audio.currentTime = details.seekTime;
+        }
+    });
+    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10));
+    });
+    navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (details.seekOffset || 10));
+    });
+}
+
+function updateMediaPositionState() {
+    if (!('mediaSession' in navigator) || !navigator.mediaSession.setPositionState) return;
+    if (!audio.duration || !isFinite(audio.duration)) return;
+    try {
+        navigator.mediaSession.setPositionState({
+            duration: audio.duration,
+            playbackRate: audio.playbackRate,
+            position: audio.currentTime,
+        });
+    } catch (e) { /* ignore */ }
+}
 
 // ══════════════════════════════════════
 //  LYRICS
@@ -758,7 +811,7 @@ async function fetchArtworkForTrack(track, gen) {
             if (_playGeneration !== gen) return; // stale
             if (thumbUrl) {
                 artworkImg.src = thumbUrl;
-                artworkImg.onload = () => { if (_playGeneration !== gen) return; artworkIcon.style.display = 'none'; artworkImg.style.display = 'block'; };
+                artworkImg.onload = () => { if (_playGeneration !== gen) return; artworkIcon.style.display = 'none'; artworkImg.style.display = 'block'; updateMediaSession(); };
                 artworkImg.onerror = () => { if (_playGeneration !== gen) return; artworkIcon.style.display = 'flex'; artworkImg.style.display = 'none'; };
                 return;
             }
@@ -777,6 +830,7 @@ async function fetchArtworkForTrack(track, gen) {
                 if (_playGeneration !== gen) return;
                 artworkIcon.style.display = 'none';
                 artworkImg.style.display = 'block';
+                updateMediaSession();
                 if (!alreadySaved) {
                     currentArtworkFromInternet = true;
                     pendingArtSource = getArtworkSource(url);
@@ -897,6 +951,7 @@ audio.addEventListener('timeupdate', () => {
     progressHandle.style.left = pct + '%';
     timeCurrent.textContent = formatTime(audio.currentTime);
     updateLyricsHighlight();
+    updateMediaPositionState();
 });
 audio.addEventListener('loadedmetadata', () => { timeTotal.textContent = formatTime(audio.duration); });
 audio.addEventListener('progress', () => {
@@ -1192,6 +1247,42 @@ async function initAfterLogin() {
     // Restore session AFTER playlistGroupId is set
     await restoreSession();
 }
+
+// ══════════════════════════════════════
+//  PWA INSTALL PROMPT
+// ══════════════════════════════════════
+let _deferredInstallPrompt = null;
+const installBanner = $('install-banner');
+const btnInstall = $('btn-install');
+const btnInstallDismiss = $('btn-install-dismiss');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _deferredInstallPrompt = e;
+    if (!localStorage.getItem('pwa_install_dismissed')) {
+        installBanner.style.display = 'flex';
+    }
+});
+
+btnInstall.addEventListener('click', async () => {
+    if (!_deferredInstallPrompt) return;
+    _deferredInstallPrompt.prompt();
+    const result = await _deferredInstallPrompt.userChoice;
+    if (result.outcome === 'accepted') {
+        installBanner.style.display = 'none';
+    }
+    _deferredInstallPrompt = null;
+});
+
+btnInstallDismiss.addEventListener('click', () => {
+    installBanner.style.display = 'none';
+    localStorage.setItem('pwa_install_dismissed', '1');
+});
+
+window.addEventListener('appinstalled', () => {
+    installBanner.style.display = 'none';
+    _deferredInstallPrompt = null;
+});
 
 // ══════════════════════════════════════
 //  BOOT

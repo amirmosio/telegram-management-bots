@@ -41,8 +41,10 @@ class MusicServer:
     def _setup_routes(self):
         # Static
         self.app.router.add_get("/", self._serve_index)
-        self.app.router.add_get("/static/{filename}", self._serve_static)
+        self.app.router.add_get("/static/{path:.*}", self._serve_static)
         self.app.router.add_get("/sw.js", self._serve_sw)
+        self.app.router.add_get("/manifest.json", self._serve_manifest)
+        self.app.router.add_get("/icons/{path:.*}", self._serve_icons)
 
         # Auth
         self.app.router.add_get("/api/auth/status", self._handle_auth_status)
@@ -177,9 +179,24 @@ class MusicServer:
     async def _serve_sw(self, request):
         return web.FileResponse(WEBAPP_DIR / "sw.js")
 
+    async def _serve_manifest(self, request):
+        return web.FileResponse(WEBAPP_DIR / "manifest.json")
+
+    async def _serve_icons(self, request):
+        filename = request.match_info["path"]
+        filepath = (WEBAPP_DIR / "icons" / filename).resolve()
+        if not str(filepath).startswith(str((WEBAPP_DIR / "icons").resolve())):
+            raise web.HTTPForbidden()
+        if not filepath.exists() or not filepath.is_file():
+            raise web.HTTPNotFound()
+        return web.FileResponse(filepath)
+
     async def _serve_static(self, request):
-        filename = request.match_info["filename"]
-        filepath = WEBAPP_DIR / filename
+        filename = request.match_info["path"]
+        filepath = (WEBAPP_DIR / filename).resolve()
+        # Prevent path traversal
+        if not str(filepath).startswith(str(WEBAPP_DIR.resolve())):
+            raise web.HTTPForbidden()
         if not filepath.exists() or not filepath.is_file():
             raise web.HTTPNotFound()
         return web.FileResponse(filepath)

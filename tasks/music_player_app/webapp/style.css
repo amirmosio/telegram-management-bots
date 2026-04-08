@@ -801,6 +801,49 @@ html, body {
     padding: 0;
 }
 
+/* ── Install Banner ── */
+#install-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 100;
+    font-size: 14px;
+    color: var(--text-primary);
+    animation: slideDown 0.3s ease;
+}
+
+#install-banner span { flex: 1; }
+
+#btn-install {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 8px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+#btn-install:hover { background: #6199d0; }
+
+#btn-install-dismiss {
+    color: var(--text-secondary);
+    font-size: 20px;
+    width: 32px; height: 32px;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
 /* ── Mobile ── */
 @media (max-width: 700px) {
     #fab-search { top: 16px; right: 16px; bottom: auto; left: auto; width: 48px; height: 48px; }

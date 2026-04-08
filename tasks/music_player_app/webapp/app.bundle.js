@@ -72542,6 +72542,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         btnPlay.classList.add("loading-audio");
         iconPlay.style.display = "none";
         iconPause.style.display = "none";
+        updateMediaSession();
         const audioPromise = getTrackBlobUrl(playerGroupId, track.id, playerTopicId).then((blobUrl) => {
           if (_playGeneration !== gen) return;
           btnPlay.classList.remove("loading-audio");
@@ -72638,6 +72639,54 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         iconPause.style.display = "none";
       });
       audio.addEventListener("ended", onTrackEnded);
+      function updateMediaSession() {
+        if (!("mediaSession" in navigator)) return;
+        const track = playerTracks[currentTrackIndex];
+        if (!track) return;
+        const artworkImg = $("artwork-img");
+        const artworkList = [];
+        if (artworkImg && artworkImg.src && artworkImg.style.display !== "none") {
+          artworkList.push({ src: artworkImg.src, sizes: "512x512", type: "image/jpeg" });
+        }
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.title || "Unknown",
+          artist: track.artist || "Unknown",
+          album: "",
+          artwork: artworkList
+        });
+        navigator.mediaSession.setActionHandler("play", () => {
+          audio.play().catch(() => {
+          });
+        });
+        navigator.mediaSession.setActionHandler("pause", () => {
+          audio.pause();
+        });
+        navigator.mediaSession.setActionHandler("nexttrack", nextTrack);
+        navigator.mediaSession.setActionHandler("previoustrack", prevTrack);
+        navigator.mediaSession.setActionHandler("seekto", (details) => {
+          if (details.seekTime != null && audio.duration) {
+            audio.currentTime = details.seekTime;
+          }
+        });
+        navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+          audio.currentTime = Math.max(0, audio.currentTime - (details.seekOffset || 10));
+        });
+        navigator.mediaSession.setActionHandler("seekforward", (details) => {
+          audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (details.seekOffset || 10));
+        });
+      }
+      function updateMediaPositionState() {
+        if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
+        if (!audio.duration || !isFinite(audio.duration)) return;
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: audio.duration,
+            playbackRate: audio.playbackRate,
+            position: audio.currentTime
+          });
+        } catch (e2) {
+        }
+      }
       async function fetchLyricsForTrack(track, gen) {
         const alreadySaved = _savedTrackIds.has(track.id);
         try {
@@ -72740,6 +72789,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
                 if (_playGeneration !== gen) return;
                 artworkIcon.style.display = "none";
                 artworkImg.style.display = "block";
+                updateMediaSession();
               };
               artworkImg.onerror = () => {
                 if (_playGeneration !== gen) return;
@@ -72762,6 +72812,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
               if (_playGeneration !== gen) return;
               artworkIcon.style.display = "none";
               artworkImg.style.display = "block";
+              updateMediaSession();
               if (!alreadySaved) {
                 currentArtworkFromInternet = true;
                 pendingArtSource = getArtworkSource(url);
@@ -72881,6 +72932,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         progressHandle.style.left = pct + "%";
         timeCurrent.textContent = formatTime(audio.currentTime);
         updateLyricsHighlight();
+        updateMediaPositionState();
       });
       audio.addEventListener("loadedmetadata", () => {
         timeTotal.textContent = formatTime(audio.duration);
@@ -73179,6 +73231,34 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
         await restoreSession();
       }
+      var _deferredInstallPrompt = null;
+      var installBanner = $("install-banner");
+      var btnInstall = $("btn-install");
+      var btnInstallDismiss = $("btn-install-dismiss");
+      window.addEventListener("beforeinstallprompt", (e2) => {
+        e2.preventDefault();
+        _deferredInstallPrompt = e2;
+        if (!localStorage.getItem("pwa_install_dismissed")) {
+          installBanner.style.display = "flex";
+        }
+      });
+      btnInstall.addEventListener("click", async () => {
+        if (!_deferredInstallPrompt) return;
+        _deferredInstallPrompt.prompt();
+        const result = await _deferredInstallPrompt.userChoice;
+        if (result.outcome === "accepted") {
+          installBanner.style.display = "none";
+        }
+        _deferredInstallPrompt = null;
+      });
+      btnInstallDismiss.addEventListener("click", () => {
+        installBanner.style.display = "none";
+        localStorage.setItem("pwa_install_dismissed", "1");
+      });
+      window.addEventListener("appinstalled", () => {
+        installBanner.style.display = "none";
+        _deferredInstallPrompt = null;
+      });
       (async function boot() {
         try {
           const auth = await checkAuth();
