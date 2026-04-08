@@ -71049,9 +71049,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     _tracksCache[cacheKey] = tracks;
     return tracks;
   }
-  function getCachedTracks(groupId, topicId = null) {
-    return _tracksCache[_trackCacheKey(groupId, topicId)] || [];
-  }
   function invalidateCache(groupId, topicId = null) {
     const key = _trackCacheKey(groupId, topicId);
     delete _tracksCache[key];
@@ -71105,19 +71102,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         yield new Uint8Array(chunk);
       }
     }
-  }
-  async function getTrackBlobUrl(groupId, trackId, topicId = null) {
-    const url = await getCachedTrackUrl(groupId, trackId);
-    if (url) return url;
-    const msg = _msgCache[`${groupId}:${trackId}`];
-    if (!msg) throw new Error("Track not in cache");
-    await _ensureConnected();
-    const buffer = await client.downloadMedia(msg);
-    if (!buffer) throw new Error("Download failed");
-    const track = getCachedTracks(groupId, topicId).find((t2) => t2.id === trackId);
-    const mime = track?.mime_type || "audio/mpeg";
-    const blob = new Blob([buffer], { type: mime });
-    return cacheTrackBlob(groupId, trackId, blob);
   }
   async function getThumbBlobUrl(groupId, trackId) {
     const key = `thumb:${groupId}:${trackId}`;
@@ -72714,20 +72698,12 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         btnPlay.classList.add("loading-audio");
         iconPlay.style.display = "none";
         iconPause.style.display = "none";
-        const clearSpinner = () => {
+        const onPlaying = () => {
           if (_playGeneration !== gen) return;
           btnPlay.classList.remove("loading-audio");
           _isLoadingAudio = false;
-          audio.removeEventListener("playing", clearSpinner);
-          audio.removeEventListener("error", onAudioError);
         };
-        const onAudioError = () => {
-          if (_playGeneration !== gen) return;
-          clearSpinner();
-          iconPlay.style.display = "block";
-        };
-        audio.addEventListener("playing", clearSpinner, { once: true });
-        audio.addEventListener("error", onAudioError, { once: true });
+        audio.addEventListener("playing", onPlaying, { once: true });
         updateMediaSession();
         fetchLyricsForTrack(track, gen);
         fetchArtworkForTrack(track, gen);
@@ -72739,71 +72715,78 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
             audio.play().catch(() => {
             });
           } else {
-            const sw = navigator.serviceWorker?.controller;
-            if (sw) {
-              _streamViaServiceWorker(track, gen);
-            } else {
-              const blobUrl = await getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
-              if (_playGeneration !== gen) return;
-              audio.src = blobUrl;
-              audio.play().catch(() => {
-              });
-            }
+            await _downloadAndPlay(track, gen);
           }
         } catch (e2) {
           if (_playGeneration !== gen) return;
-          clearSpinner();
+          audio.removeEventListener("playing", onPlaying);
+          btnPlay.classList.remove("loading-audio");
+          _isLoadingAudio = false;
           iconPlay.style.display = "block";
           showToast("Failed to load track");
           lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
         }
       }
-      async function _streamViaServiceWorker(track, gen) {
+      async function _downloadAndPlay(track, gen) {
         const gId = playerGroupId;
-        const blobKey = `${gId}:${track.id}`;
         const mime = track.mime_type || "audio/mpeg";
         const fileSize = track.file_size || 0;
-        const sw = navigator.serviceWorker.controller;
-        const channel = new MessageChannel();
-        sw.postMessage(
-          { type: "audio-stream", key: blobKey },
-          [channel.port2]
-        );
-        const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` + (fileSize ? `&size=${fileSize}` : "");
-        audio.src = streamUrl;
-        audio.play().catch(() => {
-        });
-        const chunks = [];
-        let cancelled = false;
-        channel.port1.onmessage = (event) => {
-          if (event.data?.cancel) cancelled = true;
-        };
-        try {
-          for await (const chunk of iterTrackDownload(gId, track.id)) {
-            if (_playGeneration !== gen || cancelled) {
-              channel.port1.postMessage({ done: true });
+        let channel = null;
+        let streamActive = false;
+        const sw = navigator.serviceWorker?.controller;
+        if (sw) {
+          const blobKey = `${gId}:${track.id}`;
+          channel = new MessageChannel();
+          sw.postMessage({ type: "audio-stream", key: blobKey }, [channel.port2]);
+          const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` + (fileSize ? `&size=${fileSize}` : "");
+          audio.src = streamUrl;
+          audio.play().catch(() => {
+          });
+          streamActive = true;
+          audio.addEventListener("error", () => {
+            if (!streamActive) return;
+            streamActive = false;
+            try {
               channel.port1.close();
-              return;
+            } catch (e2) {
             }
-            chunks.push(chunk);
-            channel.port1.postMessage({ chunk: chunk.buffer });
+            channel = null;
+          }, { once: true });
+        }
+        const chunks = [];
+        for await (const chunk of iterTrackDownload(gId, track.id)) {
+          if (_playGeneration !== gen) {
+            if (channel) {
+              try {
+                channel.port1.postMessage({ done: true });
+                channel.port1.close();
+              } catch (e2) {
+              }
+            }
+            return;
           }
-          channel.port1.postMessage({ done: true });
-          channel.port1.close();
-          if (_playGeneration === gen) {
-            const blob = new Blob(chunks, { type: mime });
-            cacheTrackBlob(gId, track.id, blob);
+          chunks.push(chunk);
+          if (streamActive && channel) {
+            try {
+              channel.port1.postMessage({ chunk: chunk.buffer });
+            } catch (e2) {
+            }
           }
-        } catch (e2) {
-          if (_playGeneration !== gen) return;
-          channel.port1.postMessage({ error: e2.message });
-          channel.port1.close();
-          if (_isLoadingAudio) {
-            btnPlay.classList.remove("loading-audio");
-            _isLoadingAudio = false;
-            iconPlay.style.display = "block";
-            showToast("Failed to load track");
+        }
+        if (_playGeneration !== gen) return;
+        if (channel) {
+          try {
+            channel.port1.postMessage({ done: true });
+            channel.port1.close();
+          } catch (e2) {
           }
+        }
+        const blob = new Blob(chunks, { type: mime });
+        cacheTrackBlob(gId, track.id, blob);
+        if (!streamActive) {
+          audio.src = URL.createObjectURL(blob);
+          audio.play().catch(() => {
+          });
         }
       }
       function nextTrack() {

@@ -602,20 +602,12 @@ async function playTrack(index) {
     iconPause.style.display = 'none';
 
     // Clear spinner as soon as audio actually starts playing
-    const clearSpinner = () => {
+    const onPlaying = () => {
         if (_playGeneration !== gen) return;
         btnPlay.classList.remove('loading-audio');
         _isLoadingAudio = false;
-        audio.removeEventListener('playing', clearSpinner);
-        audio.removeEventListener('error', onAudioError);
     };
-    const onAudioError = () => {
-        if (_playGeneration !== gen) return;
-        clearSpinner();
-        iconPlay.style.display = 'block';
-    };
-    audio.addEventListener('playing', clearSpinner, { once: true });
-    audio.addEventListener('error', onAudioError, { once: true });
+    audio.addEventListener('playing', onPlaying, { once: true });
 
     // ── Launch audio, lyrics, artwork ALL in parallel ──
     updateMediaSession();
@@ -631,89 +623,79 @@ async function playTrack(index) {
             audio.src = cachedUrl;
             audio.play().catch(() => {});
         } else {
-            // 2. Stream via Service Worker if available, else full download
-            const sw = navigator.serviceWorker?.controller;
-            if (sw) {
-                // _streamViaServiceWorker sets audio.src and starts piping chunks.
-                // It resolves when download finishes, but audio plays earlier via 'playing' event.
-                _streamViaServiceWorker(track, gen);
-            } else {
-                const blobUrl = await tg.getTrackBlobUrl(playerGroupId, track.id, playerTopicId);
-                if (_playGeneration !== gen) return;
-                audio.src = blobUrl;
-                audio.play().catch(() => {});
-            }
+            // 2. Try streaming via SW, with fallback to full download
+            await _downloadAndPlay(track, gen);
         }
     } catch (e) {
         if (_playGeneration !== gen) return;
-        clearSpinner();
+        audio.removeEventListener('playing', onPlaying);
+        btnPlay.classList.remove('loading-audio');
+        _isLoadingAudio = false;
         iconPlay.style.display = 'block';
         showToast('Failed to load track');
         lyricsContent.innerHTML = '<div class="lyrics-placeholder">Download failed</div>';
     }
 }
 
-// Stream audio through Service Worker — starts playback as chunks arrive.
-// Runs in the background (not awaited by playTrack) so the spinner clears
-// as soon as the audio 'playing' event fires.
-async function _streamViaServiceWorker(track, gen) {
+// Download track and start playback.
+// Tries SW streaming first (audio plays after first chunk). Falls back to full download.
+async function _downloadAndPlay(track, gen) {
     const gId = playerGroupId;
-    const blobKey = `${gId}:${track.id}`;
     const mime = track.mime_type || 'audio/mpeg';
     const fileSize = track.file_size || 0;
-    const sw = navigator.serviceWorker.controller;
 
-    // Set up MessageChannel — post port to SW before setting audio.src
-    const channel = new MessageChannel();
-    sw.postMessage(
-        { type: 'audio-stream', key: blobKey },
-        [channel.port2]
-    );
+    let channel = null;
+    let streamActive = false;
+    const sw = navigator.serviceWorker?.controller;
 
-    // Point audio element at the SW streaming endpoint
-    const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` +
-        (fileSize ? `&size=${fileSize}` : '');
-    audio.src = streamUrl;
-    audio.play().catch(() => {});
+    // ── Set up SW streaming if available ──
+    if (sw) {
+        const blobKey = `${gId}:${track.id}`;
+        channel = new MessageChannel();
+        sw.postMessage({ type: 'audio-stream', key: blobKey }, [channel.port2]);
 
-    // Download chunks and pipe to SW while collecting for cache
+        const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` +
+            (fileSize ? `&size=${fileSize}` : '');
+        audio.src = streamUrl;
+        audio.play().catch(() => {});
+        streamActive = true;
+
+        // If audio errors (e.g. old SW returning 404), mark streaming as failed
+        audio.addEventListener('error', () => {
+            if (!streamActive) return;
+            streamActive = false;
+            try { channel.port1.close(); } catch (e) {}
+            channel = null;
+        }, { once: true });
+    }
+
+    // ── Download all chunks (piped to SW if streaming, collected for fallback) ──
     const chunks = [];
-    let cancelled = false;
-
-    channel.port1.onmessage = (event) => {
-        if (event.data?.cancel) cancelled = true;
-    };
-
-    try {
-        for await (const chunk of tg.iterTrackDownload(gId, track.id)) {
-            if (_playGeneration !== gen || cancelled) {
-                channel.port1.postMessage({ done: true });
-                channel.port1.close();
-                return;
-            }
-            chunks.push(chunk);
-            // Send chunk to SW (structured clone copies the ArrayBuffer)
-            channel.port1.postMessage({ chunk: chunk.buffer });
+    for await (const chunk of tg.iterTrackDownload(gId, track.id)) {
+        if (_playGeneration !== gen) {
+            if (channel) { try { channel.port1.postMessage({ done: true }); channel.port1.close(); } catch (e) {} }
+            return;
         }
-        channel.port1.postMessage({ done: true });
-        channel.port1.close();
+        chunks.push(chunk);
+        if (streamActive && channel) {
+            try { channel.port1.postMessage({ chunk: chunk.buffer }); } catch (e) {}
+        }
+    }
+    if (_playGeneration !== gen) return;
 
-        // Cache the complete file in IDB for next time
-        if (_playGeneration === gen) {
-            const blob = new Blob(chunks, { type: mime });
-            tg.cacheTrackBlob(gId, track.id, blob);
-        }
-    } catch (e) {
-        if (_playGeneration !== gen) return;
-        channel.port1.postMessage({ error: e.message });
-        channel.port1.close();
-        // If audio hasn't started playing yet, show error
-        if (_isLoadingAudio) {
-            btnPlay.classList.remove('loading-audio');
-            _isLoadingAudio = false;
-            iconPlay.style.display = 'block';
-            showToast('Failed to load track');
-        }
+    // Close stream
+    if (channel) {
+        try { channel.port1.postMessage({ done: true }); channel.port1.close(); } catch (e) {}
+    }
+
+    // Cache complete file in IDB
+    const blob = new Blob(chunks, { type: mime });
+    tg.cacheTrackBlob(gId, track.id, blob);
+
+    // If streaming didn't work, play from the completed blob
+    if (!streamActive) {
+        audio.src = URL.createObjectURL(blob);
+        audio.play().catch(() => {});
     }
 }
 
