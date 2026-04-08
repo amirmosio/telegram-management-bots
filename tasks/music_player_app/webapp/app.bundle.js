@@ -71462,6 +71462,97 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
+  async function findOrCreateShareChannel() {
+    await _ensureConnected();
+    try {
+      const resolved = await client.invoke(
+        new import_tl.Api.contacts.ResolveUsername({ username: SHARE_CHANNEL_USERNAME })
+      );
+      if (resolved.chats && resolved.chats.length > 0) {
+        const chat = resolved.chats[0];
+        const gId = _entityId(chat);
+        _groupsCache[gId] = chat;
+        if (chat.left || !chat.participant) {
+          try {
+            await client.invoke(new import_tl.Api.channels.JoinChannel({ channel: chat }));
+          } catch (e2) {
+            if (!e2.message?.includes("USER_ALREADY_PARTICIPANT")) {
+              console.warn("Join share channel:", e2.message);
+            }
+          }
+        }
+        return { id: gId, title: chat.title || SHARE_CHANNEL_TITLE, username: SHARE_CHANNEL_USERNAME };
+      }
+    } catch (e2) {
+      if (!e2.message?.includes("USERNAME_NOT_OCCUPIED")) {
+        console.warn("Resolve share channel failed:", e2.message);
+      }
+    }
+    try {
+      const result = await client.invoke(new import_tl.Api.channels.CreateChannel({
+        title: SHARE_CHANNEL_TITLE,
+        about: "Shared music from Telegram Music Player",
+        megagroup: true
+      }));
+      let channel = null;
+      for (const chat of result.chats) {
+        if (_isChannel(chat)) {
+          channel = chat;
+          break;
+        }
+      }
+      if (!channel) throw new Error("Channel not found in create response");
+      await client.invoke(new import_tl.Api.channels.UpdateUsername({
+        channel,
+        username: SHARE_CHANNEL_USERNAME
+      }));
+      const gId = _entityId(channel);
+      _groupsCache[gId] = channel;
+      return { id: gId, title: SHARE_CHANNEL_TITLE, username: SHARE_CHANNEL_USERNAME };
+    } catch (e2) {
+      console.error("Failed to create share channel:", e2);
+      throw e2;
+    }
+  }
+  async function shareTrack(shareGroupId, sourceGroupId, trackId) {
+    await _ensureConnected();
+    const shareEntity = await _getEntity(shareGroupId);
+    const sourceEntity = await _getEntity(sourceGroupId);
+    const result = await client.invoke(new import_tl.Api.messages.ForwardMessages({
+      fromPeer: sourceEntity,
+      toPeer: shareEntity,
+      id: [trackId],
+      randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))]
+    }));
+    let newMsgId = null;
+    if (result.updates) {
+      for (const update of result.updates) {
+        if (update.message && update.message.id) {
+          newMsgId = update.message.id;
+          break;
+        }
+      }
+    }
+    const link = `https://t.me/${SHARE_CHANNEL_USERNAME}/${newMsgId}`;
+    return { msgId: newMsgId, link };
+  }
+  async function resolveShareLink(msgId) {
+    await _ensureConnected();
+    const channel = await findOrCreateShareChannel();
+    const entity = await _getEntity(channel.id);
+    const msgs = await client.getMessages(entity, { ids: [msgId] });
+    const msg = msgs[0];
+    if (!msg) throw new Error("Shared track not found");
+    const meta = _extractAudioMeta(msg);
+    if (!meta) throw new Error("Message is not an audio track");
+    _msgCache[`${channel.id}:${msg.id}`] = msg;
+    const cacheKey = _trackCacheKey(channel.id, null);
+    if (!_tracksCache[cacheKey]) _tracksCache[cacheKey] = [];
+    if (!_tracksCache[cacheKey].find((t2) => t2.id === meta.id)) {
+      _tracksCache[cacheKey].push(meta);
+    }
+    return { track: meta, groupId: channel.id };
+  }
   async function ensureBotInGroup(groupId) {
     await _ensureConnected();
     const entity = await _getEntity(groupId);
@@ -71603,7 +71694,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
-  var import_process4, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _phoneCodeHash, _dlCache;
+  var import_process4, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _phoneCodeHash, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71627,6 +71718,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       _blobCache = {};
       _thumbBlobCache = {};
       _phoneCodeHash = null;
+      SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
+      SHARE_CHANNEL_TITLE = "TG Music Player Shared";
       _dlCache = {};
     }
   });
@@ -72493,6 +72586,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
       function _updateAddButton() {
         $("btn-add-playing").style.display = playingFromPlaylist ? "none" : "flex";
+        $("btn-share").style.display = "flex";
       }
       function updateSidebarHighlight() {
         document.querySelectorAll(".track-item").forEach((el) => {
@@ -72937,6 +73031,40 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           showToast("Failed to add");
         }
       }
+      var btnShare = $("btn-share");
+      btnShare.addEventListener("click", async () => {
+        if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+        const track = playerTracks[currentTrackIndex];
+        btnShare.classList.add("sharing");
+        showToast("Sharing...");
+        try {
+          let shareChannelId = localStorage.getItem("share_channel_id");
+          if (!shareChannelId) {
+            const channel = await findOrCreateShareChannel();
+            shareChannelId = channel.id;
+            localStorage.setItem("share_channel_id", String(channel.id));
+          }
+          const { link } = await shareTrack(
+            parseInt(shareChannelId, 10),
+            playerGroupId,
+            track.id
+          );
+          const appUrl = window.location.origin + window.location.pathname;
+          const msgId = link.split("/").pop();
+          const shareLink = `${appUrl}?play=${msgId}`;
+          try {
+            await navigator.clipboard.writeText(shareLink);
+            showToast("Link copied!");
+          } catch (e2) {
+            showToast(shareLink);
+          }
+        } catch (e2) {
+          console.error("Share failed:", e2);
+          showToast("Share failed: " + e2.message);
+          localStorage.removeItem("share_channel_id");
+        }
+        btnShare.classList.remove("sharing");
+      });
       audio.addEventListener("timeupdate", () => {
         if (isSeeking || !audio.duration) return;
         const pct = audio.currentTime / audio.duration * 100;
@@ -73085,6 +73213,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           if (s2.playingFromPlaylist) {
             playingFromPlaylist = true;
             $("btn-add-playing").style.display = "none";
+          }
+          if (s2.trackTitle) {
+            $("btn-share").style.display = "flex";
           }
           if (!s2.playerGroupId || !s2.currentTrackId) return;
           const tracks = await scanTracks(s2.playerGroupId, s2.playerTopicId ?? null);
@@ -73242,6 +73373,19 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           console.error("Failed to get playlist group:", e2);
         }
         await restoreSession();
+        const params = new URLSearchParams(window.location.search);
+        const playMsgId = params.get("play");
+        if (playMsgId) {
+          history.replaceState(null, "", window.location.pathname);
+          try {
+            showToast("Loading shared track...");
+            const { track, groupId } = await resolveShareLink(parseInt(playMsgId, 10));
+            startPlayback([track], groupId, null, 0, false);
+          } catch (e2) {
+            console.error("Failed to load shared track:", e2);
+            showToast("Failed to load shared track");
+          }
+        }
       }
       var _deferredInstallPrompt = null;
       var installBanner = $("install-banner");

@@ -511,6 +511,7 @@ function renderTracksInto(container, trackList, filter, context) {
 
 function _updateAddButton() {
     $('btn-add-playing').style.display = playingFromPlaylist ? 'none' : 'flex';
+    $('btn-share').style.display = 'flex';
 }
 
 function updateSidebarHighlight() {
@@ -944,6 +945,57 @@ async function addTrackToPlaylist(topicId) {
 }
 
 // ══════════════════════════════════════
+//  SHARE
+// ══════════════════════════════════════
+const btnShare = $('btn-share');
+
+btnShare.addEventListener('click', async () => {
+    if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+    const track = playerTracks[currentTrackIndex];
+
+    btnShare.classList.add('sharing');
+    showToast('Sharing...');
+
+    try {
+        // Find or create the share channel (join if needed)
+        let shareChannelId = localStorage.getItem('share_channel_id');
+        if (!shareChannelId) {
+            const channel = await tg.findOrCreateShareChannel();
+            shareChannelId = channel.id;
+            localStorage.setItem('share_channel_id', String(channel.id));
+        }
+
+        // Forward the track
+        const { link } = await tg.shareTrack(
+            parseInt(shareChannelId, 10),
+            playerGroupId,
+            track.id
+        );
+
+        // Build web app link with play parameter
+        const appUrl = window.location.origin + window.location.pathname;
+        const msgId = link.split('/').pop();
+        const shareLink = `${appUrl}?play=${msgId}`;
+
+        // Copy to clipboard
+        try {
+            await navigator.clipboard.writeText(shareLink);
+            showToast('Link copied!');
+        } catch (e) {
+            // Fallback: show the link
+            showToast(shareLink);
+        }
+    } catch (e) {
+        console.error('Share failed:', e);
+        showToast('Share failed: ' + e.message);
+        // Clear cached channel ID in case it's stale
+        localStorage.removeItem('share_channel_id');
+    }
+
+    btnShare.classList.remove('sharing');
+});
+
+// ══════════════════════════════════════
 //  PROGRESS BAR
 // ══════════════════════════════════════
 audio.addEventListener('timeupdate', () => {
@@ -1093,6 +1145,10 @@ async function restoreSession() {
         if (s.playingFromPlaylist) {
             playingFromPlaylist = true;
             $('btn-add-playing').style.display = 'none';
+        }
+        // Share button always visible when a track was playing
+        if (s.trackTitle) {
+            $('btn-share').style.display = 'flex';
         }
 
             if (!s.playerGroupId || !s.currentTrackId) return;
@@ -1248,6 +1304,22 @@ async function initAfterLogin() {
 
     // Restore session AFTER playlistGroupId is set
     await restoreSession();
+
+    // Handle deep link for shared tracks: ?play={msgId}
+    const params = new URLSearchParams(window.location.search);
+    const playMsgId = params.get('play');
+    if (playMsgId) {
+        // Clean URL
+        history.replaceState(null, '', window.location.pathname);
+        try {
+            showToast('Loading shared track...');
+            const { track, groupId } = await tg.resolveShareLink(parseInt(playMsgId, 10));
+            startPlayback([track], groupId, null, 0, false);
+        } catch (e) {
+            console.error('Failed to load shared track:', e);
+            showToast('Failed to load shared track');
+        }
+    }
 }
 
 // ══════════════════════════════════════

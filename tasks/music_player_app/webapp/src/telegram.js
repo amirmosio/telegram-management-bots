@@ -757,6 +757,133 @@ export async function findOrCreatePlaylistGroup() {
 }
 
 // ════════════════════════════════════
+//  SHARE CHANNEL MANAGEMENT
+// ════════════════════════════════════
+
+const SHARE_CHANNEL_USERNAME = 'tgmusicplayer_shared';
+const SHARE_CHANNEL_TITLE = 'TG Music Player Shared';
+
+export async function findOrCreateShareChannel() {
+    await _ensureConnected();
+
+    // 1. Try to resolve by username (finds it even if we haven't joined)
+    try {
+        const resolved = await client.invoke(
+            new Api.contacts.ResolveUsername({ username: SHARE_CHANNEL_USERNAME })
+        );
+        if (resolved.chats && resolved.chats.length > 0) {
+            const chat = resolved.chats[0];
+            const gId = _entityId(chat);
+            _groupsCache[gId] = chat;
+
+            // Join if not already a member
+            if (chat.left || !chat.participant) {
+                try {
+                    await client.invoke(new Api.channels.JoinChannel({ channel: chat }));
+                } catch (e) {
+                    if (!e.message?.includes('USER_ALREADY_PARTICIPANT')) {
+                        console.warn('Join share channel:', e.message);
+                    }
+                }
+            }
+
+            return { id: gId, title: chat.title || SHARE_CHANNEL_TITLE, username: SHARE_CHANNEL_USERNAME };
+        }
+    } catch (e) {
+        // USERNAME_NOT_OCCUPIED — channel doesn't exist yet
+        if (!e.message?.includes('USERNAME_NOT_OCCUPIED')) {
+            console.warn('Resolve share channel failed:', e.message);
+        }
+    }
+
+    // 2. Not found — create a public megagroup
+    try {
+        const result = await client.invoke(new Api.channels.CreateChannel({
+            title: SHARE_CHANNEL_TITLE,
+            about: 'Shared music from Telegram Music Player',
+            megagroup: true,
+        }));
+
+        let channel = null;
+        for (const chat of result.chats) {
+            if (_isChannel(chat)) {
+                channel = chat;
+                break;
+            }
+        }
+        if (!channel) throw new Error('Channel not found in create response');
+
+        // Set public username
+        await client.invoke(new Api.channels.UpdateUsername({
+            channel: channel,
+            username: SHARE_CHANNEL_USERNAME,
+        }));
+
+        const gId = _entityId(channel);
+        _groupsCache[gId] = channel;
+        return { id: gId, title: SHARE_CHANNEL_TITLE, username: SHARE_CHANNEL_USERNAME };
+    } catch (e) {
+        console.error('Failed to create share channel:', e);
+        throw e;
+    }
+}
+
+export async function shareTrack(shareGroupId, sourceGroupId, trackId) {
+    await _ensureConnected();
+    const shareEntity = await _getEntity(shareGroupId);
+    const sourceEntity = await _getEntity(sourceGroupId);
+
+    const result = await client.invoke(new Api.messages.ForwardMessages({
+        fromPeer: sourceEntity,
+        toPeer: shareEntity,
+        id: [trackId],
+        randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))],
+    }));
+
+    // Extract the new message ID
+    let newMsgId = null;
+    if (result.updates) {
+        for (const update of result.updates) {
+            if (update.message && update.message.id) {
+                newMsgId = update.message.id;
+                break;
+            }
+        }
+    }
+
+    const link = `https://t.me/${SHARE_CHANNEL_USERNAME}/${newMsgId}`;
+    return { msgId: newMsgId, link };
+}
+
+export async function resolveShareLink(msgId) {
+    await _ensureConnected();
+
+    // Resolve and join the share channel
+    const channel = await findOrCreateShareChannel();
+    const entity = await _getEntity(channel.id);
+
+    // Fetch the specific message
+    const msgs = await client.getMessages(entity, { ids: [msgId] });
+    const msg = msgs[0];
+    if (!msg) throw new Error('Shared track not found');
+
+    const meta = _extractAudioMeta(msg);
+    if (!meta) throw new Error('Message is not an audio track');
+
+    // Cache the message for playback
+    _msgCache[`${channel.id}:${msg.id}`] = msg;
+
+    // Put it in the tracks cache so getTrackBlobUrl works
+    const cacheKey = _trackCacheKey(channel.id, null);
+    if (!_tracksCache[cacheKey]) _tracksCache[cacheKey] = [];
+    if (!_tracksCache[cacheKey].find(t => t.id === meta.id)) {
+        _tracksCache[cacheKey].push(meta);
+    }
+
+    return { track: meta, groupId: channel.id };
+}
+
+// ════════════════════════════════════
 //  MUSIC SEARCH (via @moozikestan_bot)
 // ════════════════════════════════════
 
