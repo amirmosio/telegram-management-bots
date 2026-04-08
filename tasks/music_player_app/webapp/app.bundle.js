@@ -73400,8 +73400,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         await restoreSession();
         const params = new URLSearchParams(window.location.search);
         const trackCode = params.get("track");
-        const legacyPlayId = params.get("play");
-        const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : legacyPlayId ? parseInt(legacyPlayId, 10) : null;
+        const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : null;
         if (sharedMsgId) {
           history.replaceState(null, "", window.location.pathname);
           try {

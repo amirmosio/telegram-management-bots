@@ -1322,11 +1322,10 @@ async function initAfterLogin() {
     // Restore session AFTER playlistGroupId is set
     await restoreSession();
 
-    // Handle deep link for shared tracks: ?track={encodedId} (or legacy ?play={msgId})
+    // Handle deep link for shared tracks: ?track={encodedId}
     const params = new URLSearchParams(window.location.search);
     const trackCode = params.get('track');
-    const legacyPlayId = params.get('play');
-    const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : (legacyPlayId ? parseInt(legacyPlayId, 10) : null);
+    const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : null;
     if (sharedMsgId) {
         // Clean URL
         history.replaceState(null, '', window.location.pathname);
