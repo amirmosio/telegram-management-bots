@@ -52,6 +52,22 @@ function _persistSavedIds() {
 }
 
 // ══════════════════════════════════════
+//  SHARE LINK ENCODING
+// ══════════════════════════════════════
+// Encodes a Telegram message ID into an opaque-looking string (reversible, no DB needed).
+// XOR with a fixed key + base36 encoding. e.g. msgId 4 → "a1b2c3" instead of "4".
+const _SHARE_XOR_KEY = 0x5A3C7E;
+function _encodeTrackId(msgId) {
+    const encoded = (msgId ^ _SHARE_XOR_KEY) >>> 0; // XOR + unsigned
+    return encoded.toString(36);
+}
+function _decodeTrackId(code) {
+    const decoded = parseInt(code, 36);
+    if (isNaN(decoded)) return null;
+    return (decoded ^ _SHARE_XOR_KEY) >>> 0;
+}
+
+// ══════════════════════════════════════
 //  DOM REFS
 // ══════════════════════════════════════
 const $ = id => document.getElementById(id);
@@ -956,6 +972,7 @@ btnShare.addEventListener('click', async () => {
             const channel = await tg.findOrCreateShareChannel();
             shareChannelId = channel.id;
             localStorage.setItem('share_channel_id', String(channel.id));
+            tg.muteChat(channel.id); // mute on first use
         }
 
         // Forward the track
@@ -965,10 +982,10 @@ btnShare.addEventListener('click', async () => {
             track.id
         );
 
-        // Build web app link with play parameter
+        // Build web app link with encoded track ID
         const appUrl = window.location.origin + window.location.pathname;
         const msgId = link.split('/').pop();
-        const shareLink = `${appUrl}?play=${msgId}`;
+        const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
 
         // Copy to clipboard
         try {
@@ -1290,23 +1307,32 @@ async function initAfterLogin() {
             localStorage.setItem('playlist_group_id', pg.id);
             localStorage.setItem('playlist_group_title', pg.title);
             loadPlaylists();
+            tg.muteChat(pg.id); // ensure muted (fire-and-forget)
         }
     } catch (e) {
         console.error('Failed to get playlist group:', e);
     }
 
+    // Ensure share channel is muted too (if user has used it before)
+    const cachedShareId = localStorage.getItem('share_channel_id');
+    if (cachedShareId) {
+        tg.muteChat(parseInt(cachedShareId, 10)); // fire-and-forget
+    }
+
     // Restore session AFTER playlistGroupId is set
     await restoreSession();
 
-    // Handle deep link for shared tracks: ?play={msgId}
+    // Handle deep link for shared tracks: ?track={encodedId} (or legacy ?play={msgId})
     const params = new URLSearchParams(window.location.search);
-    const playMsgId = params.get('play');
-    if (playMsgId) {
+    const trackCode = params.get('track');
+    const legacyPlayId = params.get('play');
+    const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : (legacyPlayId ? parseInt(legacyPlayId, 10) : null);
+    if (sharedMsgId) {
         // Clean URL
         history.replaceState(null, '', window.location.pathname);
         try {
             showToast('Loading shared track...');
-            const { track, groupId } = await tg.resolveShareLink(parseInt(playMsgId, 10));
+            const { track, groupId } = await tg.resolveShareLink(sharedMsgId);
             startPlayback([track], groupId, null, 0, false);
         } catch (e) {
             console.error('Failed to load shared track:', e);

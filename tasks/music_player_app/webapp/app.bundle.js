@@ -71462,6 +71462,21 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
+  async function muteChat(groupId) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    try {
+      await client.invoke(new import_tl.Api.account.UpdateNotifySettings({
+        peer: new import_tl.Api.InputNotifyPeer({ peer: entity }),
+        settings: new import_tl.Api.InputPeerNotifySettings({
+          muteUntil: 2147483647
+          // max int32 — mute forever
+        })
+      }));
+    } catch (e2) {
+      console.warn("Failed to mute chat:", e2.message);
+    }
+  }
   async function findOrCreateShareChannel() {
     await _ensureConnected();
     try {
@@ -72181,6 +72196,16 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       var _savedTrackIds = new Set(JSON.parse(localStorage.getItem("saved_track_ids") || "[]"));
       function _persistSavedIds() {
         localStorage.setItem("saved_track_ids", JSON.stringify([..._savedTrackIds]));
+      }
+      var _SHARE_XOR_KEY = 5913726;
+      function _encodeTrackId(msgId) {
+        const encoded = (msgId ^ _SHARE_XOR_KEY) >>> 0;
+        return encoded.toString(36);
+      }
+      function _decodeTrackId(code) {
+        const decoded = parseInt(code, 36);
+        if (isNaN(decoded)) return null;
+        return (decoded ^ _SHARE_XOR_KEY) >>> 0;
       }
       var $ = (id) => document.getElementById(id);
       var audio = $("audio-element");
@@ -73037,6 +73062,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
             const channel = await findOrCreateShareChannel();
             shareChannelId = channel.id;
             localStorage.setItem("share_channel_id", String(channel.id));
+            muteChat(channel.id);
           }
           const { link } = await shareTrack(
             parseInt(shareChannelId, 10),
@@ -73045,7 +73071,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           );
           const appUrl = window.location.origin + window.location.pathname;
           const msgId = link.split("/").pop();
-          const shareLink = `${appUrl}?play=${msgId}`;
+          const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
           try {
             await navigator.clipboard.writeText(shareLink);
             showToast("Link copied!");
@@ -73362,18 +73388,25 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
             localStorage.setItem("playlist_group_id", pg.id);
             localStorage.setItem("playlist_group_title", pg.title);
             loadPlaylists();
+            muteChat(pg.id);
           }
         } catch (e2) {
           console.error("Failed to get playlist group:", e2);
         }
+        const cachedShareId = localStorage.getItem("share_channel_id");
+        if (cachedShareId) {
+          muteChat(parseInt(cachedShareId, 10));
+        }
         await restoreSession();
         const params = new URLSearchParams(window.location.search);
-        const playMsgId = params.get("play");
-        if (playMsgId) {
+        const trackCode = params.get("track");
+        const legacyPlayId = params.get("play");
+        const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : legacyPlayId ? parseInt(legacyPlayId, 10) : null;
+        if (sharedMsgId) {
           history.replaceState(null, "", window.location.pathname);
           try {
             showToast("Loading shared track...");
-            const { track, groupId } = await resolveShareLink(parseInt(playMsgId, 10));
+            const { track, groupId } = await resolveShareLink(sharedMsgId);
             startPlayback([track], groupId, null, 0, false);
           } catch (e2) {
             console.error("Failed to load shared track:", e2);

@@ -757,6 +757,25 @@ export async function findOrCreatePlaylistGroup() {
 }
 
 // ════════════════════════════════════
+//  MUTE CHAT
+// ════════════════════════════════════
+
+export async function muteChat(groupId) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    try {
+        await client.invoke(new Api.account.UpdateNotifySettings({
+            peer: new Api.InputNotifyPeer({ peer: entity }),
+            settings: new Api.InputPeerNotifySettings({
+                muteUntil: 2147483647, // max int32 — mute forever
+            }),
+        }));
+    } catch (e) {
+        console.warn('Failed to mute chat:', e.message);
+    }
+}
+
+// ════════════════════════════════════
 //  SHARE CHANNEL MANAGEMENT
 // ════════════════════════════════════
 
