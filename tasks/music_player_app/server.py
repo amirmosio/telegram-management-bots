@@ -3,6 +3,7 @@ import json
 import mimetypes
 from pathlib import Path
 
+import aiohttp
 from aiohttp import web
 
 from tasks.music_player_app.music_source import MusicSource
@@ -124,6 +125,9 @@ class MusicServer:
         self.app.router.add_post(
             "/api/groups/{group_id}/topics/{topic_id}/tracks/{track_id}/save-lyrics",
             self._handle_topic_save_lyrics)
+
+        # CORS proxy for external APIs (Musixmatch, lyrics.ovh, ChartLyrics)
+        self.app.router.add_get("/proxy", self._handle_proxy)
 
     # ── Auth ──
 
@@ -557,6 +561,43 @@ class MusicServer:
             self.music_source.invalidate(group_id)
 
         return web.json_response(result)
+
+    # ── CORS Proxy ──
+
+    _PROXY_ALLOWED_HOSTS = {
+        "apic-desktop.musixmatch.com",
+        "api.lyrics.ovh",
+        "api.chartlyrics.com",
+    }
+
+    async def _handle_proxy(self, request):
+        target_url = request.query.get("url", "")
+        if not target_url:
+            raise web.HTTPBadRequest(text="Missing url parameter")
+
+        from urllib.parse import urlparse
+        parsed = urlparse(target_url)
+        if parsed.hostname not in self._PROXY_ALLOWED_HOSTS:
+            raise web.HTTPForbidden(text="Host not allowed")
+
+        timeout = aiohttp.ClientTimeout(total=15)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    target_url,
+                    timeout=timeout,
+                    headers={"User-Agent": "TelegramMusicPlayer/1.0"},
+                ) as resp:
+                    body = await resp.read()
+                    return web.Response(
+                        body=body,
+                        status=resp.status,
+                        content_type=resp.content_type or "application/octet-stream",
+                    )
+        except asyncio.TimeoutError:
+            raise web.HTTPGatewayTimeout(text="Upstream timeout")
+        except Exception as e:
+            raise web.HTTPBadGateway(text=str(e))
 
     # ── Lifecycle ──
 

@@ -23,7 +23,7 @@ class LyricsFetcher:
 
         # Try each source in order until we get lyrics
         sources = [
-            self._try_lrclib,
+            lambda t, a: self._try_lrclib(t, a, duration),
             self._try_lyrics_ovh,
             self._try_chartlyrics,
         ]
@@ -31,8 +31,6 @@ class LyricsFetcher:
         for source_fn in sources:
             result = await source_fn(title, artist)
             if result["synced"] or result["plain"]:
-                if result["plain"] and not result["synced"] and duration > 0:
-                    result["synced"] = _auto_sync(result["plain"], duration)
                 self._cache[cache_key] = result
                 return result
 
@@ -42,24 +40,55 @@ class LyricsFetcher:
 
     # ── Source 1: lrclib.net (synced + plain) ──
 
-    async def _try_lrclib(self, title: str, artist: str) -> dict:
+    async def _try_lrclib(self, title: str, artist: str, duration: int = 0) -> dict:
         result = {"synced": None, "plain": None, "source": "lrclib.net"}
-
-        queries = []
-        if artist:
-            queries.append({"track_name": title, "artist_name": artist})
-        if artist:
-            for variant in _artist_variants(artist):
-                queries.append({"track_name": title, "artist_name": variant})
-        queries.append({"track_name": title})
-        cleaned = _clean_title(title)
-        if cleaned != title:
-            if artist:
-                queries.append({"track_name": cleaned, "artist_name": artist})
-            queries.append({"track_name": cleaned})
 
         try:
             async with aiohttp.ClientSession() as session:
+                # 1. Try exact-match endpoint first (most reliable)
+                if artist and duration > 0:
+                    try:
+                        params = {
+                            "track_name": title,
+                            "artist_name": artist,
+                            "duration": str(duration),
+                        }
+                        async with session.get(
+                            "https://lrclib.net/api/get",
+                            params=params,
+                            timeout=TIMEOUT,
+                            headers=HEADERS,
+                        ) as resp:
+                            if resp.status == 200:
+                                item = await resp.json()
+                                if item.get("syncedLyrics"):
+                                    result["synced"] = parse_lrc(item["syncedLyrics"])
+                                if item.get("plainLyrics"):
+                                    result["plain"] = item["plainLyrics"]
+                                if result["synced"] or result["plain"]:
+                                    return result
+                    except Exception:
+                        pass
+
+                # 2. Search with multiple query variations
+                cleaned = _clean_title(title)
+                queries = []
+                if artist:
+                    queries.append({"track_name": title, "artist_name": artist})
+                if artist:
+                    for variant in _artist_variants(artist):
+                        queries.append({"track_name": title, "artist_name": variant})
+                queries.append({"track_name": title})
+                if cleaned != title:
+                    if artist:
+                        queries.append({"track_name": cleaned, "artist_name": artist})
+                    queries.append({"track_name": cleaned})
+                # Free-text query combining artist and title
+                if artist:
+                    queries.append({"q": f"{artist} {title}"})
+                    if cleaned != title:
+                        queries.append({"q": f"{artist} {cleaned}"})
+
                 for params in queries:
                     try:
                         async with session.get(
@@ -151,35 +180,6 @@ class LyricsFetcher:
         except Exception:
             pass
         return result
-
-
-# ══════════════════════════════════════
-#  AUTO-SYNC: distribute plain lyrics evenly across the track duration
-# ══════════════════════════════════════
-
-def _auto_sync(plain_text: str, duration: int) -> list[dict]:
-    """Create approximate time-synced lyrics from plain text and track duration.
-
-    Distributes non-empty lines evenly across the track, leaving a small
-    intro gap and ending before the track ends.
-    """
-    lines = [l.strip() for l in plain_text.split("\n") if l.strip()]
-    if not lines or duration <= 0:
-        return []
-
-    # Leave 5% intro and 10% outro, distribute lines in the middle
-    start = duration * 0.05
-    end = duration * 0.90
-    span = end - start
-
-    if len(lines) == 1:
-        return [{"time": round(start, 2), "text": lines[0]}]
-
-    interval = span / len(lines)
-    return [
-        {"time": round(start + i * interval, 2), "text": line}
-        for i, line in enumerate(lines)
-    ]
 
 
 # ══════════════════════════════════════

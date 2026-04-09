@@ -18,16 +18,13 @@ export async function searchLyrics(title, artist = '', duration = 0) {
     // Check IndexedDB
     const cached = await idbGet('lyrics', key);
     if (cached !== null) {
-        if (cached.plain && !cached.synced && duration > 0) {
-            cached.synced = autoSync(cached.plain, duration);
-        }
         cache[key] = cached;
         return cached;
     }
 
     // Run ALL sources in parallel, then pick the best result
     const results = await Promise.allSettled([
-        tryLrclib(t, a),
+        tryLrclib(t, a, duration),
         tryMusixmatch(t, a),
         tryLyricsOvh(t, a),
         tryChartLyrics(t, a),
@@ -45,10 +42,6 @@ export async function searchLyrics(title, artist = '', duration = 0) {
 
     let winner = bestSynced || bestPlain || { synced: null, plain: null, source: null };
 
-    if (winner.plain && !winner.synced && duration > 0) {
-        winner.synced = autoSync(winner.plain, duration);
-    }
-
     cache[key] = winner;
     // Only persist in IndexedDB if we actually found lyrics
     if (winner.synced || winner.plain) {
@@ -61,16 +54,39 @@ export async function searchLyrics(title, artist = '', duration = 0) {
 //  SOURCES
 // ══════════════════════════════════════
 
-async function tryLrclib(title, artist) {
+async function tryLrclib(title, artist, duration = 0) {
     const result = { synced: null, plain: null, source: 'lrclib.net' };
+
+    // 1. Try exact-match endpoint first (most reliable when we have all fields)
+    if (artist && duration > 0) {
+        try {
+            const qs = new URLSearchParams({
+                track_name: title,
+                artist_name: artist,
+                duration: String(Math.round(duration)),
+            }).toString();
+            const resp = await fetchWithTimeout(`https://lrclib.net/api/get?${qs}`);
+            if (resp.ok) {
+                const item = await resp.json();
+                if (item.syncedLyrics) result.synced = parseLRC(item.syncedLyrics);
+                if (item.plainLyrics) result.plain = item.plainLyrics;
+                if (result.synced || result.plain) return result;
+            }
+        } catch { /* fall through to search */ }
+    }
+
+    // 2. Search with multiple query variations
+    const cleaned = cleanTitle(title);
     const queries = [];
     if (artist) queries.push({ track_name: title, artist_name: artist });
     queries.push({ track_name: title });
-    const cleaned = cleanTitle(title);
     if (cleaned !== title) {
         if (artist) queries.push({ track_name: cleaned, artist_name: artist });
         queries.push({ track_name: cleaned });
     }
+    // Try with artist words in the title query (handles missing artist metadata)
+    if (artist) queries.push({ q: `${artist} ${title}` });
+    if (artist && cleaned !== title) queries.push({ q: `${artist} ${cleaned}` });
 
     for (const params of queries) {
         try {
@@ -259,19 +275,6 @@ export function parseLRC(lrcText) {
     return lines;
 }
 
-function autoSync(plainText, duration) {
-    const lines = plainText.split('\n').map(l => l.trim()).filter(Boolean);
-    if (!lines.length || duration <= 0) return [];
-    const start = duration * 0.05;
-    const end = duration * 0.90;
-    const span = end - start;
-    if (lines.length === 1) return [{ time: Math.round(start * 100) / 100, text: lines[0] }];
-    const interval = span / lines.length;
-    return lines.map((line, i) => ({
-        time: Math.round((start + i * interval) * 100) / 100,
-        text: line,
-    }));
-}
 
 export function parseTrackInfo(title, artist) {
     if (artist && (artist.startsWith('@') || artist.toLowerCase().includes('_bot'))) {
