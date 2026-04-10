@@ -71881,7 +71881,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       var playlistsContainer = $("playlists-container");
       var playlistTracksSearch = $("playlist-tracks-search");
       var playlistTracksContainer = $("playlist-tracks-container");
-      var fabSearch = $("fab-search");
+      var btnSearch = $("btn-search");
       var searchOverlay = $("search-overlay");
       var searchQuery = $("search-query");
       var searchResultsContainer = $("search-results-container");
@@ -72112,20 +72112,18 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
       function openSearch() {
         searchOverlay.classList.add("open");
-        fabSearch.classList.add("hidden");
         setTimeout(() => searchQuery.focus(), 350);
       }
       function closeSearch() {
         searchOverlay.classList.remove("open");
-        fabSearch.classList.remove("hidden");
       }
-      fabSearch.addEventListener("click", openSearch);
+      btnSearch.addEventListener("click", openSearch);
       $("search-overlay-close").addEventListener("click", closeSearch);
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && searchOverlay.classList.contains("open")) closeSearch();
       });
       document.addEventListener("click", (e) => {
-        if (searchOverlay.classList.contains("open") && !searchOverlay.contains(e.target) && e.target !== fabSearch) closeSearch();
+        if (searchOverlay.classList.contains("open") && !searchOverlay.contains(e.target) && e.target !== btnSearch) closeSearch();
       });
       searchQuery.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {

@@ -86,7 +86,7 @@ const playlistsContainer = $('playlists-container');
 const playlistTracksSearch = $('playlist-tracks-search');
 const playlistTracksContainer = $('playlist-tracks-container');
 
-const fabSearch = $('fab-search');
+const btnSearch = $('btn-search');
 const searchOverlay = $('search-overlay');
 const searchQuery = $('search-query');
 const searchResultsContainer = $('search-results-container');
@@ -342,21 +342,19 @@ function createGroupElement(g, onClick) {
 // ══════════════════════════════════════
 function openSearch() {
     searchOverlay.classList.add('open');
-    fabSearch.classList.add('hidden');
     setTimeout(() => searchQuery.focus(), 350);
 }
 function closeSearch() {
     searchOverlay.classList.remove('open');
-    fabSearch.classList.remove('hidden');
 }
 
-fabSearch.addEventListener('click', openSearch);
+btnSearch.addEventListener('click', openSearch);
 $('search-overlay-close').addEventListener('click', closeSearch);
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && searchOverlay.classList.contains('open')) closeSearch();
 });
 document.addEventListener('click', (e) => {
-    if (searchOverlay.classList.contains('open') && !searchOverlay.contains(e.target) && e.target !== fabSearch) closeSearch();
+    if (searchOverlay.classList.contains('open') && !searchOverlay.contains(e.target) && e.target !== btnSearch) closeSearch();
 });
 
 searchQuery.addEventListener('keydown', (e) => {

@@ -546,6 +546,12 @@ html, body {
 
 #now-playing-label {
     font-size: 14px; color: var(--text-secondary); font-weight: 500;
+    flex: 1;
+}
+
+#top-bar-actions {
+    display: flex; align-items: center; gap: 4px;
+    flex-shrink: 0;
 }
 
 /* ── Artwork ── */
@@ -764,35 +770,11 @@ html, body {
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* ── Search FAB ── */
-#fab-search {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    width: 56px;
-    height: 56px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #fff;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 16px var(--accent-glow);
-    z-index: 30;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
-}
-#fab-search * { pointer-events: none; }
-#fab-search:hover { transform: scale(1.08); box-shadow: 0 6px 24px var(--accent-glow); }
-#fab-search:active { transform: scale(0.95); }
-#fab-search.hidden { opacity: 0; pointer-events: none; }
-
 /* ── Search Overlay ── */
-/* Desktop: bubble popup near FAB */
+/* Desktop: dropdown from top-bar */
 #search-overlay {
     position: fixed;
-    bottom: 90px;
+    top: 52px;
     right: 24px;
     width: 400px;
     max-height: 500px;
@@ -803,8 +785,8 @@ html, body {
     z-index: 60;
     display: flex;
     flex-direction: column;
-    transform: scale(0.8) translateY(10px);
-    transform-origin: bottom right;
+    transform: scale(0.95) translateY(-8px);
+    transform-origin: top right;
     opacity: 0;
     transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
     pointer-events: none;
@@ -988,12 +970,12 @@ html, body {
 
 /* ── Mobile ── */
 @media (max-width: 700px) {
-    #fab-search { top: 16px; right: 16px; bottom: auto; left: auto; width: 48px; height: 48px; }
     #search-overlay {
-        top: 70px; right: 16px; bottom: auto; left: 16px;
+        top: 56px; right: 8px; left: 8px;
         width: auto; max-height: 60vh;
         transform-origin: top right;
     }
+    #search-overlay-close { display: flex; }
     #side-panel {
         position: fixed; left: -320px; top: 0; bottom: 0;
         transition: left 0.3s ease; z-index: 20;
@@ -1041,7 +1023,7 @@ html, body {
         top: auto;
         padding: 12px 20px;
         background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 100%);
-        z-index: 3;
+        z-index: 5;
     }
 
     #track-title { font-size: 16px; }
@@ -1064,13 +1046,13 @@ html, body {
         flex: 1;
         max-width: 100%;
         padding: 0 8px;
-        margin-bottom: 0;
-        mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 70%, transparent 100%);
-        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 70%, transparent 100%);
+        margin-bottom: 60px;
+        mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+        -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
     }
 
     #lyrics-content {
-        padding: 60px 16px 120px;
+        padding: 60px 16px 80px;
     }
 
     .lyric-line {
