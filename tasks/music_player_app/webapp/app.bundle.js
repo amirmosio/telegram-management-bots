@@ -72851,19 +72851,15 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
       function _startBadgeCountdown() {
         _updateBadgeText();
-        sleepBadgeInterval = setInterval(_updateBadgeText, 3e4);
+        sleepBadgeInterval = setInterval(_updateBadgeText, 1e3);
       }
       function _updateBadgeText() {
         if (!sleepEndTime) return;
         const remaining = Math.max(0, sleepEndTime - Date.now());
-        const mins = Math.ceil(remaining / 6e4);
-        if (mins >= 60) {
-          const h = Math.floor(mins / 60);
-          const m = mins % 60;
-          sleepBadge.textContent = m > 0 ? `${h}h${m}` : `${h}h`;
-        } else {
-          sleepBadge.textContent = `${mins}`;
-        }
+        const totalSec = Math.ceil(remaining / 1e3);
+        const m = Math.floor(totalSec / 60);
+        const s = totalSec % 60;
+        sleepBadge.textContent = `${m}:${String(s).padStart(2, "0")}`;
         sleepBadge.style.display = "";
       }
       audio.addEventListener("timeupdate", () => {
