@@ -70756,7 +70756,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       file_size: doc.size?.value || doc.size || 0
     };
   }
-  async function scanTracks(groupId, topicId = null, limit = 500) {
+  async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     if (_tracksCache[cacheKey]) return _tracksCache[cacheKey];
     const entity = await _getEntity(groupId);
@@ -70772,6 +70772,26 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     _tracksCache[cacheKey] = tracks;
     return tracks;
+  }
+  async function loadMoreTracks(groupId, topicId = null) {
+    const cacheKey = _trackCacheKey(groupId, topicId);
+    const existing = _tracksCache[cacheKey] || [];
+    if (existing.length === 0) return [];
+    const lastTrack = existing[existing.length - 1];
+    const entity = await _getEntity(groupId);
+    const params = { entity, limit: PAGE_SIZE, offsetId: lastTrack.id };
+    if (topicId !== null) params.replyTo = topicId;
+    const newTracks = [];
+    for await (const msg of client.iterMessages(entity, params)) {
+      const meta = _extractAudioMeta(msg);
+      if (meta) {
+        newTracks.push(meta);
+        _msgCache[`${groupId}:${msg.id}`] = msg;
+      }
+    }
+    existing.push(...newTracks);
+    _tracksCache[cacheKey] = existing;
+    return newTracks;
   }
   function getCachedTracks(groupId, topicId = null) {
     return _tracksCache[_trackCacheKey(groupId, topicId)] || [];
@@ -71440,7 +71460,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _phoneCodeHash, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _phoneCodeHash, PAGE_SIZE, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71464,6 +71484,7 @@ ${JSON.stringify(state)}`;
       _blobCache = {};
       _thumbBlobCache = {};
       _phoneCodeHash = null;
+      PAGE_SIZE = 100;
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
       SHARE_CHANNEL_TITLE = "TG Music Player Shared";
       _dlCache = {};
@@ -72264,6 +72285,64 @@ ${JSON.stringify(state)}`;
           showToast("Download failed");
         }
       }
+      function _createTrackEl(track, trackList, context) {
+        const origIndex = trackList.indexOf(track);
+        const isPlaying = track.id === currentTrackId;
+        const el = document.createElement("div");
+        el.className = "track-item" + (isPlaying ? " active" : "");
+        el.dataset.trackId = track.id;
+        const addBtn = context.showAddBtn ? `<button class="track-add-btn" title="Add to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>` : "";
+        const placeholderSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+        el.innerHTML = `
+        <div class="track-item-thumb-placeholder">${placeholderSvg}</div>
+        <div class="track-item-info">
+            <div class="track-item-title">${escapeHtml(track.title)}</div>
+            <div class="track-item-artist">${escapeHtml(track.artist || "Unknown")}</div>
+        </div>
+        <span class="track-item-duration">${formatTime(track.duration)}</span>
+        ${addBtn}
+    `;
+        if (track.has_thumb) {
+          getThumbBlobUrl(context.groupId, track.id).then((url) => {
+            if (url) {
+              const placeholder = el.querySelector(".track-item-thumb-placeholder");
+              if (placeholder) {
+                const img = document.createElement("img");
+                img.className = "track-item-thumb";
+                img.src = url;
+                img.alt = "";
+                img.loading = "lazy";
+                placeholder.replaceWith(img);
+              }
+            }
+          }).catch(() => {
+          });
+        }
+        el.addEventListener("click", (e) => {
+          if (e.target.closest(".track-add-btn")) return;
+          startPlayback(trackList, context.groupId, context.topicId, origIndex, !context.showAddBtn);
+          closePanel();
+        });
+        if (context.showAddBtn) {
+          el.querySelector(".track-add-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!playlistGroupId) {
+              showToast("Set a playlist group first");
+              switchTab("playlists");
+              return;
+            }
+            if (playlists.length === 0) {
+              showToast("Create a playlist first");
+              switchTab("playlists");
+              return;
+            }
+            pendingAddTrack = { trackId: track.id, groupId: context.groupId };
+            showPlaylistPicker();
+          });
+        }
+        return el;
+      }
+      var _loadMoreInFlight = false;
       function renderTracksInto(container, trackList, filter, context) {
         container.innerHTML = "";
         let list = trackList;
@@ -72276,62 +72355,35 @@ ${JSON.stringify(state)}`;
           return;
         }
         list.forEach((track) => {
-          const origIndex = trackList.indexOf(track);
-          const isPlaying = track.id === currentTrackId;
-          const el = document.createElement("div");
-          el.className = "track-item" + (isPlaying ? " active" : "");
-          el.dataset.trackId = track.id;
-          const addBtn = context.showAddBtn ? `<button class="track-add-btn" title="Add to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>` : "";
-          const placeholderSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
-          el.innerHTML = `
-            <div class="track-item-thumb-placeholder">${placeholderSvg}</div>
-            <div class="track-item-info">
-                <div class="track-item-title">${escapeHtml(track.title)}</div>
-                <div class="track-item-artist">${escapeHtml(track.artist || "Unknown")}</div>
-            </div>
-            <span class="track-item-duration">${formatTime(track.duration)}</span>
-            ${addBtn}
-        `;
-          if (track.has_thumb) {
-            getThumbBlobUrl(context.groupId, track.id).then((url) => {
-              if (url) {
-                const placeholder = el.querySelector(".track-item-thumb-placeholder");
-                if (placeholder) {
-                  const img = document.createElement("img");
-                  img.className = "track-item-thumb";
-                  img.src = url;
-                  img.alt = "";
-                  img.loading = "lazy";
-                  placeholder.replaceWith(img);
-                }
-              }
-            }).catch(() => {
-            });
-          }
-          el.addEventListener("click", (e) => {
-            if (e.target.closest(".track-add-btn")) return;
-            startPlayback(trackList, context.groupId, context.topicId, origIndex, !context.showAddBtn);
-            closePanel();
-          });
-          if (context.showAddBtn) {
-            el.querySelector(".track-add-btn").addEventListener("click", (e) => {
-              e.stopPropagation();
-              if (!playlistGroupId) {
-                showToast("Set a playlist group first");
-                switchTab("playlists");
-                return;
-              }
-              if (playlists.length === 0) {
-                showToast("Create a playlist first");
-                switchTab("playlists");
-                return;
-              }
-              pendingAddTrack = { trackId: track.id, groupId: context.groupId };
-              showPlaylistPicker();
-            });
-          }
-          container.appendChild(el);
+          container.appendChild(_createTrackEl(track, trackList, context));
         });
+        if (!filter && context.groupId) {
+          container._scrollCtx = context;
+          container._trackListRef = trackList;
+          if (!container._scrollBound) {
+            container._scrollBound = true;
+            container.addEventListener("scroll", () => {
+              if (_loadMoreInFlight) return;
+              const ctx = container._scrollCtx;
+              const tl = container._trackListRef;
+              if (!ctx || !tl) return;
+              const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 200;
+              if (nearBottom) {
+                _loadMoreInFlight = true;
+                loadMoreTracks(ctx.groupId, ctx.topicId || null).then((newTracks) => {
+                  if (newTracks.length > 0) {
+                    newTracks.forEach((track) => {
+                      container.appendChild(_createTrackEl(track, tl, ctx));
+                    });
+                  }
+                }).catch(() => {
+                }).finally(() => {
+                  _loadMoreInFlight = false;
+                });
+              }
+            });
+          }
+        }
       }
       function _updateAddButton() {
         $("btn-add-playing").style.display = playingFromPlaylist ? "none" : "flex";
@@ -72519,7 +72571,7 @@ ${JSON.stringify(state)}`;
           _playWithRetry(gen);
         }
       }
-      function nextTrack() {
+      async function nextTrack() {
         if (playerTracks.length === 0) return;
         if (shuffleOn) {
           shuffleHistory.push(currentTrackIndex);
@@ -72529,7 +72581,21 @@ ${JSON.stringify(state)}`;
           } while (rand === currentTrackIndex && playerTracks.length > 1);
           playTrack(rand);
         } else {
-          playTrack((currentTrackIndex + 1) % playerTracks.length);
+          const nextIdx = currentTrackIndex + 1;
+          if (nextIdx >= playerTracks.length) {
+            try {
+              const more = await loadMoreTracks(playerGroupId, playerTopicId || null);
+              if (more.length > 0) {
+                playerTracks = getCachedTracks(playerGroupId, playerTopicId || null);
+                playTrack(nextIdx);
+                return;
+              }
+            } catch (e) {
+            }
+            playTrack(0);
+          } else {
+            playTrack(nextIdx);
+          }
         }
       }
       function prevTrack() {

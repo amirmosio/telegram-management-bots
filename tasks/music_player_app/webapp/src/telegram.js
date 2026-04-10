@@ -390,7 +390,9 @@ function _extractAudioMeta(msg) {
     };
 }
 
-export async function scanTracks(groupId, topicId = null, limit = 500) {
+const PAGE_SIZE = 100;
+
+export async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     if (_tracksCache[cacheKey]) return _tracksCache[cacheKey];
 
@@ -409,6 +411,33 @@ export async function scanTracks(groupId, topicId = null, limit = 500) {
 
     _tracksCache[cacheKey] = tracks;
     return tracks;
+}
+
+// Load next page of tracks, appending to existing cache.
+// Returns the new tracks added (empty array if no more).
+export async function loadMoreTracks(groupId, topicId = null) {
+    const cacheKey = _trackCacheKey(groupId, topicId);
+    const existing = _tracksCache[cacheKey] || [];
+    if (existing.length === 0) return [];
+
+    // Use the oldest (last) track's message ID as offset
+    const lastTrack = existing[existing.length - 1];
+    const entity = await _getEntity(groupId);
+    const params = { entity, limit: PAGE_SIZE, offsetId: lastTrack.id };
+    if (topicId !== null) params.replyTo = topicId;
+
+    const newTracks = [];
+    for await (const msg of client.iterMessages(entity, params)) {
+        const meta = _extractAudioMeta(msg);
+        if (meta) {
+            newTracks.push(meta);
+            _msgCache[`${groupId}:${msg.id}`] = msg;
+        }
+    }
+
+    existing.push(...newTracks);
+    _tracksCache[cacheKey] = existing;
+    return newTracks;
 }
 
 export function getCachedTracks(groupId, topicId = null) {

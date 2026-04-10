@@ -455,6 +455,65 @@ async function downloadAndPlay(item, searchRef) {
 // ══════════════════════════════════════
 //  RENDER TRACKS
 // ══════════════════════════════════════
+function _createTrackEl(track, trackList, context) {
+    const origIndex = trackList.indexOf(track);
+    const isPlaying = track.id === currentTrackId;
+    const el = document.createElement('div');
+    el.className = 'track-item' + (isPlaying ? ' active' : '');
+    el.dataset.trackId = track.id;
+
+    const addBtn = context.showAddBtn
+        ? `<button class="track-add-btn" title="Add to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>`
+        : '';
+
+    const placeholderSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+    el.innerHTML = `
+        <div class="track-item-thumb-placeholder">${placeholderSvg}</div>
+        <div class="track-item-info">
+            <div class="track-item-title">${escapeHtml(track.title)}</div>
+            <div class="track-item-artist">${escapeHtml(track.artist || 'Unknown')}</div>
+        </div>
+        <span class="track-item-duration">${formatTime(track.duration)}</span>
+        ${addBtn}
+    `;
+
+    if (track.has_thumb) {
+        tg.getThumbBlobUrl(context.groupId, track.id).then(url => {
+            if (url) {
+                const placeholder = el.querySelector('.track-item-thumb-placeholder');
+                if (placeholder) {
+                    const img = document.createElement('img');
+                    img.className = 'track-item-thumb';
+                    img.src = url;
+                    img.alt = '';
+                    img.loading = 'lazy';
+                    placeholder.replaceWith(img);
+                }
+            }
+        }).catch(() => {});
+    }
+
+    el.addEventListener('click', (e) => {
+        if (e.target.closest('.track-add-btn')) return;
+        startPlayback(trackList, context.groupId, context.topicId, origIndex, !context.showAddBtn);
+        closePanel();
+    });
+
+    if (context.showAddBtn) {
+        el.querySelector('.track-add-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!playlistGroupId) { showToast('Set a playlist group first'); switchTab('playlists'); return; }
+            if (playlists.length === 0) { showToast('Create a playlist first'); switchTab('playlists'); return; }
+            pendingAddTrack = { trackId: track.id, groupId: context.groupId };
+            showPlaylistPicker();
+        });
+    }
+
+    return el;
+}
+
+let _loadMoreInFlight = false;
+
 function renderTracksInto(container, trackList, filter, context) {
     container.innerHTML = '';
     let list = trackList;
@@ -467,62 +526,34 @@ function renderTracksInto(container, trackList, filter, context) {
         return;
     }
     list.forEach(track => {
-        const origIndex = trackList.indexOf(track);
-        const isPlaying = track.id === currentTrackId;
-        const el = document.createElement('div');
-        el.className = 'track-item' + (isPlaying ? ' active' : '');
-        el.dataset.trackId = track.id;
+        container.appendChild(_createTrackEl(track, trackList, context));
+    });
 
-        const addBtn = context.showAddBtn
-            ? `<button class="track-add-btn" title="Add to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>`
-            : '';
-
-        const placeholderSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
-        el.innerHTML = `
-            <div class="track-item-thumb-placeholder">${placeholderSvg}</div>
-            <div class="track-item-info">
-                <div class="track-item-title">${escapeHtml(track.title)}</div>
-                <div class="track-item-artist">${escapeHtml(track.artist || 'Unknown')}</div>
-            </div>
-            <span class="track-item-duration">${formatTime(track.duration)}</span>
-            ${addBtn}
-        `;
-
-        // Load thumbnail asynchronously if available
-        if (track.has_thumb) {
-            tg.getThumbBlobUrl(context.groupId, track.id).then(url => {
-                if (url) {
-                    const placeholder = el.querySelector('.track-item-thumb-placeholder');
-                    if (placeholder) {
-                        const img = document.createElement('img');
-                        img.className = 'track-item-thumb';
-                        img.src = url;
-                        img.alt = '';
-                        img.loading = 'lazy';
-                        placeholder.replaceWith(img);
-                    }
+    // Infinite scroll — load more when near bottom (only if not filtering)
+    if (!filter && context.groupId) {
+        container._scrollCtx = context;
+        container._trackListRef = trackList;
+        if (!container._scrollBound) {
+            container._scrollBound = true;
+            container.addEventListener('scroll', () => {
+                if (_loadMoreInFlight) return;
+                const ctx = container._scrollCtx;
+                const tl = container._trackListRef;
+                if (!ctx || !tl) return;
+                const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 200;
+                if (nearBottom) {
+                    _loadMoreInFlight = true;
+                    tg.loadMoreTracks(ctx.groupId, ctx.topicId || null).then(newTracks => {
+                        if (newTracks.length > 0) {
+                            newTracks.forEach(track => {
+                                container.appendChild(_createTrackEl(track, tl, ctx));
+                            });
+                        }
+                    }).catch(() => {}).finally(() => { _loadMoreInFlight = false; });
                 }
-            }).catch(() => {});
-        }
-
-        el.addEventListener('click', (e) => {
-            if (e.target.closest('.track-add-btn')) return;
-            startPlayback(trackList, context.groupId, context.topicId, origIndex, !context.showAddBtn);
-            closePanel();
-        });
-
-        if (context.showAddBtn) {
-            el.querySelector('.track-add-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (!playlistGroupId) { showToast('Set a playlist group first'); switchTab('playlists'); return; }
-                if (playlists.length === 0) { showToast('Create a playlist first'); switchTab('playlists'); return; }
-                pendingAddTrack = { trackId: track.id, groupId: context.groupId };
-                showPlaylistPicker();
             });
         }
-
-        container.appendChild(el);
-    });
+    }
 }
 
 function _updateAddButton() {
@@ -742,7 +773,7 @@ async function _downloadAndPlay(track, gen) {
     }
 }
 
-function nextTrack() {
+async function nextTrack() {
     if (playerTracks.length === 0) return;
     if (shuffleOn) {
         shuffleHistory.push(currentTrackIndex);
@@ -751,7 +782,21 @@ function nextTrack() {
         while (rand === currentTrackIndex && playerTracks.length > 1);
         playTrack(rand);
     } else {
-        playTrack((currentTrackIndex + 1) % playerTracks.length);
+        const nextIdx = currentTrackIndex + 1;
+        if (nextIdx >= playerTracks.length) {
+            // Try loading more tracks before wrapping around
+            try {
+                const more = await tg.loadMoreTracks(playerGroupId, playerTopicId || null);
+                if (more.length > 0) {
+                    playerTracks = tg.getCachedTracks(playerGroupId, playerTopicId || null);
+                    playTrack(nextIdx);
+                    return;
+                }
+            } catch (e) { /* ignore */ }
+            playTrack(0); // wrap around
+        } else {
+            playTrack(nextIdx);
+        }
     }
 }
 
