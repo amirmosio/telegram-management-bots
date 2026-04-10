@@ -71910,6 +71910,7 @@ ${JSON.stringify(state)}`;
       var repeatOn = false;
       var shuffleHistory = [];
       var _wakeLock = null;
+      var _pendingSeekTime = 0;
       var activeTab = "playlists";
       var searchTracks = [];
       var _searchAbort = null;
@@ -72400,11 +72401,16 @@ ${JSON.stringify(state)}`;
         btnPlay.classList.add("loading-audio");
         iconPlay.style.display = "none";
         iconPause.style.display = "none";
+        const seekTime = _pendingSeekTime;
+        _pendingSeekTime = 0;
         const onPlaying = () => {
           if (_playGeneration !== gen) return;
           btnPlay.classList.remove("loading-audio");
           _isLoadingAudio = false;
           _requestWakeLock();
+          if (seekTime > 0 && audio.duration && seekTime < audio.duration) {
+            audio.currentTime = seekTime;
+          }
         };
         audio.addEventListener("playing", onPlaying, { once: true });
         updateMediaSession();
@@ -72831,7 +72837,8 @@ ${JSON.stringify(state)}`;
           archiveChat(parsedShareId);
           const appUrl = window.location.origin + window.location.pathname;
           const msgId = link.split("/").pop();
-          const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
+          const currentSec = Math.floor(audio.currentTime || 0);
+          const shareLink = currentSec > 0 ? `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}&t=${currentSec}` : `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
           const isMobile = window.matchMedia("(max-width: 700px)").matches;
           if (isMobile && navigator.share) {
             try {
@@ -73066,7 +73073,7 @@ ${JSON.stringify(state)}`;
           gId: playerGroupId,
           tId: playerTopicId,
           trk: currentTrackId,
-          pos: Math.round(audio.currentTime || 0),
+          pos: Math.floor(audio.currentTime || 0),
           shf: shuffleOn,
           rpt: repeatOn,
           fp: playingFromPlaylist
@@ -73174,6 +73181,15 @@ ${JSON.stringify(state)}`;
           trackTitleEl.textContent = track.title;
           trackArtistEl.textContent = track.artist || "Unknown";
           timeTotal.textContent = formatTime(track.duration);
+          if (s.currentTime > 0) {
+            _pendingSeekTime = s.currentTime;
+            timeCurrent.textContent = formatTime(s.currentTime);
+            if (track.duration > 0) {
+              const pct = s.currentTime / track.duration * 100;
+              progressFill.style.width = pct + "%";
+              progressHandle.style.left = pct + "%";
+            }
+          }
           fetchArtworkForTrack(track, _playGeneration);
           fetchLyricsForTrack(track, _playGeneration);
           if (s.currentPlaylistTopicId && playlistGroupId && s.activeTab === "playlists") {
@@ -73327,12 +73343,14 @@ ${JSON.stringify(state)}`;
         await restoreSession();
         const params = new URLSearchParams(window.location.search);
         const trackCode = params.get("track");
+        const sharedTime = parseInt(params.get("t") || "0", 10);
         const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : null;
         if (sharedMsgId) {
           history.replaceState(null, "", window.location.pathname);
           try {
             showToast("Loading shared track...");
             const { track, groupId } = await resolveShareLink(sharedMsgId);
+            if (sharedTime > 0) _pendingSeekTime = sharedTime;
             startPlayback([track], groupId, null, 0, false);
             muteChat(groupId);
             archiveChat(groupId);

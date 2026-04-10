@@ -33,6 +33,7 @@ let shuffleOn = false;
 let repeatOn = false;
 let shuffleHistory = []; // stack of previously played indices for shuffle-back
 let _wakeLock = null; // Screen Wake Lock to keep playback alive in background
+let _pendingSeekTime = 0; // seek to this position when audio starts playing (from sync/share)
 
 let activeTab = 'playlists';
 
@@ -609,11 +610,17 @@ async function playTrack(index) {
     iconPause.style.display = 'none';
 
     // Clear spinner as soon as audio actually starts playing
+    const seekTime = _pendingSeekTime;
+    _pendingSeekTime = 0;
     const onPlaying = () => {
         if (_playGeneration !== gen) return;
         btnPlay.classList.remove('loading-audio');
         _isLoadingAudio = false;
         _requestWakeLock();
+        // Apply pending seek from sync/share link
+        if (seekTime > 0 && audio.duration && seekTime < audio.duration) {
+            audio.currentTime = seekTime;
+        }
     };
     audio.addEventListener('playing', onPlaying, { once: true });
 
@@ -1029,10 +1036,13 @@ btnShare.addEventListener('click', async () => {
         // Re-archive after sharing (forwarding unarchives the chat)
         tg.archiveChat(parsedShareId);
 
-        // Build web app link with encoded track ID
+        // Build web app link with encoded track ID and current position
         const appUrl = window.location.origin + window.location.pathname;
         const msgId = link.split('/').pop();
-        const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
+        const currentSec = Math.floor(audio.currentTime || 0);
+        const shareLink = currentSec > 0
+            ? `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}&t=${currentSec}`
+            : `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
 
         // Use Web Share API on mobile (clipboard fails in async context on iOS)
         const isMobile = window.matchMedia('(max-width: 700px)').matches;
@@ -1281,7 +1291,7 @@ function _syncToTelegram() {
         gId: playerGroupId,
         tId: playerTopicId,
         trk: currentTrackId,
-        pos: Math.round(audio.currentTime || 0),
+        pos: Math.floor(audio.currentTime || 0),
         shf: shuffleOn,
         rpt: repeatOn,
         fp: playingFromPlaylist,
@@ -1386,6 +1396,17 @@ async function restoreSession() {
         trackTitleEl.textContent = track.title;
         trackArtistEl.textContent = track.artist || 'Unknown';
         timeTotal.textContent = formatTime(track.duration);
+
+        // Set pending seek so playback resumes at the saved position
+        if (s.currentTime > 0) {
+            _pendingSeekTime = s.currentTime;
+            timeCurrent.textContent = formatTime(s.currentTime);
+            if (track.duration > 0) {
+                const pct = (s.currentTime / track.duration) * 100;
+                progressFill.style.width = pct + '%';
+                progressHandle.style.left = pct + '%';
+            }
+        }
 
         // Fetch artwork & lyrics
         fetchArtworkForTrack(track, _playGeneration);
@@ -1531,9 +1552,10 @@ async function initAfterLogin() {
     // Restore session AFTER playlistGroupId is set
     await restoreSession();
 
-    // Handle deep link for shared tracks: ?track={encodedId}
+    // Handle deep link for shared tracks: ?track={encodedId}&t={seconds}
     const params = new URLSearchParams(window.location.search);
     const trackCode = params.get('track');
+    const sharedTime = parseInt(params.get('t') || '0', 10);
     const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : null;
     if (sharedMsgId) {
         // Clean URL
@@ -1541,6 +1563,7 @@ async function initAfterLogin() {
         try {
             showToast('Loading shared track...');
             const { track, groupId } = await tg.resolveShareLink(sharedMsgId);
+            if (sharedTime > 0) _pendingSeekTime = sharedTime;
             startPlayback([track], groupId, null, 0, false);
             // Mute and archive the share channel so it doesn't clutter the chat list
             tg.muteChat(groupId);
