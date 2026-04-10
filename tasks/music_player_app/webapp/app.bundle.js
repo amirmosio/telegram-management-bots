@@ -72123,7 +72123,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         if (e.key === "Escape" && searchOverlay.classList.contains("open")) closeSearch();
       });
       document.addEventListener("click", (e) => {
-        if (searchOverlay.classList.contains("open") && !searchOverlay.contains(e.target) && e.target !== btnSearch) closeSearch();
+        if (searchOverlay.classList.contains("open") && !searchOverlay.contains(e.target) && !btnSearch.contains(e.target)) closeSearch();
       });
       searchQuery.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {

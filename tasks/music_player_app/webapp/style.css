@@ -554,6 +554,9 @@ html, body {
     flex-shrink: 0;
 }
 
+#top-bar-actions .icon-btn { padding: 8px; }
+#top-bar-actions .icon-btn * { pointer-events: none; }
+
 /* ── Artwork ── */
 #artwork {
     width: 100%; max-width: 420px;
