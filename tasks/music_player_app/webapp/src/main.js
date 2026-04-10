@@ -219,7 +219,20 @@ function showBrowseTracks() {
 
 browseTracksSearch.addEventListener('input', () => {
     clearTimeout(browseSearchTimeout);
-    browseSearchTimeout = setTimeout(() => renderBrowseTracks(), 200);
+    browseSearchTimeout = setTimeout(async () => {
+        const q = browseTracksSearch.value.trim();
+        if (!q) {
+            renderBrowseTracks();
+            return;
+        }
+        browseTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+        try {
+            const results = await tg.searchTracksInChat(browseGroupId, null, q);
+            renderTracksInto(browseTracksContainer, results, '', { groupId: browseGroupId, topicId: null, showAddBtn: true });
+        } catch (e) {
+            renderBrowseTracks(); // fallback to local filter
+        }
+    }, 400);
 });
 
 // ══════════════════════════════════════
@@ -277,10 +290,20 @@ function showPlaylistTracks() {
 
 playlistTracksSearch.addEventListener('input', () => {
     clearTimeout(browseSearchTimeout);
-    browseSearchTimeout = setTimeout(() => {
-        renderTracksInto(playlistTracksContainer, playlistTracks, playlistTracksSearch.value,
-            { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
-    }, 200);
+    browseSearchTimeout = setTimeout(async () => {
+        const q = playlistTracksSearch.value.trim();
+        if (!q) {
+            renderTracksInto(playlistTracksContainer, playlistTracks, '', { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+            return;
+        }
+        playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+        try {
+            const results = await tg.searchTracksInChat(playlistGroupId, currentPlaylistTopicId, q);
+            renderTracksInto(playlistTracksContainer, results, '', { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+        } catch (e) {
+            renderTracksInto(playlistTracksContainer, playlistTracks, q, { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+        }
+    }, 400);
 });
 
 btnNewPlaylist.addEventListener('click', async () => {

@@ -440,6 +440,25 @@ export async function loadMoreTracks(groupId, topicId = null) {
     return newTracks;
 }
 
+// Server-side search for tracks by query string
+export async function searchTracksInChat(groupId, topicId = null, query = '') {
+    if (!query.trim()) return [];
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    const params = { entity, limit: 100, search: query };
+    if (topicId !== null) params.replyTo = topicId;
+
+    const tracks = [];
+    for await (const msg of client.iterMessages(entity, params)) {
+        const meta = _extractAudioMeta(msg);
+        if (meta) {
+            tracks.push(meta);
+            _msgCache[`${groupId}:${msg.id}`] = msg;
+        }
+    }
+    return tracks;
+}
+
 export function getCachedTracks(groupId, topicId = null) {
     return _tracksCache[_trackCacheKey(groupId, topicId)] || [];
 }

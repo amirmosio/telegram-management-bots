@@ -70793,6 +70793,22 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     _tracksCache[cacheKey] = existing;
     return newTracks;
   }
+  async function searchTracksInChat(groupId, topicId = null, query = "") {
+    if (!query.trim()) return [];
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    const params = { entity, limit: 100, search: query };
+    if (topicId !== null) params.replyTo = topicId;
+    const tracks = [];
+    for await (const msg of client.iterMessages(entity, params)) {
+      const meta = _extractAudioMeta(msg);
+      if (meta) {
+        tracks.push(meta);
+        _msgCache[`${groupId}:${msg.id}`] = msg;
+      }
+    }
+    return tracks;
+  }
   function getCachedTracks(groupId, topicId = null) {
     return _tracksCache[_trackCacheKey(groupId, topicId)] || [];
   }
@@ -72086,7 +72102,20 @@ ${JSON.stringify(state)}`;
       }
       browseTracksSearch.addEventListener("input", () => {
         clearTimeout(browseSearchTimeout);
-        browseSearchTimeout = setTimeout(() => renderBrowseTracks(), 200);
+        browseSearchTimeout = setTimeout(async () => {
+          const q = browseTracksSearch.value.trim();
+          if (!q) {
+            renderBrowseTracks();
+            return;
+          }
+          browseTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+          try {
+            const results = await searchTracksInChat(browseGroupId, null, q);
+            renderTracksInto(browseTracksContainer, results, "", { groupId: browseGroupId, topicId: null, showAddBtn: true });
+          } catch (e) {
+            renderBrowseTracks();
+          }
+        }, 400);
       });
       async function loadPlaylists() {
         playlistsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
@@ -72138,14 +72167,20 @@ ${JSON.stringify(state)}`;
       }
       playlistTracksSearch.addEventListener("input", () => {
         clearTimeout(browseSearchTimeout);
-        browseSearchTimeout = setTimeout(() => {
-          renderTracksInto(
-            playlistTracksContainer,
-            playlistTracks,
-            playlistTracksSearch.value,
-            { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false }
-          );
-        }, 200);
+        browseSearchTimeout = setTimeout(async () => {
+          const q = playlistTracksSearch.value.trim();
+          if (!q) {
+            renderTracksInto(playlistTracksContainer, playlistTracks, "", { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+            return;
+          }
+          playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+          try {
+            const results = await searchTracksInChat(playlistGroupId, currentPlaylistTopicId, q);
+            renderTracksInto(playlistTracksContainer, results, "", { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+          } catch (e) {
+            renderTracksInto(playlistTracksContainer, playlistTracks, q, { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+          }
+        }, 400);
       });
       btnNewPlaylist.addEventListener("click", async () => {
         if (!playlistGroupId) {
