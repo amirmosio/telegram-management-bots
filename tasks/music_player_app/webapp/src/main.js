@@ -1025,22 +1025,30 @@ btnShare.addEventListener('click', async () => {
             tg.archiveChat(channel.id); // archive on first use
         }
 
-        // Forward the track
         const parsedShareId = parseInt(shareChannelId, 10);
-        const { link } = await tg.shareTrack(
-            parsedShareId,
-            playerGroupId,
-            track.id
-        );
 
-        // Re-archive after sharing (forwarding unarchives the chat)
-        tg.archiveChat(parsedShareId);
+        // Check if this track was already shared (avoid duplicate forwards)
+        const shareCacheKey = `share_${playerGroupId}_${track.id}`;
+        let sharedMsgId = localStorage.getItem(shareCacheKey);
+
+        if (!sharedMsgId) {
+            // Forward the track for the first time
+            const { link } = await tg.shareTrack(
+                parsedShareId,
+                playerGroupId,
+                track.id
+            );
+            sharedMsgId = link.split('/').pop();
+            localStorage.setItem(shareCacheKey, sharedMsgId);
+
+            // Re-archive after sharing (forwarding unarchives the chat)
+            tg.archiveChat(parsedShareId);
+        }
 
         // Build web app link with encoded track ID and current position
         const appUrl = window.location.origin + window.location.pathname;
-        const msgId = link.split('/').pop();
         const currentSec = Math.floor(audio.currentTime || 0);
-        const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}&t=${currentSec}`;
+        const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(sharedMsgId, 10))}&t=${currentSec}`;
 
         // Use Web Share API on mobile (clipboard fails in async context on iOS)
         const isMobile = window.matchMedia('(max-width: 700px)').matches;

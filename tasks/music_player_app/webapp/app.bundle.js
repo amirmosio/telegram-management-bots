@@ -72829,16 +72829,21 @@ ${JSON.stringify(state)}`;
             archiveChat(channel.id);
           }
           const parsedShareId = parseInt(shareChannelId, 10);
-          const { link } = await shareTrack(
-            parsedShareId,
-            playerGroupId,
-            track.id
-          );
-          archiveChat(parsedShareId);
+          const shareCacheKey = `share_${playerGroupId}_${track.id}`;
+          let sharedMsgId = localStorage.getItem(shareCacheKey);
+          if (!sharedMsgId) {
+            const { link } = await shareTrack(
+              parsedShareId,
+              playerGroupId,
+              track.id
+            );
+            sharedMsgId = link.split("/").pop();
+            localStorage.setItem(shareCacheKey, sharedMsgId);
+            archiveChat(parsedShareId);
+          }
           const appUrl = window.location.origin + window.location.pathname;
-          const msgId = link.split("/").pop();
           const currentSec = Math.floor(audio.currentTime || 0);
-          const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}&t=${currentSec}`;
+          const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(sharedMsgId, 10))}&t=${currentSec}`;
           const isMobile = window.matchMedia("(max-width: 700px)").matches;
           if (isMobile && navigator.share) {
             try {
