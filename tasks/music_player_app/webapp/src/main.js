@@ -1040,9 +1040,7 @@ btnShare.addEventListener('click', async () => {
         const appUrl = window.location.origin + window.location.pathname;
         const msgId = link.split('/').pop();
         const currentSec = Math.floor(audio.currentTime || 0);
-        const shareLink = currentSec > 0
-            ? `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}&t=${currentSec}`
-            : `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
+        const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}&t=${currentSec}`;
 
         // Use Web Share API on mobile (clipboard fails in async context on iOS)
         const isMobile = window.matchMedia('(max-width: 700px)').matches;
