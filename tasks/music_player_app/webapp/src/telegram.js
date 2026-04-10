@@ -441,15 +441,20 @@ export async function loadMoreTracks(groupId, topicId = null) {
 }
 
 // Server-side search for tracks by query string
+// Note: GramJS iterMessages doesn't support search + replyTo combined,
+// so we search the whole group and filter by topic client-side if needed.
 export async function searchTracksInChat(groupId, topicId = null, query = '') {
     if (!query.trim()) return [];
     await _ensureConnected();
     const entity = await _getEntity(groupId);
-    const params = { entity, limit: 100, search: query };
-    if (topicId !== null) params.replyTo = topicId;
+    const params = { entity, limit: 200, search: query };
 
     const tracks = [];
     for await (const msg of client.iterMessages(entity, params)) {
+        // If topicId specified, filter to that topic
+        if (topicId !== null && msg.replyTo?.replyToTopId !== topicId && msg.replyTo?.replyToMsgId !== topicId) {
+            continue;
+        }
         const meta = _extractAudioMeta(msg);
         if (meta) {
             tracks.push(meta);

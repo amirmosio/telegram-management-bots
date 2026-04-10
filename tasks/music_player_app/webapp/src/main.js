@@ -228,9 +228,9 @@ browseTracksSearch.addEventListener('input', () => {
         browseTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
         try {
             const results = await tg.searchTracksInChat(browseGroupId, null, q);
-            renderTracksInto(browseTracksContainer, results, '', { groupId: browseGroupId, topicId: null, showAddBtn: true });
+            renderTracksInto(browseTracksContainer, results, '', { groupId: browseGroupId, topicId: null, showAddBtn: true }, { isSearchResult: true });
         } catch (e) {
-            renderBrowseTracks(); // fallback to local filter
+            browseTracksContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
         }
     }, 400);
 });
@@ -299,9 +299,9 @@ playlistTracksSearch.addEventListener('input', () => {
         playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
         try {
             const results = await tg.searchTracksInChat(playlistGroupId, currentPlaylistTopicId, q);
-            renderTracksInto(playlistTracksContainer, results, '', { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+            renderTracksInto(playlistTracksContainer, results, '', { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false }, { isSearchResult: true });
         } catch (e) {
-            renderTracksInto(playlistTracksContainer, playlistTracks, q, { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+            playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
         }
     }, 400);
 });
@@ -537,10 +537,10 @@ function _createTrackEl(track, trackList, context) {
 
 let _loadMoreInFlight = false;
 
-function renderTracksInto(container, trackList, filter, context) {
+function renderTracksInto(container, trackList, filter, context, { isSearchResult = false } = {}) {
     container.innerHTML = '';
     let list = trackList;
-    if (filter) {
+    if (filter && !isSearchResult) {
         const q = filter.toLowerCase();
         list = trackList.filter(t => t.title.toLowerCase().includes(q) || (t.artist && t.artist.toLowerCase().includes(q)));
     }
@@ -552,14 +552,21 @@ function renderTracksInto(container, trackList, filter, context) {
         container.appendChild(_createTrackEl(track, trackList, context));
     });
 
-    // Infinite scroll — load more when near bottom (only if not filtering)
-    if (!filter && context.groupId) {
+    // Disable infinite scroll for search results
+    if (isSearchResult) {
+        container._scrollPaused = true;
+        return;
+    }
+
+    // Infinite scroll — load more when near bottom
+    container._scrollPaused = false;
+    if (context.groupId) {
         container._scrollCtx = context;
         container._trackListRef = trackList;
         if (!container._scrollBound) {
             container._scrollBound = true;
             container.addEventListener('scroll', () => {
-                if (_loadMoreInFlight) return;
+                if (_loadMoreInFlight || container._scrollPaused) return;
                 const ctx = container._scrollCtx;
                 const tl = container._trackListRef;
                 if (!ctx || !tl) return;

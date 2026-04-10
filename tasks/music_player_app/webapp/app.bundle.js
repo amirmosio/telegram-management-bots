@@ -70797,10 +70797,12 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     if (!query.trim()) return [];
     await _ensureConnected();
     const entity = await _getEntity(groupId);
-    const params = { entity, limit: 100, search: query };
-    if (topicId !== null) params.replyTo = topicId;
+    const params = { entity, limit: 200, search: query };
     const tracks = [];
     for await (const msg of client.iterMessages(entity, params)) {
+      if (topicId !== null && msg.replyTo?.replyToTopId !== topicId && msg.replyTo?.replyToMsgId !== topicId) {
+        continue;
+      }
       const meta = _extractAudioMeta(msg);
       if (meta) {
         tracks.push(meta);
@@ -72111,9 +72113,9 @@ ${JSON.stringify(state)}`;
           browseTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
           try {
             const results = await searchTracksInChat(browseGroupId, null, q);
-            renderTracksInto(browseTracksContainer, results, "", { groupId: browseGroupId, topicId: null, showAddBtn: true });
+            renderTracksInto(browseTracksContainer, results, "", { groupId: browseGroupId, topicId: null, showAddBtn: true }, { isSearchResult: true });
           } catch (e) {
-            renderBrowseTracks();
+            browseTracksContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
           }
         }, 400);
       });
@@ -72176,9 +72178,9 @@ ${JSON.stringify(state)}`;
           playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
           try {
             const results = await searchTracksInChat(playlistGroupId, currentPlaylistTopicId, q);
-            renderTracksInto(playlistTracksContainer, results, "", { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+            renderTracksInto(playlistTracksContainer, results, "", { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false }, { isSearchResult: true });
           } catch (e) {
-            renderTracksInto(playlistTracksContainer, playlistTracks, q, { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+            playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
           }
         }, 400);
       });
@@ -72378,10 +72380,10 @@ ${JSON.stringify(state)}`;
         return el;
       }
       var _loadMoreInFlight = false;
-      function renderTracksInto(container, trackList, filter, context) {
+      function renderTracksInto(container, trackList, filter, context, { isSearchResult = false } = {}) {
         container.innerHTML = "";
         let list = trackList;
-        if (filter) {
+        if (filter && !isSearchResult) {
           const q = filter.toLowerCase();
           list = trackList.filter((t) => t.title.toLowerCase().includes(q) || t.artist && t.artist.toLowerCase().includes(q));
         }
@@ -72392,13 +72394,18 @@ ${JSON.stringify(state)}`;
         list.forEach((track) => {
           container.appendChild(_createTrackEl(track, trackList, context));
         });
-        if (!filter && context.groupId) {
+        if (isSearchResult) {
+          container._scrollPaused = true;
+          return;
+        }
+        container._scrollPaused = false;
+        if (context.groupId) {
           container._scrollCtx = context;
           container._trackListRef = trackList;
           if (!container._scrollBound) {
             container._scrollBound = true;
             container.addEventListener("scroll", () => {
-              if (_loadMoreInFlight) return;
+              if (_loadMoreInFlight || container._scrollPaused) return;
               const ctx = container._scrollCtx;
               const tl = container._trackListRef;
               if (!ctx || !tl) return;
