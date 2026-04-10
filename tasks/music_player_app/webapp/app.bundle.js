@@ -71903,6 +71903,14 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       var playlistModal = $("playlist-modal");
       var modalPlaylists = $("modal-playlists");
       var modalCancel = $("modal-cancel");
+      var btnSleepTimer = $("btn-sleep-timer");
+      var sleepSheet = $("sleep-sheet");
+      var sleepBadge = $("sleep-badge");
+      var sleepCancelBtn = $("sleep-cancel");
+      var sleepTimerId = null;
+      var sleepEndTime = null;
+      var sleepBadgeInterval = null;
+      var sleepEndOfTrack = false;
       document.querySelectorAll("#panel-tabs .tab").forEach((tab) => {
         tab.addEventListener("click", () => switchTab(tab.dataset.tab));
       });
@@ -72468,6 +72476,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
       }
       function onTrackEnded() {
+        if (sleepEndOfTrack) {
+          _clearSleepTimer();
+          showToast("Sleep timer \u2014 playback stopped");
+          return;
+        }
         if (repeatOn) {
           audio.currentTime = 0;
           audio.play().catch(() => {
@@ -72553,9 +72566,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         navigator.mediaSession.metadata = new MediaMetadata({
           title: track.title || "Unknown",
           artist: track.artist || "Unknown",
-          album: "",
+          album: browseGroupTitle || playlistGroupTitle || "Music",
           artwork: artworkList
         });
+        navigator.mediaSession.setActionHandler("nexttrack", () => nextTrack());
+        navigator.mediaSession.setActionHandler("previoustrack", () => prevTrack());
       }
       function updateMediaPositionState() {
         if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
@@ -72754,11 +72769,25 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           const appUrl = window.location.origin + window.location.pathname;
           const msgId = link.split("/").pop();
           const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
-          try {
-            await navigator.clipboard.writeText(shareLink);
-            showToast("Link copied!");
-          } catch (e) {
-            showToast(shareLink);
+          const isMobile = window.matchMedia("(max-width: 700px)").matches;
+          if (isMobile && navigator.share) {
+            try {
+              await navigator.share({
+                title: track.title || "Music",
+                text: `${track.title}${track.artist ? " - " + track.artist : ""}`,
+                url: shareLink
+              });
+              showToast("Shared!");
+            } catch (e) {
+              if (e.name !== "AbortError") showToast("Share cancelled");
+            }
+          } else {
+            try {
+              await navigator.clipboard.writeText(shareLink);
+              showToast("Link copied!");
+            } catch (e) {
+              showToast(shareLink);
+            }
           }
         } catch (e) {
           console.error("Share failed:", e);
@@ -72767,6 +72796,76 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
         btnShare.classList.remove("sharing");
       });
+      btnSleepTimer.addEventListener("click", () => {
+        sleepSheet.querySelectorAll(".sleep-option").forEach((btn) => {
+          btn.classList.remove("selected");
+        });
+        sleepCancelBtn.style.display = sleepTimerId || sleepEndOfTrack ? "block" : "none";
+        sleepSheet.style.display = "flex";
+      });
+      sleepSheet.querySelector(".sheet-backdrop").addEventListener("click", () => {
+        sleepSheet.style.display = "none";
+      });
+      sleepSheet.querySelectorAll(".sleep-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const minutes = parseInt(btn.dataset.minutes, 10);
+          _clearSleepTimer();
+          if (minutes === -1) {
+            sleepEndOfTrack = true;
+            btnSleepTimer.classList.add("active");
+            sleepBadge.textContent = "1";
+            sleepBadge.style.display = "";
+            showToast("Music will stop after this track");
+          } else {
+            sleepEndTime = Date.now() + minutes * 60 * 1e3;
+            sleepTimerId = setTimeout(() => {
+              audio.pause();
+              _clearSleepTimer();
+              showToast("Sleep timer \u2014 playback stopped");
+            }, minutes * 60 * 1e3);
+            btnSleepTimer.classList.add("active");
+            _startBadgeCountdown();
+            showToast(`Sleep timer: ${btn.textContent}`);
+          }
+          sleepSheet.style.display = "none";
+        });
+      });
+      sleepCancelBtn.addEventListener("click", () => {
+        _clearSleepTimer();
+        sleepSheet.style.display = "none";
+        showToast("Sleep timer cancelled");
+      });
+      function _clearSleepTimer() {
+        if (sleepTimerId) {
+          clearTimeout(sleepTimerId);
+          sleepTimerId = null;
+        }
+        if (sleepBadgeInterval) {
+          clearInterval(sleepBadgeInterval);
+          sleepBadgeInterval = null;
+        }
+        sleepEndTime = null;
+        sleepEndOfTrack = false;
+        btnSleepTimer.classList.remove("active");
+        sleepBadge.style.display = "none";
+      }
+      function _startBadgeCountdown() {
+        _updateBadgeText();
+        sleepBadgeInterval = setInterval(_updateBadgeText, 3e4);
+      }
+      function _updateBadgeText() {
+        if (!sleepEndTime) return;
+        const remaining = Math.max(0, sleepEndTime - Date.now());
+        const mins = Math.ceil(remaining / 6e4);
+        if (mins >= 60) {
+          const h = Math.floor(mins / 60);
+          const m = mins % 60;
+          sleepBadge.textContent = m > 0 ? `${h}h${m}` : `${h}h`;
+        } else {
+          sleepBadge.textContent = `${mins}`;
+        }
+        sleepBadge.style.display = "";
+      }
       audio.addEventListener("timeupdate", () => {
         if (isSeeking || !audio.duration) return;
         const pct = audio.currentTime / audio.duration * 100;

@@ -111,6 +111,16 @@ const playlistModal = $('playlist-modal');
 const modalPlaylists = $('modal-playlists');
 const modalCancel = $('modal-cancel');
 
+// Sleep timer refs
+const btnSleepTimer = $('btn-sleep-timer');
+const sleepSheet = $('sleep-sheet');
+const sleepBadge = $('sleep-badge');
+const sleepCancelBtn = $('sleep-cancel');
+let sleepTimerId = null;
+let sleepEndTime = null;
+let sleepBadgeInterval = null;
+let sleepEndOfTrack = false;
+
 // ══════════════════════════════════════
 //  TABS
 // ══════════════════════════════════════
@@ -750,6 +760,11 @@ function prevTrack() {
 }
 
 function onTrackEnded() {
+    if (sleepEndOfTrack) {
+        _clearSleepTimer();
+        showToast('Sleep timer — playback stopped');
+        return;
+    }
     if (repeatOn) { audio.currentTime = 0; audio.play().catch(() => {}); }
     else nextTrack();
 }
@@ -812,9 +827,13 @@ function updateMediaSession() {
     navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title || 'Unknown',
         artist: track.artist || 'Unknown',
-        album: '',
+        album: browseGroupTitle || playlistGroupTitle || 'Music',
         artwork: artworkList,
     });
+
+    // Re-register handlers on each metadata update (iOS requires this)
+    navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
+    navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
 }
 
 function updateMediaPositionState() {
@@ -1016,13 +1035,28 @@ btnShare.addEventListener('click', async () => {
         const msgId = link.split('/').pop();
         const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(msgId, 10))}`;
 
-        // Copy to clipboard
-        try {
-            await navigator.clipboard.writeText(shareLink);
-            showToast('Link copied!');
-        } catch (e) {
-            // Fallback: show the link
-            showToast(shareLink);
+        // Use Web Share API on mobile (clipboard fails in async context on iOS)
+        const isMobile = window.matchMedia('(max-width: 700px)').matches;
+        if (isMobile && navigator.share) {
+            try {
+                await navigator.share({
+                    title: track.title || 'Music',
+                    text: `${track.title}${track.artist ? ' - ' + track.artist : ''}`,
+                    url: shareLink,
+                });
+                showToast('Shared!');
+            } catch (e) {
+                if (e.name !== 'AbortError') showToast('Share cancelled');
+            }
+        } else {
+            // Desktop: copy to clipboard
+            try {
+                await navigator.clipboard.writeText(shareLink);
+                showToast('Link copied!');
+            } catch (e) {
+                // Fallback: show the link
+                showToast(shareLink);
+            }
         }
     } catch (e) {
         console.error('Share failed:', e);
@@ -1033,6 +1067,84 @@ btnShare.addEventListener('click', async () => {
 
     btnShare.classList.remove('sharing');
 });
+
+// ══════════════════════════════════════
+//  SLEEP TIMER
+// ══════════════════════════════════════
+btnSleepTimer.addEventListener('click', () => {
+    // Update selected state and cancel button visibility
+    sleepSheet.querySelectorAll('.sleep-option').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    sleepCancelBtn.style.display = sleepTimerId || sleepEndOfTrack ? 'block' : 'none';
+    sleepSheet.style.display = 'flex';
+});
+
+sleepSheet.querySelector('.sheet-backdrop').addEventListener('click', () => {
+    sleepSheet.style.display = 'none';
+});
+
+sleepSheet.querySelectorAll('.sleep-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const minutes = parseInt(btn.dataset.minutes, 10);
+        _clearSleepTimer();
+
+        if (minutes === -1) {
+            // End of current track
+            sleepEndOfTrack = true;
+            btnSleepTimer.classList.add('active');
+            sleepBadge.textContent = '1';
+            sleepBadge.style.display = '';
+            showToast('Music will stop after this track');
+        } else {
+            sleepEndTime = Date.now() + minutes * 60 * 1000;
+            sleepTimerId = setTimeout(() => {
+                audio.pause();
+                _clearSleepTimer();
+                showToast('Sleep timer — playback stopped');
+            }, minutes * 60 * 1000);
+            btnSleepTimer.classList.add('active');
+            _startBadgeCountdown();
+            showToast(`Sleep timer: ${btn.textContent}`);
+        }
+
+        sleepSheet.style.display = 'none';
+    });
+});
+
+sleepCancelBtn.addEventListener('click', () => {
+    _clearSleepTimer();
+    sleepSheet.style.display = 'none';
+    showToast('Sleep timer cancelled');
+});
+
+function _clearSleepTimer() {
+    if (sleepTimerId) { clearTimeout(sleepTimerId); sleepTimerId = null; }
+    if (sleepBadgeInterval) { clearInterval(sleepBadgeInterval); sleepBadgeInterval = null; }
+    sleepEndTime = null;
+    sleepEndOfTrack = false;
+    btnSleepTimer.classList.remove('active');
+    sleepBadge.style.display = 'none';
+}
+
+function _startBadgeCountdown() {
+    _updateBadgeText();
+    sleepBadgeInterval = setInterval(_updateBadgeText, 30000);
+}
+
+function _updateBadgeText() {
+    if (!sleepEndTime) return;
+    const remaining = Math.max(0, sleepEndTime - Date.now());
+    const mins = Math.ceil(remaining / 60000);
+    if (mins >= 60) {
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        sleepBadge.textContent = m > 0 ? `${h}h${m}` : `${h}h`;
+    } else {
+        sleepBadge.textContent = `${mins}`;
+    }
+    sleepBadge.style.display = '';
+}
 
 // ══════════════════════════════════════
 //  PROGRESS BAR

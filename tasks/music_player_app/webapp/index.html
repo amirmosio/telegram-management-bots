@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="Music">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=26">
+    <link rel="stylesheet" href="style.css?v=27">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -122,7 +122,12 @@
                     </svg>
                 </button>
                 <span id="now-playing-label">Music Player</span>
-                <div></div>
+                <button id="btn-sleep-timer" class="icon-btn" title="Sleep timer">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <span id="sleep-badge" style="display:none"></span>
+                </button>
             </div>
 
             <div id="artwork">
@@ -221,6 +226,25 @@
         <button id="btn-install-dismiss" class="icon-btn">&times;</button>
     </div>
 
+    <!-- Sleep Timer Sheet -->
+    <div id="sleep-sheet" style="display:none">
+        <div class="sheet-backdrop"></div>
+        <div class="sheet-content">
+            <div class="sheet-handle"></div>
+            <h3 class="sheet-title">Sleep Timer</h3>
+            <div id="sleep-options">
+                <button class="sleep-option" data-minutes="15">15 min</button>
+                <button class="sleep-option" data-minutes="30">30 min</button>
+                <button class="sleep-option" data-minutes="45">45 min</button>
+                <button class="sleep-option" data-minutes="60">1 hour</button>
+                <button class="sleep-option" data-minutes="90">1.5 hours</button>
+                <button class="sleep-option" data-minutes="120">2 hours</button>
+                <button class="sleep-option" data-minutes="-1">End of track</button>
+            </div>
+            <button id="sleep-cancel" class="sleep-cancel-btn" style="display:none">Cancel Timer</button>
+        </div>
+    </div>
+
     <div id="overlay"></div>
     <audio id="audio-element" preload="auto"></audio>
     <script>
@@ -229,6 +253,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=26"></script>
+    <script src="app.bundle.js?v=27"></script>
 </body>
 </html>
