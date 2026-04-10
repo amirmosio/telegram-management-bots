@@ -1025,3 +1025,85 @@ export async function downloadSearchResult(groupId, dlCmd) {
 
     return null;
 }
+
+
+// ══════════════════════════════════════
+//  CROSS-DEVICE SYNC (pinned message in General topic)
+// ══════════════════════════════════════
+const SYNC_MSG_KEY = 'sync_msg_id';
+
+export async function saveSyncState(groupId, state) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    const peer = await client.getInputEntity(groupId);
+    const text = `🎵 Now Playing: ${state.title || 'Unknown'}${state.artist ? ' - ' + state.artist : ''}\n${JSON.stringify(state)}`;
+
+    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
+
+    // Try editing existing message first
+    if (cachedId) {
+        try {
+            await client.invoke(new Api.messages.EditMessage({
+                peer,
+                id: cachedId,
+                message: text,
+            }));
+            return;
+        } catch (e) {
+            // Message deleted or invalid — fall through to send new
+            localStorage.removeItem(SYNC_MSG_KEY);
+        }
+    }
+
+    // Send new message in General topic (id=1) and pin it
+    const sent = await client.sendMessage(entity, {
+        message: text,
+        replyTo: 1,
+    });
+    localStorage.setItem(SYNC_MSG_KEY, String(sent.id));
+
+    try {
+        await client.invoke(new Api.messages.UpdatePinnedMessage({
+            peer,
+            id: sent.id,
+            silent: true,
+        }));
+    } catch (e) {
+        console.warn('Pin sync message failed:', e.message);
+    }
+}
+
+export async function getSyncState(groupId) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+
+    // Try cached message ID first
+    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
+    if (cachedId) {
+        try {
+            const msgs = await client.getMessages(entity, { ids: [cachedId] });
+            const msg = msgs?.[0];
+            if (msg?.message?.startsWith('🎵')) {
+                const json = msg.message.split('\n').slice(1).join('\n');
+                return JSON.parse(json);
+            }
+        } catch (e) {
+            localStorage.removeItem(SYNC_MSG_KEY);
+        }
+    }
+
+    // Search recent messages in General topic for our sync message
+    try {
+        for await (const msg of client.iterMessages(entity, { limit: 15, replyTo: 1 })) {
+            if (msg.message?.startsWith('🎵') && msg.message.includes('{')) {
+                localStorage.setItem(SYNC_MSG_KEY, String(msg.id));
+                const json = msg.message.split('\n').slice(1).join('\n');
+                return JSON.parse(json);
+            }
+        }
+    } catch (e) {
+        console.warn('getSyncState search failed:', e.message);
+    }
+
+    return null;
+}

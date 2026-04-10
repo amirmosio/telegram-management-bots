@@ -621,6 +621,7 @@ async function playTrack(index) {
     updateMediaSession();
     fetchLyricsForTrack(track, gen);
     fetchArtworkForTrack(track, gen);
+    _syncToTelegram();
 
     try {
         // 1. Check memory + IDB cache (instant playback)
@@ -1263,8 +1264,34 @@ function saveSession() {
 }
 
 setInterval(saveSession, 3000);
-audio.addEventListener('pause', saveSession);
-window.addEventListener('beforeunload', saveSession);
+audio.addEventListener('pause', () => { saveSession(); _syncToTelegram(); });
+window.addEventListener('beforeunload', () => { saveSession(); _syncToTelegram(); });
+
+// ── Cross-device sync via Telegram ──
+let _syncInFlight = false;
+function _syncToTelegram() {
+    if (!playlistGroupId || currentTrackIndex < 0 || _syncInFlight) return;
+    const track = playerTracks[currentTrackIndex];
+    if (!track) return;
+    const state = {
+        v: 1,
+        ts: Date.now(),
+        title: track.title || '',
+        artist: track.artist || '',
+        gId: playerGroupId,
+        tId: playerTopicId,
+        trk: currentTrackId,
+        pos: Math.round(audio.currentTime || 0),
+        shf: shuffleOn,
+        rpt: repeatOn,
+        fp: playingFromPlaylist,
+    };
+    _syncInFlight = true;
+    localStorage.setItem('last_sync_ts', String(state.ts));
+    tg.saveSyncState(playlistGroupId, state)
+        .catch(e => console.warn('Sync to Telegram failed:', e.message))
+        .finally(() => { _syncInFlight = false; });
+}
 
 // Restore the complete app state
 async function restoreSession() {
@@ -1296,9 +1323,52 @@ async function restoreSession() {
             $('btn-share').style.display = 'flex';
         }
 
-            if (!s.playerGroupId || !s.currentTrackId) return;
+            if (!s.playerGroupId || !s.currentTrackId) {
+            // No local state — try Telegram sync
+            if (playlistGroupId) {
+                try {
+                    const remote = await tg.getSyncState(playlistGroupId);
+                    if (remote?.gId && remote?.trk) {
+                        s.playerGroupId = remote.gId;
+                        s.playerTopicId = remote.tId || null;
+                        s.currentTrackId = remote.trk;
+                        s.currentTime = remote.pos || 0;
+                        s.shuffleOn = remote.shf;
+                        s.repeatOn = remote.rpt;
+                        s.playingFromPlaylist = remote.fp;
+                        if (remote.shf) { shuffleOn = true; btnShuffle.classList.add('active'); }
+                        if (remote.rpt) { repeatOn = true; btnRepeat.classList.add('active'); }
+                    } else return;
+                } catch (e) { return; }
+            } else return;
+        }
 
-        // ── 2. Restore player state (network needed) ──
+        // ── 2. Check Telegram for newer state from another device ──
+        if (playlistGroupId) {
+            try {
+                const remote = await tg.getSyncState(playlistGroupId);
+                const localTs = parseInt(localStorage.getItem('last_sync_ts') || '0', 10);
+                if (remote?.ts > localTs && remote?.gId && remote?.trk) {
+                    s.playerGroupId = remote.gId;
+                    s.playerTopicId = remote.tId || null;
+                    s.currentTrackId = remote.trk;
+                    s.currentTime = remote.pos || 0;
+                    if (remote.shf !== undefined) { shuffleOn = remote.shf; btnShuffle.classList.toggle('active', shuffleOn); }
+                    if (remote.rpt !== undefined) { repeatOn = remote.rpt; btnRepeat.classList.toggle('active', repeatOn); }
+                    s.playingFromPlaylist = remote.fp;
+                    // Show track info from remote
+                    if (remote.title) {
+                        trackTitleEl.textContent = remote.title;
+                        trackArtistEl.textContent = remote.artist || 'Unknown';
+                        nowPlayingLabel.textContent = 'Now Playing';
+                    }
+                }
+            } catch (e) {
+                console.warn('Remote sync check failed:', e.message);
+            }
+        }
+
+        // ── 3. Restore player state (network needed) ──
         const tracks = await tg.scanTracks(s.playerGroupId, s.playerTopicId ?? null);
         if (!tracks.length) return;
 

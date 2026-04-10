@@ -71377,7 +71377,70 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _phoneCodeHash, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache;
+  async function saveSyncState(groupId, state) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    const peer = await client.getInputEntity(groupId);
+    const text = `\u{1F3B5} Now Playing: ${state.title || "Unknown"}${state.artist ? " - " + state.artist : ""}
+${JSON.stringify(state)}`;
+    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
+    if (cachedId) {
+      try {
+        await client.invoke(new import_tl.Api.messages.EditMessage({
+          peer,
+          id: cachedId,
+          message: text
+        }));
+        return;
+      } catch (e) {
+        localStorage.removeItem(SYNC_MSG_KEY);
+      }
+    }
+    const sent = await client.sendMessage(entity, {
+      message: text,
+      replyTo: 1
+    });
+    localStorage.setItem(SYNC_MSG_KEY, String(sent.id));
+    try {
+      await client.invoke(new import_tl.Api.messages.UpdatePinnedMessage({
+        peer,
+        id: sent.id,
+        silent: true
+      }));
+    } catch (e) {
+      console.warn("Pin sync message failed:", e.message);
+    }
+  }
+  async function getSyncState(groupId) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
+    if (cachedId) {
+      try {
+        const msgs = await client.getMessages(entity, { ids: [cachedId] });
+        const msg = msgs?.[0];
+        if (msg?.message?.startsWith("\u{1F3B5}")) {
+          const json = msg.message.split("\n").slice(1).join("\n");
+          return JSON.parse(json);
+        }
+      } catch (e) {
+        localStorage.removeItem(SYNC_MSG_KEY);
+      }
+    }
+    try {
+      for await (const msg of client.iterMessages(entity, { limit: 15, replyTo: 1 })) {
+        if (msg.message?.startsWith("\u{1F3B5}") && msg.message.includes("{")) {
+          localStorage.setItem(SYNC_MSG_KEY, String(msg.id));
+          const json = msg.message.split("\n").slice(1).join("\n");
+          return JSON.parse(json);
+        }
+      }
+    } catch (e) {
+      console.warn("getSyncState search failed:", e.message);
+    }
+    return null;
+  }
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _phoneCodeHash, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71404,6 +71467,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
       SHARE_CHANNEL_TITLE = "TG Music Player Shared";
       _dlCache = {};
+      SYNC_MSG_KEY = "sync_msg_id";
     }
   });
 
@@ -72346,6 +72410,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         updateMediaSession();
         fetchLyricsForTrack(track, gen);
         fetchArtworkForTrack(track, gen);
+        _syncToTelegram();
         try {
           const cachedUrl = await getCachedTrackUrl(playerGroupId, track.id);
           if (_playGeneration !== gen) return;
@@ -72980,8 +73045,38 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         localStorage.setItem("player_session", JSON.stringify(session));
       }
       setInterval(saveSession, 3e3);
-      audio.addEventListener("pause", saveSession);
-      window.addEventListener("beforeunload", saveSession);
+      audio.addEventListener("pause", () => {
+        saveSession();
+        _syncToTelegram();
+      });
+      window.addEventListener("beforeunload", () => {
+        saveSession();
+        _syncToTelegram();
+      });
+      var _syncInFlight = false;
+      function _syncToTelegram() {
+        if (!playlistGroupId || currentTrackIndex < 0 || _syncInFlight) return;
+        const track = playerTracks[currentTrackIndex];
+        if (!track) return;
+        const state = {
+          v: 1,
+          ts: Date.now(),
+          title: track.title || "",
+          artist: track.artist || "",
+          gId: playerGroupId,
+          tId: playerTopicId,
+          trk: currentTrackId,
+          pos: Math.round(audio.currentTime || 0),
+          shf: shuffleOn,
+          rpt: repeatOn,
+          fp: playingFromPlaylist
+        };
+        _syncInFlight = true;
+        localStorage.setItem("last_sync_ts", String(state.ts));
+        saveSyncState(playlistGroupId, state).catch((e) => console.warn("Sync to Telegram failed:", e.message)).finally(() => {
+          _syncInFlight = false;
+        });
+      }
       async function restoreSession() {
         const raw = localStorage.getItem("player_session");
         if (!raw) return;
@@ -73012,7 +73107,60 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           if (s.trackTitle) {
             $("btn-share").style.display = "flex";
           }
-          if (!s.playerGroupId || !s.currentTrackId) return;
+          if (!s.playerGroupId || !s.currentTrackId) {
+            if (playlistGroupId) {
+              try {
+                const remote = await getSyncState(playlistGroupId);
+                if (remote?.gId && remote?.trk) {
+                  s.playerGroupId = remote.gId;
+                  s.playerTopicId = remote.tId || null;
+                  s.currentTrackId = remote.trk;
+                  s.currentTime = remote.pos || 0;
+                  s.shuffleOn = remote.shf;
+                  s.repeatOn = remote.rpt;
+                  s.playingFromPlaylist = remote.fp;
+                  if (remote.shf) {
+                    shuffleOn = true;
+                    btnShuffle.classList.add("active");
+                  }
+                  if (remote.rpt) {
+                    repeatOn = true;
+                    btnRepeat.classList.add("active");
+                  }
+                } else return;
+              } catch (e) {
+                return;
+              }
+            } else return;
+          }
+          if (playlistGroupId) {
+            try {
+              const remote = await getSyncState(playlistGroupId);
+              const localTs = parseInt(localStorage.getItem("last_sync_ts") || "0", 10);
+              if (remote?.ts > localTs && remote?.gId && remote?.trk) {
+                s.playerGroupId = remote.gId;
+                s.playerTopicId = remote.tId || null;
+                s.currentTrackId = remote.trk;
+                s.currentTime = remote.pos || 0;
+                if (remote.shf !== void 0) {
+                  shuffleOn = remote.shf;
+                  btnShuffle.classList.toggle("active", shuffleOn);
+                }
+                if (remote.rpt !== void 0) {
+                  repeatOn = remote.rpt;
+                  btnRepeat.classList.toggle("active", repeatOn);
+                }
+                s.playingFromPlaylist = remote.fp;
+                if (remote.title) {
+                  trackTitleEl.textContent = remote.title;
+                  trackArtistEl.textContent = remote.artist || "Unknown";
+                  nowPlayingLabel.textContent = "Now Playing";
+                }
+              }
+            } catch (e) {
+              console.warn("Remote sync check failed:", e.message);
+            }
+          }
           const tracks = await scanTracks(s.playerGroupId, s.playerTopicId ?? null);
           if (!tracks.length) return;
           playerTracks = tracks;
