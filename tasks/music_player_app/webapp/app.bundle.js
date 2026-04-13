@@ -72449,6 +72449,7 @@ ${JSON.stringify(state)}`;
         }
         const total = playlistTracks.length;
         const notYet = playlistTracks.filter((t) => !isTrackDownloaded(playlistGroupId, t.id));
+        const alreadyCount = total - notYet.length;
         if (total === 0) {
           showToast("No tracks to download");
           return;
@@ -72458,9 +72459,13 @@ ${JSON.stringify(state)}`;
           return;
         }
         const ok = window.confirm(
-          `Download all ${notYet.length} track${notYet.length === 1 ? "" : "s"} in "${panelTitle.textContent}" for offline play?
+          `Playlist "${panelTitle.textContent}"
 
-This will cache them in your browser and may use significant data.`
+Total tracks: ${total}
+Already downloaded: ${alreadyCount}
+To download: ${notYet.length}
+
+Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for offline play?`
         );
         if (!ok) return;
         _downloadAllInFlight = true;

@@ -372,12 +372,16 @@ btnDownloadAll.addEventListener('click', async () => {
 
     const total = playlistTracks.length;
     const notYet = playlistTracks.filter(t => !tg.isTrackDownloaded(playlistGroupId, t.id));
+    const alreadyCount = total - notYet.length;
     if (total === 0) { showToast('No tracks to download'); return; }
     if (notYet.length === 0) { showToast('All tracks already downloaded'); return; }
 
     const ok = window.confirm(
-        `Download all ${notYet.length} track${notYet.length === 1 ? '' : 's'} in "${panelTitle.textContent}" for offline play?\n\n` +
-        `This will cache them in your browser and may use significant data.`
+        `Playlist "${panelTitle.textContent}"\n\n` +
+        `Total tracks: ${total}\n` +
+        `Already downloaded: ${alreadyCount}\n` +
+        `To download: ${notYet.length}\n\n` +
+        `Cache the remaining ${notYet.length} track${notYet.length === 1 ? '' : 's'} for offline play?`
     );
     if (!ok) return;
 
