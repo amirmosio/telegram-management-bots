@@ -72660,7 +72660,7 @@ This will cache them in your browser and may use significant data.`
         }
       }
       function _updateAddButton() {
-        $("btn-add-playing").style.display = playingFromPlaylist ? "none" : "flex";
+        $("btn-add-playing").style.display = "flex";
         $("btn-share").style.display = "flex";
       }
       function updateSidebarHighlight() {
@@ -73515,9 +73515,9 @@ This will cache them in your browser and may use significant data.`
           }
           if (s.playingFromPlaylist) {
             playingFromPlaylist = true;
-            $("btn-add-playing").style.display = "none";
           }
           if (s.trackTitle) {
+            $("btn-add-playing").style.display = "flex";
             $("btn-share").style.display = "flex";
           }
           if (!s.playerGroupId || !s.currentTrackId) {

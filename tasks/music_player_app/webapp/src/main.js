@@ -666,7 +666,7 @@ function renderTracksInto(container, trackList, filter, context, { isSearchResul
 }
 
 function _updateAddButton() {
-    $('btn-add-playing').style.display = playingFromPlaylist ? 'none' : 'flex';
+    $('btn-add-playing').style.display = 'flex';
     $('btn-share').style.display = 'flex';
 }
 
@@ -1569,13 +1569,12 @@ async function restoreSession() {
             timeTotal.textContent = formatTime(s.trackDuration || 0);
         }
 
-        // Restore playlist play flag and hide + button if needed
+        // Restore playlist play flag — but keep the + button visible regardless.
         if (s.playingFromPlaylist) {
             playingFromPlaylist = true;
-            $('btn-add-playing').style.display = 'none';
         }
-        // Share button always visible when a track was playing
         if (s.trackTitle) {
+            $('btn-add-playing').style.display = 'flex';
             $('btn-share').style.display = 'flex';
         }
 
