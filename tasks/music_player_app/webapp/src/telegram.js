@@ -6,7 +6,7 @@ import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { Api } from 'telegram/tl';
 import { Buffer } from 'buffer';
-import { idbGet, idbPut } from './idb-cache.js';
+import { idbGet, idbPut, idbGetAllKeys } from './idb-cache.js';
 
 // Make Buffer available globally for GramJS browser compat
 if (typeof window !== 'undefined') {
@@ -24,6 +24,17 @@ let _tracksCache = {};    // cacheKey -> [track]
 let _msgCache = {};       // `${groupId}:${msgId}` -> message
 let _blobCache = {};      // `${groupId}:${trackId}` -> blobUrl
 let _thumbBlobCache = {}; // `${groupId}:${trackId}` -> blobUrl
+let _downloadedIds = new Set(); // `${groupId}:${trackId}` for rows already in IDB audio store
+let _drainGeneration = 0; // cancellation token for loadAllTracks
+
+// Preload the set of already-downloaded track ids from IDB so the sidebar
+// can render a "downloaded" marker on first paint.
+(async () => {
+    try {
+        const keys = await idbGetAllKeys('downloaded_index');
+        for (const k of keys) _downloadedIds.add(k);
+    } catch { /* ignore */ }
+})();
 
 
 // ════════════════════════════════════
@@ -171,6 +182,7 @@ export async function logout() {
     _msgCache = {};
     _blobCache = {};
     _thumbBlobCache = {};
+    _downloadedIds = new Set();
 }
 
 // ════════════════════════════════════
@@ -262,7 +274,14 @@ export async function getGroupPhoto(groupId) {
 // ════════════════════════════════════
 
 export async function listTopics(groupId) {
-    const entity = await _getEntity(groupId);
+    let entity;
+    try {
+        entity = await _getEntity(groupId);
+    } catch (e) {
+        const cached = await idbGet('topics', String(groupId));
+        if (cached) { _topicsCache[groupId] = cached; return cached; }
+        throw e;
+    }
     const topics = [];
     try {
         const result = await client.invoke(
@@ -323,9 +342,12 @@ export async function listTopics(groupId) {
         }
     } catch (e) {
         console.error('GetForumTopics failed:', e);
+        const cached = await idbGet('topics', String(groupId));
+        if (cached) { _topicsCache[groupId] = cached; return cached; }
     }
 
     _topicsCache[groupId] = topics;
+    if (topics.length > 0) idbPut('topics', String(groupId), topics);
     return topics;
 }
 
@@ -396,25 +418,38 @@ export async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     if (_tracksCache[cacheKey]) return _tracksCache[cacheKey];
 
-    const entity = await _getEntity(groupId);
-    const tracks = [];
-    const params = { entity, limit };
-    if (topicId !== null) params.replyTo = topicId;
+    try {
+        const entity = await _getEntity(groupId);
+        const tracks = [];
+        const params = { entity, limit };
+        if (topicId !== null) params.replyTo = topicId;
 
-    for await (const msg of client.iterMessages(entity, params)) {
-        const meta = _extractAudioMeta(msg);
-        if (meta) {
-            tracks.push(meta);
-            _msgCache[`${groupId}:${msg.id}`] = msg;
+        for await (const msg of client.iterMessages(entity, params)) {
+            const meta = _extractAudioMeta(msg);
+            if (meta) {
+                tracks.push(meta);
+                _msgCache[`${groupId}:${msg.id}`] = msg;
+            }
         }
-    }
 
-    _tracksCache[cacheKey] = tracks;
-    return tracks;
+        _tracksCache[cacheKey] = tracks;
+        if (tracks.length > 0) idbPut('track_lists', cacheKey, { tracks, cachedAt: Date.now() });
+        return tracks;
+    } catch (e) {
+        // Offline fallback — return last-known metadata from IDB so downloaded
+        // tracks remain playable without a connection. Note: _msgCache is empty,
+        // so only cached-blob tracks will actually play.
+        const stored = await idbGet('track_lists', cacheKey);
+        if (stored?.tracks) {
+            _tracksCache[cacheKey] = stored.tracks;
+            return stored.tracks;
+        }
+        throw e;
+    }
 }
 
 // Load next page of tracks, appending to existing cache.
-// Returns the new tracks added (empty array if no more).
+// Returns the new tracks added (empty array if no more / offline).
 export async function loadMoreTracks(groupId, topicId = null) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     const existing = _tracksCache[cacheKey] || [];
@@ -422,22 +457,81 @@ export async function loadMoreTracks(groupId, topicId = null) {
 
     // Use the oldest (last) track's message ID as offset
     const lastTrack = existing[existing.length - 1];
-    const entity = await _getEntity(groupId);
+    let entity;
+    try {
+        entity = await _getEntity(groupId);
+    } catch { return []; }
     const params = { entity, limit: PAGE_SIZE, offsetId: lastTrack.id };
     if (topicId !== null) params.replyTo = topicId;
 
     const newTracks = [];
-    for await (const msg of client.iterMessages(entity, params)) {
-        const meta = _extractAudioMeta(msg);
-        if (meta) {
-            newTracks.push(meta);
-            _msgCache[`${groupId}:${msg.id}`] = msg;
+    try {
+        for await (const msg of client.iterMessages(entity, params)) {
+            const meta = _extractAudioMeta(msg);
+            if (meta) {
+                newTracks.push(meta);
+                _msgCache[`${groupId}:${msg.id}`] = msg;
+            }
         }
-    }
+    } catch { return []; }
 
     existing.push(...newTracks);
     _tracksCache[cacheKey] = existing;
+    if (newTracks.length > 0) idbPut('track_lists', cacheKey, { tracks: existing, cachedAt: Date.now() });
     return newTracks;
+}
+
+// Eagerly drain every remaining page for a (group, topic) track list.
+// Calls onPage(newTracks) after each page so callers can update live UI
+// or in-place mutate their playerTracks array. Cancellable via cancelDrain().
+export async function loadAllTracks(groupId, topicId = null, onPage = null) {
+    const gen = ++_drainGeneration;
+    while (true) {
+        const page = await loadMoreTracks(groupId, topicId);
+        if (gen !== _drainGeneration) return; // cancelled
+        if (page.length === 0) return;
+        if (onPage) {
+            try { onPage(page); } catch { /* ignore UI errors */ }
+        }
+    }
+}
+
+export function cancelDrain() {
+    _drainGeneration++;
+}
+
+// Prefetch a track's audio into IDB (for background next-track).
+// No-op if already cached. Returns when the blob is fully stored.
+export async function prefetchTrack(groupId, trackId) {
+    const blobKey = `${groupId}:${trackId}`;
+    if (_blobCache[blobKey]) return;
+    const existing = await idbGet('audio', blobKey);
+    if (existing) {
+        _blobCache[blobKey] = URL.createObjectURL(existing);
+        return;
+    }
+
+    const msg = _msgCache[blobKey];
+    if (!msg) return; // not in memory — can't prefetch without the message
+    const doc = msg.media?.document;
+    if (!doc) return;
+    const mime = doc.mimeType || 'audio/mpeg';
+
+    try {
+        const chunks = [];
+        for await (const chunk of iterTrackDownload(groupId, trackId)) {
+            chunks.push(chunk);
+        }
+        if (chunks.length === 0) return;
+        const blob = new Blob(chunks, { type: mime });
+        cacheTrackBlob(groupId, trackId, blob);
+    } catch (e) {
+        console.warn('[prefetch] failed', trackId, e?.message || e);
+    }
+}
+
+export function isTrackDownloaded(groupId, trackId) {
+    return _downloadedIds.has(`${groupId}:${trackId}`);
 }
 
 // Server-side search for tracks by query string
@@ -502,6 +596,9 @@ export function cacheTrackBlob(groupId, trackId, blob) {
     const url = URL.createObjectURL(blob);
     _blobCache[blobKey] = url;
     idbPut('audio', blobKey, blob);
+    _downloadedIds.add(blobKey);
+    idbPut('downloaded_index', blobKey, 1);
+    try { window.dispatchEvent(new CustomEvent('track-downloaded', { detail: { groupId, trackId } })); } catch {}
     return url;
 }
 

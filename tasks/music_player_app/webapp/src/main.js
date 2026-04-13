@@ -32,6 +32,7 @@ let isSeeking = false;
 let shuffleOn = false;
 let repeatOn = false;
 let shuffleHistory = []; // stack of previously played indices for shuffle-back
+let _committedNextIndex = -1; // index of the track to play next (pre-picked for prefetch)
 let _wakeLock = null; // Screen Wake Lock to keep playback alive in background
 let _pendingSeekTime = 0; // seek to this position when audio starts playing (from sync/share)
 
@@ -241,10 +242,12 @@ browseTracksSearch.addEventListener('input', () => {
 async function loadPlaylists() {
     playlistsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
     try {
-        playlists = await tg.listTopics(playlistGroupId);
+        const topics = await tg.listTopics(playlistGroupId);
+        playlists = [{ id: null, title: 'All', icon: '🎵', isAll: true }, ...topics];
         renderPlaylists();
     } catch (e) {
-        playlistsContainer.innerHTML = '<div class="lyrics-placeholder">Failed to load</div>';
+        playlists = [{ id: null, title: 'All', icon: '🎵', isAll: true }];
+        renderPlaylists();
     }
 }
 
@@ -268,14 +271,17 @@ function renderPlaylists() {
 }
 
 async function openPlaylist(p) {
-    currentPlaylistTopicId = p.id;
+    // Use '__all__' as sentinel for the synthetic "All" entry so switchTab
+    // can distinguish "All view open" from "playlists list view".
+    currentPlaylistTopicId = p.isAll ? '__all__' : p.id;
+    const topicIdForApi = p.isAll ? null : p.id;
     showPlaylistTracks();
     panelTitle.textContent = p.title;
     playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
     try {
-        playlistTracks = await tg.scanTracks(playlistGroupId, p.id);
+        playlistTracks = await tg.scanTracks(playlistGroupId, topicIdForApi);
         renderTracksInto(playlistTracksContainer, playlistTracks, '',
-            { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+            { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false });
     } catch (e) {
         playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder">Failed to load</div>';
     }
@@ -292,14 +298,15 @@ playlistTracksSearch.addEventListener('input', () => {
     clearTimeout(browseSearchTimeout);
     browseSearchTimeout = setTimeout(async () => {
         const q = playlistTracksSearch.value.trim();
+        const topicIdForApi = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
         if (!q) {
-            renderTracksInto(playlistTracksContainer, playlistTracks, '', { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+            renderTracksInto(playlistTracksContainer, playlistTracks, '', { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false });
             return;
         }
         playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
         try {
-            const results = await tg.searchTracksInChat(playlistGroupId, currentPlaylistTopicId, q);
-            renderTracksInto(playlistTracksContainer, results, '', { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false }, { isSearchResult: true });
+            const results = await tg.searchTracksInChat(playlistGroupId, topicIdForApi, q);
+            renderTracksInto(playlistTracksContainer, results, '', { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false }, { isSearchResult: true });
         } catch (e) {
             playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
         }
@@ -481,8 +488,9 @@ async function downloadAndPlay(item, searchRef) {
 function _createTrackEl(track, trackList, context) {
     const origIndex = trackList.indexOf(track);
     const isPlaying = track.id === currentTrackId;
+    const isDownloaded = tg.isTrackDownloaded(context.groupId, track.id);
     const el = document.createElement('div');
-    el.className = 'track-item' + (isPlaying ? ' active' : '');
+    el.className = 'track-item' + (isPlaying ? ' active' : '') + (isDownloaded ? ' is-downloaded' : '');
     el.dataset.trackId = track.id;
 
     const addBtn = context.showAddBtn
@@ -496,6 +504,7 @@ function _createTrackEl(track, trackList, context) {
             <div class="track-item-title">${escapeHtml(track.title)}</div>
             <div class="track-item-artist">${escapeHtml(track.artist || 'Unknown')}</div>
         </div>
+        <span class="track-item-downloaded" title="Downloaded"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></span>
         <span class="track-item-duration">${formatTime(track.duration)}</span>
         ${addBtn}
     `;
@@ -598,6 +607,15 @@ function updateSidebarHighlight() {
     });
 }
 
+// When a track finishes downloading, mark any visible row with the is-downloaded class.
+window.addEventListener('track-downloaded', (e) => {
+    const { trackId } = e.detail || {};
+    if (trackId == null) return;
+    document.querySelectorAll(`.track-item[data-track-id="${trackId}"]`).forEach(el => {
+        el.classList.add('is-downloaded');
+    });
+});
+
 // ══════════════════════════════════════
 //  PLAYBACK
 // ══════════════════════════════════════
@@ -632,6 +650,7 @@ async function playTrack(index) {
     // Bump generation so any in-flight fetches for the previous track are ignored
     const gen = ++_playGeneration;
     _isLoadingAudio = true;
+    _committedNextIndex = -1; // will be re-picked from onPlaying
 
     currentTrackIndex = index;
     const track = playerTracks[index];
@@ -682,6 +701,9 @@ async function playTrack(index) {
         if (seekTime > 0 && audio.duration && seekTime < audio.duration) {
             audio.currentTime = seekTime;
         }
+        // Pre-pick and prefetch the next track so nextTrack() can play it
+        // instantly — even with the screen locked.
+        _prefetchNextTrack(gen);
     };
     audio.addEventListener('playing', onPlaying, { once: true });
 
@@ -805,6 +827,16 @@ async function _downloadAndPlay(track, gen) {
 
 async function nextTrack() {
     if (playerTracks.length === 0) return;
+
+    // Consume the pre-picked next index so playback uses the prefetched blob.
+    if (_committedNextIndex >= 0 && _committedNextIndex < playerTracks.length) {
+        const idx = _committedNextIndex;
+        _committedNextIndex = -1;
+        if (shuffleOn) shuffleHistory.push(currentTrackIndex);
+        playTrack(idx);
+        return;
+    }
+
     if (shuffleOn) {
         shuffleHistory.push(currentTrackIndex);
         let rand;
@@ -828,6 +860,30 @@ async function nextTrack() {
             playTrack(nextIdx);
         }
     }
+}
+
+// Pre-pick + prefetch the next track into IDB so it's ready to play instantly
+// when the user (or MediaSession) fires nextTrack() — even if the screen is
+// locked and GramJS throttled. Called from onPlaying after the current track
+// actually starts decoding.
+async function _prefetchNextTrack(gen) {
+    if (_playGeneration !== gen) return;
+    if (playerTracks.length < 2) return;
+
+    let nextIdx;
+    if (shuffleOn) {
+        do { nextIdx = Math.floor(Math.random() * playerTracks.length); }
+        while (nextIdx === currentTrackIndex && playerTracks.length > 1);
+    } else {
+        nextIdx = (currentTrackIndex + 1) % playerTracks.length;
+    }
+    _committedNextIndex = nextIdx;
+
+    const nextT = playerTracks[nextIdx];
+    if (!nextT) return;
+    try {
+        await tg.prefetchTrack(playerGroupId, nextT.id);
+    } catch { /* best effort */ }
 }
 
 function prevTrack() {
@@ -861,7 +917,44 @@ function togglePlay() {
     if (audio.paused) audio.play().catch(() => {}); else audio.pause();
 }
 
-btnShuffle.addEventListener('click', () => { shuffleOn = !shuffleOn; btnShuffle.classList.toggle('active', shuffleOn); saveSession(); });
+btnShuffle.addEventListener('click', () => {
+    shuffleOn = !shuffleOn;
+    btnShuffle.classList.toggle('active', shuffleOn);
+    saveSession();
+    _committedNextIndex = -1; // force re-pick under new mode
+
+    if (shuffleOn) {
+        // Shuffle must span the full playlist, not just the loaded pages.
+        // Drain every remaining page in the background; mutate playerTracks
+        // in place so the random pick naturally widens as pages arrive.
+        _shuffleDrainIntoPlayer();
+    } else {
+        tg.cancelDrain();
+        btnShuffle.classList.remove('draining');
+    }
+});
+
+async function _shuffleDrainIntoPlayer() {
+    if (!playerGroupId) return;
+    const cachedList = tg.getCachedTracks(playerGroupId, playerTopicId);
+    if (playerTracks !== cachedList) return; // player isn't tracking a paginated list
+    btnShuffle.classList.add('draining');
+    try {
+        await tg.loadAllTracks(playerGroupId, playerTopicId, (newPage) => {
+            // playerTracks is the same array reference as the cache — it grew.
+            // Append corresponding rows to the visible list if it matches.
+            const cpT = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+            if (playerGroupId === playlistGroupId && playerTopicId === cpT) {
+                const ctx = { groupId: playlistGroupId, topicId: cpT, showAddBtn: false };
+                for (const track of newPage) {
+                    playlistTracksContainer.appendChild(_createTrackEl(track, playlistTracks, ctx));
+                }
+            }
+        });
+    } finally {
+        btnShuffle.classList.remove('draining');
+    }
+}
 btnRepeat.addEventListener('click', () => { repeatOn = !repeatOn; btnRepeat.classList.toggle('active', repeatOn); saveSession(); });
 btnPlay.addEventListener('click', togglePlay);
 $('btn-next').addEventListener('click', nextTrack);
@@ -1334,9 +1427,11 @@ function saveSession() {
 
         // Playlist context
         currentPlaylistTopicId,
-        currentPlaylistTitle: currentPlaylistTopicId
-            ? (playlists.find(p => p.id === currentPlaylistTopicId)?.title || '')
-            : null,
+        currentPlaylistTitle: currentPlaylistTopicId === '__all__'
+            ? 'All'
+            : (currentPlaylistTopicId
+                ? (playlists.find(p => p.id === currentPlaylistTopicId)?.title || '')
+                : null),
 
         // Player state
         playerGroupId,
@@ -1496,17 +1591,18 @@ async function restoreSession() {
         // ── 3. Restore sidebar view ──
         if (s.currentPlaylistTopicId && playlistGroupId && s.activeTab === 'playlists') {
             currentPlaylistTopicId = s.currentPlaylistTopicId;
+            const topicIdForApi = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
             showPlaylistTracks();
-            panelTitle.textContent = s.currentPlaylistTitle || '';
+            panelTitle.textContent = s.currentPlaylistTitle || (currentPlaylistTopicId === '__all__' ? 'All' : '');
 
             // If playing from this playlist, reuse tracks; otherwise scan
-            if (String(s.playerGroupId) === String(playlistGroupId) && s.playerTopicId === s.currentPlaylistTopicId) {
+            if (String(s.playerGroupId) === String(playlistGroupId) && s.playerTopicId === topicIdForApi) {
                 playlistTracks = tracks;
             } else {
-                try { playlistTracks = await tg.scanTracks(playlistGroupId, s.currentPlaylistTopicId); } catch (e) {}
+                try { playlistTracks = await tg.scanTracks(playlistGroupId, topicIdForApi); } catch (e) {}
             }
             renderTracksInto(playlistTracksContainer, playlistTracks, '',
-                { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+                { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false });
         }
 
         // Restore browse tracks if browsing a different group

@@ -70441,14 +70441,27 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     } catch {
     }
   }
+  async function idbGetAllKeys(store) {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(store, "readonly");
+        const req = tx.objectStore(store).getAllKeys();
+        req.onsuccess = () => resolve(req.result ?? []);
+        req.onerror = () => resolve([]);
+      });
+    } catch {
+      return [];
+    }
+  }
   var import_process2, DB_NAME, DB_VERSION, STORES, _db;
   var init_idb_cache = __esm({
     "src/idb-cache.js"() {
       init_define_process_env();
       import_process2 = __toESM(require_process());
       DB_NAME = "music_cache";
-      DB_VERSION = 2;
-      STORES = ["audio", "artwork", "lyrics"];
+      DB_VERSION = 3;
+      STORES = ["audio", "artwork", "lyrics", "track_lists", "topics", "downloaded_index"];
       _db = null;
     }
   });
@@ -70644,7 +70657,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     return null;
   }
   async function listTopics(groupId) {
-    const entity = await _getEntity(groupId);
+    let entity;
+    try {
+      entity = await _getEntity(groupId);
+    } catch (e) {
+      const cached = await idbGet("topics", String(groupId));
+      if (cached) {
+        _topicsCache[groupId] = cached;
+        return cached;
+      }
+      throw e;
+    }
     const topics = [];
     try {
       const result = await client.invoke(
@@ -70701,8 +70724,14 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
     } catch (e) {
       console.error("GetForumTopics failed:", e);
+      const cached = await idbGet("topics", String(groupId));
+      if (cached) {
+        _topicsCache[groupId] = cached;
+        return cached;
+      }
     }
     _topicsCache[groupId] = topics;
+    if (topics.length > 0) idbPut("topics", String(groupId), topics);
     return topics;
   }
   async function createTopic(groupId, title) {
@@ -70759,39 +70788,104 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     if (_tracksCache[cacheKey]) return _tracksCache[cacheKey];
-    const entity = await _getEntity(groupId);
-    const tracks = [];
-    const params = { entity, limit };
-    if (topicId !== null) params.replyTo = topicId;
-    for await (const msg of client.iterMessages(entity, params)) {
-      const meta = _extractAudioMeta(msg);
-      if (meta) {
-        tracks.push(meta);
-        _msgCache[`${groupId}:${msg.id}`] = msg;
+    try {
+      const entity = await _getEntity(groupId);
+      const tracks = [];
+      const params = { entity, limit };
+      if (topicId !== null) params.replyTo = topicId;
+      for await (const msg of client.iterMessages(entity, params)) {
+        const meta = _extractAudioMeta(msg);
+        if (meta) {
+          tracks.push(meta);
+          _msgCache[`${groupId}:${msg.id}`] = msg;
+        }
       }
+      _tracksCache[cacheKey] = tracks;
+      if (tracks.length > 0) idbPut("track_lists", cacheKey, { tracks, cachedAt: Date.now() });
+      return tracks;
+    } catch (e) {
+      const stored = await idbGet("track_lists", cacheKey);
+      if (stored?.tracks) {
+        _tracksCache[cacheKey] = stored.tracks;
+        return stored.tracks;
+      }
+      throw e;
     }
-    _tracksCache[cacheKey] = tracks;
-    return tracks;
   }
   async function loadMoreTracks(groupId, topicId = null) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     const existing = _tracksCache[cacheKey] || [];
     if (existing.length === 0) return [];
     const lastTrack = existing[existing.length - 1];
-    const entity = await _getEntity(groupId);
+    let entity;
+    try {
+      entity = await _getEntity(groupId);
+    } catch {
+      return [];
+    }
     const params = { entity, limit: PAGE_SIZE, offsetId: lastTrack.id };
     if (topicId !== null) params.replyTo = topicId;
     const newTracks = [];
-    for await (const msg of client.iterMessages(entity, params)) {
-      const meta = _extractAudioMeta(msg);
-      if (meta) {
-        newTracks.push(meta);
-        _msgCache[`${groupId}:${msg.id}`] = msg;
+    try {
+      for await (const msg of client.iterMessages(entity, params)) {
+        const meta = _extractAudioMeta(msg);
+        if (meta) {
+          newTracks.push(meta);
+          _msgCache[`${groupId}:${msg.id}`] = msg;
+        }
       }
+    } catch {
+      return [];
     }
     existing.push(...newTracks);
     _tracksCache[cacheKey] = existing;
+    if (newTracks.length > 0) idbPut("track_lists", cacheKey, { tracks: existing, cachedAt: Date.now() });
     return newTracks;
+  }
+  async function loadAllTracks(groupId, topicId = null, onPage = null) {
+    const gen = ++_drainGeneration;
+    while (true) {
+      const page = await loadMoreTracks(groupId, topicId);
+      if (gen !== _drainGeneration) return;
+      if (page.length === 0) return;
+      if (onPage) {
+        try {
+          onPage(page);
+        } catch {
+        }
+      }
+    }
+  }
+  function cancelDrain() {
+    _drainGeneration++;
+  }
+  async function prefetchTrack(groupId, trackId) {
+    const blobKey = `${groupId}:${trackId}`;
+    if (_blobCache[blobKey]) return;
+    const existing = await idbGet("audio", blobKey);
+    if (existing) {
+      _blobCache[blobKey] = URL.createObjectURL(existing);
+      return;
+    }
+    const msg = _msgCache[blobKey];
+    if (!msg) return;
+    const doc = msg.media?.document;
+    if (!doc) return;
+    const mime = doc.mimeType || "audio/mpeg";
+    try {
+      const chunks = [];
+      for await (const chunk of iterTrackDownload(groupId, trackId)) {
+        chunks.push(chunk);
+      }
+      if (chunks.length === 0) return;
+      const blob = new Blob(chunks, { type: mime });
+      cacheTrackBlob(groupId, trackId, blob);
+    } catch (e) {
+      console.warn("[prefetch] failed", trackId, e?.message || e);
+    }
+  }
+  function isTrackDownloaded(groupId, trackId) {
+    return _downloadedIds.has(`${groupId}:${trackId}`);
   }
   async function searchTracksInChat(groupId, topicId = null, query = "") {
     if (!query.trim()) return [];
@@ -70839,6 +70933,12 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     const url = URL.createObjectURL(blob);
     _blobCache[blobKey] = url;
     idbPut("audio", blobKey, blob);
+    _downloadedIds.add(blobKey);
+    idbPut("downloaded_index", blobKey, 1);
+    try {
+      window.dispatchEvent(new CustomEvent("track-downloaded", { detail: { groupId, trackId } }));
+    } catch {
+    }
     return url;
   }
   async function* iterTrackDownload(groupId, trackId) {
@@ -71478,7 +71578,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _phoneCodeHash, PAGE_SIZE, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _phoneCodeHash, PAGE_SIZE, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71501,6 +71601,15 @@ ${JSON.stringify(state)}`;
       _msgCache = {};
       _blobCache = {};
       _thumbBlobCache = {};
+      _downloadedIds = /* @__PURE__ */ new Set();
+      _drainGeneration = 0;
+      (async () => {
+        try {
+          const keys = await idbGetAllKeys("downloaded_index");
+          for (const k of keys) _downloadedIds.add(k);
+        } catch {
+        }
+      })();
       _phoneCodeHash = null;
       PAGE_SIZE = 100;
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
@@ -71948,6 +72057,7 @@ ${JSON.stringify(state)}`;
       var shuffleOn = false;
       var repeatOn = false;
       var shuffleHistory = [];
+      var _committedNextIndex = -1;
       var _wakeLock = null;
       var _pendingSeekTime = 0;
       var activeTab = "playlists";
@@ -72122,10 +72232,12 @@ ${JSON.stringify(state)}`;
       async function loadPlaylists() {
         playlistsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
         try {
-          playlists = await listTopics(playlistGroupId);
+          const topics = await listTopics(playlistGroupId);
+          playlists = [{ id: null, title: "All", icon: "\u{1F3B5}", isAll: true }, ...topics];
           renderPlaylists();
         } catch (e) {
-          playlistsContainer.innerHTML = '<div class="lyrics-placeholder">Failed to load</div>';
+          playlists = [{ id: null, title: "All", icon: "\u{1F3B5}", isAll: true }];
+          renderPlaylists();
         }
       }
       function renderPlaylists() {
@@ -72145,17 +72257,18 @@ ${JSON.stringify(state)}`;
         });
       }
       async function openPlaylist(p) {
-        currentPlaylistTopicId = p.id;
+        currentPlaylistTopicId = p.isAll ? "__all__" : p.id;
+        const topicIdForApi = p.isAll ? null : p.id;
         showPlaylistTracks();
         panelTitle.textContent = p.title;
         playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
         try {
-          playlistTracks = await scanTracks(playlistGroupId, p.id);
+          playlistTracks = await scanTracks(playlistGroupId, topicIdForApi);
           renderTracksInto(
             playlistTracksContainer,
             playlistTracks,
             "",
-            { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false }
+            { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false }
           );
         } catch (e) {
           playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder">Failed to load</div>';
@@ -72171,14 +72284,15 @@ ${JSON.stringify(state)}`;
         clearTimeout(browseSearchTimeout);
         browseSearchTimeout = setTimeout(async () => {
           const q = playlistTracksSearch.value.trim();
+          const topicIdForApi = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
           if (!q) {
-            renderTracksInto(playlistTracksContainer, playlistTracks, "", { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false });
+            renderTracksInto(playlistTracksContainer, playlistTracks, "", { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false });
             return;
           }
           playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
           try {
-            const results = await searchTracksInChat(playlistGroupId, currentPlaylistTopicId, q);
-            renderTracksInto(playlistTracksContainer, results, "", { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false }, { isSearchResult: true });
+            const results = await searchTracksInChat(playlistGroupId, topicIdForApi, q);
+            renderTracksInto(playlistTracksContainer, results, "", { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false }, { isSearchResult: true });
           } catch (e) {
             playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
           }
@@ -72325,8 +72439,9 @@ ${JSON.stringify(state)}`;
       function _createTrackEl(track, trackList, context) {
         const origIndex = trackList.indexOf(track);
         const isPlaying = track.id === currentTrackId;
+        const isDownloaded = isTrackDownloaded(context.groupId, track.id);
         const el = document.createElement("div");
-        el.className = "track-item" + (isPlaying ? " active" : "");
+        el.className = "track-item" + (isPlaying ? " active" : "") + (isDownloaded ? " is-downloaded" : "");
         el.dataset.trackId = track.id;
         const addBtn = context.showAddBtn ? `<button class="track-add-btn" title="Add to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>` : "";
         const placeholderSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
@@ -72336,6 +72451,7 @@ ${JSON.stringify(state)}`;
             <div class="track-item-title">${escapeHtml(track.title)}</div>
             <div class="track-item-artist">${escapeHtml(track.artist || "Unknown")}</div>
         </div>
+        <span class="track-item-downloaded" title="Downloaded"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg></span>
         <span class="track-item-duration">${formatTime(track.duration)}</span>
         ${addBtn}
     `;
@@ -72437,6 +72553,13 @@ ${JSON.stringify(state)}`;
           el.classList.toggle("active", id !== void 0 && Number(id) === currentTrackId);
         });
       }
+      window.addEventListener("track-downloaded", (e) => {
+        const { trackId } = e.detail || {};
+        if (trackId == null) return;
+        document.querySelectorAll(`.track-item[data-track-id="${trackId}"]`).forEach((el) => {
+          el.classList.add("is-downloaded");
+        });
+      });
       function startPlayback(trackList, gId, topicId, index, fromPlaylist) {
         playerTracks = trackList;
         playerGroupId = gId;
@@ -72470,6 +72593,7 @@ ${JSON.stringify(state)}`;
         if (index < 0 || index >= playerTracks.length) return;
         const gen = ++_playGeneration;
         _isLoadingAudio = true;
+        _committedNextIndex = -1;
         currentTrackIndex = index;
         const track = playerTracks[index];
         currentTrackId = track.id;
@@ -72505,6 +72629,7 @@ ${JSON.stringify(state)}`;
           if (seekTime > 0 && audio.duration && seekTime < audio.duration) {
             audio.currentTime = seekTime;
           }
+          _prefetchNextTrack(gen);
         };
         audio.addEventListener("playing", onPlaying, { once: true });
         updateMediaSession();
@@ -72615,6 +72740,13 @@ ${JSON.stringify(state)}`;
       }
       async function nextTrack() {
         if (playerTracks.length === 0) return;
+        if (_committedNextIndex >= 0 && _committedNextIndex < playerTracks.length) {
+          const idx = _committedNextIndex;
+          _committedNextIndex = -1;
+          if (shuffleOn) shuffleHistory.push(currentTrackIndex);
+          playTrack(idx);
+          return;
+        }
         if (shuffleOn) {
           shuffleHistory.push(currentTrackIndex);
           let rand;
@@ -72638,6 +72770,25 @@ ${JSON.stringify(state)}`;
           } else {
             playTrack(nextIdx);
           }
+        }
+      }
+      async function _prefetchNextTrack(gen) {
+        if (_playGeneration !== gen) return;
+        if (playerTracks.length < 2) return;
+        let nextIdx;
+        if (shuffleOn) {
+          do {
+            nextIdx = Math.floor(Math.random() * playerTracks.length);
+          } while (nextIdx === currentTrackIndex && playerTracks.length > 1);
+        } else {
+          nextIdx = (currentTrackIndex + 1) % playerTracks.length;
+        }
+        _committedNextIndex = nextIdx;
+        const nextT = playerTracks[nextIdx];
+        if (!nextT) return;
+        try {
+          await prefetchTrack(playerGroupId, nextT.id);
+        } catch {
         }
       }
       function prevTrack() {
@@ -72679,7 +72830,33 @@ ${JSON.stringify(state)}`;
         shuffleOn = !shuffleOn;
         btnShuffle.classList.toggle("active", shuffleOn);
         saveSession();
+        _committedNextIndex = -1;
+        if (shuffleOn) {
+          _shuffleDrainIntoPlayer();
+        } else {
+          cancelDrain();
+          btnShuffle.classList.remove("draining");
+        }
       });
+      async function _shuffleDrainIntoPlayer() {
+        if (!playerGroupId) return;
+        const cachedList = getCachedTracks(playerGroupId, playerTopicId);
+        if (playerTracks !== cachedList) return;
+        btnShuffle.classList.add("draining");
+        try {
+          await loadAllTracks(playerGroupId, playerTopicId, (newPage) => {
+            const cpT = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
+            if (playerGroupId === playlistGroupId && playerTopicId === cpT) {
+              const ctx = { groupId: playlistGroupId, topicId: cpT, showAddBtn: false };
+              for (const track of newPage) {
+                playlistTracksContainer.appendChild(_createTrackEl(track, playlistTracks, ctx));
+              }
+            }
+          });
+        } finally {
+          btnShuffle.classList.remove("draining");
+        }
+      }
       btnRepeat.addEventListener("click", () => {
         repeatOn = !repeatOn;
         btnRepeat.classList.toggle("active", repeatOn);
@@ -73150,7 +73327,7 @@ ${JSON.stringify(state)}`;
           browseGroupTitle,
           // Playlist context
           currentPlaylistTopicId,
-          currentPlaylistTitle: currentPlaylistTopicId ? playlists.find((p) => p.id === currentPlaylistTopicId)?.title || "" : null,
+          currentPlaylistTitle: currentPlaylistTopicId === "__all__" ? "All" : currentPlaylistTopicId ? playlists.find((p) => p.id === currentPlaylistTopicId)?.title || "" : null,
           // Player state
           playerGroupId,
           playerTopicId,
@@ -73307,13 +73484,14 @@ ${JSON.stringify(state)}`;
           fetchLyricsForTrack(track, _playGeneration);
           if (s.currentPlaylistTopicId && playlistGroupId && s.activeTab === "playlists") {
             currentPlaylistTopicId = s.currentPlaylistTopicId;
+            const topicIdForApi = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
             showPlaylistTracks();
-            panelTitle.textContent = s.currentPlaylistTitle || "";
-            if (String(s.playerGroupId) === String(playlistGroupId) && s.playerTopicId === s.currentPlaylistTopicId) {
+            panelTitle.textContent = s.currentPlaylistTitle || (currentPlaylistTopicId === "__all__" ? "All" : "");
+            if (String(s.playerGroupId) === String(playlistGroupId) && s.playerTopicId === topicIdForApi) {
               playlistTracks = tracks;
             } else {
               try {
-                playlistTracks = await scanTracks(playlistGroupId, s.currentPlaylistTopicId);
+                playlistTracks = await scanTracks(playlistGroupId, topicIdForApi);
               } catch (e) {
               }
             }
@@ -73321,7 +73499,7 @@ ${JSON.stringify(state)}`;
               playlistTracksContainer,
               playlistTracks,
               "",
-              { groupId: playlistGroupId, topicId: currentPlaylistTopicId, showAddBtn: false }
+              { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false }
             );
           }
           if (browseGroupId && s.activeTab === "browse") {

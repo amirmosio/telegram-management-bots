@@ -4,8 +4,8 @@
  */
 
 const DB_NAME = 'music_cache';
-const DB_VERSION = 2; // bumped to add artwork + lyrics stores
-const STORES = ['audio', 'artwork', 'lyrics'];
+const DB_VERSION = 3; // bumped to add track_lists, topics, downloaded_index
+const STORES = ['audio', 'artwork', 'lyrics', 'track_lists', 'topics', 'downloaded_index'];
 
 let _db = null;
 
@@ -44,4 +44,16 @@ export async function idbPut(store, key, value) {
         const tx = db.transaction(store, 'readwrite');
         tx.objectStore(store).put(value, key);
     } catch { /* ignore */ }
+}
+
+export async function idbGetAllKeys(store) {
+    try {
+        const db = await openDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(store, 'readonly');
+            const req = tx.objectStore(store).getAllKeys();
+            req.onsuccess = () => resolve(req.result ?? []);
+            req.onerror = () => resolve([]);
+        });
+    } catch { return []; }
 }
