@@ -754,6 +754,12 @@ document.addEventListener('visibilitychange', () => {
 async function playTrack(index) {
     if (index < 0 || index >= playerTracks.length) return;
 
+    // Tear down any in-flight streaming session for the previous track.
+    if (_currentStreamCleanup) {
+        try { _currentStreamCleanup(); } catch {}
+        _currentStreamCleanup = null;
+    }
+
     // Bump generation so any in-flight fetches for the previous track are ignored
     const gen = ++_playGeneration;
     _isLoadingAudio = true;
@@ -876,60 +882,165 @@ async function _getSWController() {
     } catch (e) { return null; }
 }
 
+// ══════════════════════════════════════
+// Range-aware streaming helpers
+// ══════════════════════════════════════
+const SEEK_ALIGN = 512 * 1024; // 512 KiB — matches Telegram chunk size
+function _isFilled(filled, off) {
+    for (const [s, e] of filled) if (off >= s && off < e) return true;
+    return false;
+}
+function _addRange(filled, start, end) {
+    const out = [];
+    let inserted = false;
+    for (const [s, e] of filled) {
+        if (e < start) { out.push([s, e]); continue; }
+        if (s > end) {
+            if (!inserted) { out.push([start, end]); inserted = true; }
+            out.push([s, e]);
+            continue;
+        }
+        start = Math.min(start, s);
+        end = Math.max(end, e);
+    }
+    if (!inserted) out.push([start, end]);
+    return out;
+}
+function _totalFilled(filled) {
+    let t = 0;
+    for (const [s, e] of filled) t += (e - s);
+    return t;
+}
+
+let _currentStreamCleanup = null;
+
 // Download track and start playback.
-// Uses SW streaming if available (audio plays after first chunk).
-// Falls back to full download + blob URL.
+//  • If a Service Worker is available, stream via the range-aware SW protocol
+//    so the user can seek to any position even during the first play.
+//  • Otherwise, fall back to a single full download + blob URL.
 async function _downloadAndPlay(track, gen) {
     const gId = playerGroupId;
-    const mime = track.mime_type || 'audio/mpeg';
     const fileSize = track.file_size || 0;
 
     const sw = await _getSWController();
     if (_playGeneration !== gen) return;
 
-    if (sw) {
-        // ── SW streaming: pipe chunks via MessageChannel ──
-        console.log('[player] SW streaming: setting up');
-        const blobKey = `${gId}:${track.id}`;
-        const channel = new MessageChannel();
-        sw.postMessage({ type: 'audio-stream', key: blobKey }, [channel.port2]);
-
-        const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` +
-            (fileSize ? `&size=${fileSize}` : '');
-        audio.src = streamUrl;
-        _playWithRetry(gen);
-
-        const chunks = [];
-        try {
-            for await (const chunk of tg.iterTrackDownload(gId, track.id)) {
-                if (_playGeneration !== gen) {
-                    channel.port1.postMessage({ done: true }); channel.port1.close();
-                    return;
-                }
-                chunks.push(chunk);
-                console.log('[player] chunk', chunks.length, '(' + chunk.byteLength + ' bytes)');
-                channel.port1.postMessage({ chunk: chunk.buffer });
-            }
-            channel.port1.postMessage({ done: true });
-            channel.port1.close();
-        } catch (e) {
-            try { channel.port1.postMessage({ error: e.message }); channel.port1.close(); } catch (_) {}
-            throw e;
-        }
-
-        if (_playGeneration === gen && chunks.length > 0) {
-            const blob = new Blob(chunks, { type: mime });
-            tg.cacheTrackBlob(gId, track.id, blob);
-            console.log('[player] streamed & cached:', chunks.length, 'chunks,', blob.size, 'bytes');
-        }
-    } else {
-        // ── Fallback: full download then play ──
-        console.log('[player] no SW, full download');
-        const blobUrl = await tg.getTrackBlobUrl(gId, track.id, playerTopicId);
-        if (_playGeneration !== gen) return;
-        audio.src = blobUrl;
-        _playWithRetry(gen);
+    if (sw && fileSize > 0) {
+        await _streamWithSeek(track, gen, sw);
+        return;
     }
+
+    // ── Fallback: full download then play ──
+    console.log('[player] no SW or unknown size, full download');
+    const blobUrl = await tg.getTrackBlobUrl(gId, track.id, playerTopicId);
+    if (_playGeneration !== gen) return;
+    audio.src = blobUrl;
+    _playWithRetry(gen);
+}
+
+async function _streamWithSeek(track, gen, sw) {
+    const gId = playerGroupId;
+    const mime = track.mime_type || 'audio/mpeg';
+    const fileSize = track.file_size;
+    const blobKey = `${gId}:${track.id}`;
+    console.log('[player] streaming', track.title, '(', fileSize, 'bytes )');
+
+    const channel = new MessageChannel();
+    sw.postMessage({
+        type: 'stream-init',
+        key: blobKey,
+        fileSize,
+        mime,
+    }, [channel.port2]);
+
+    // Mirror filled state in main thread so we can persist a complete blob to
+    // IDB once every byte has been downloaded.
+    const localBuffer = new Uint8Array(fileSize);
+    let localFilled = [];
+    let cachedToIdb = false;
+
+    let dlGen = 0;
+    let currentDlPos = 0;
+    let teardown = false;
+
+    const startDownload = async (rawOffset) => {
+        const aligned = Math.max(0, Math.floor(rawOffset / SEEK_ALIGN) * SEEK_ALIGN);
+        const myDlGen = ++dlGen;
+        currentDlPos = aligned;
+        console.log('[stream] download from', aligned);
+        let pos = aligned;
+        try {
+            for await (const chunk of tg.iterTrackDownload(gId, track.id, aligned)) {
+                if (teardown || dlGen !== myDlGen || _playGeneration !== gen) return;
+                const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+                if (pos + u8.byteLength > fileSize) {
+                    // Trim the tail so we don't overflow the buffer.
+                    const trim = u8.subarray(0, fileSize - pos);
+                    localBuffer.set(trim, pos);
+                    localFilled = _addRange(localFilled, pos, pos + trim.byteLength);
+                    sw.postMessage({
+                        type: 'stream-chunk',
+                        key: blobKey,
+                        offset: pos,
+                        chunk: trim.slice().buffer,
+                    });
+                    pos += trim.byteLength;
+                } else {
+                    localBuffer.set(u8, pos);
+                    localFilled = _addRange(localFilled, pos, pos + u8.byteLength);
+                    sw.postMessage({
+                        type: 'stream-chunk',
+                        key: blobKey,
+                        offset: pos,
+                        chunk: u8.slice().buffer,
+                    });
+                    pos += u8.byteLength;
+                }
+                currentDlPos = pos;
+
+                // Once every byte is in, persist to IDB so future plays are instant.
+                if (!cachedToIdb && _totalFilled(localFilled) >= fileSize) {
+                    cachedToIdb = true;
+                    const blob = new Blob([localBuffer], { type: mime });
+                    tg.cacheTrackBlob(gId, track.id, blob);
+                    console.log('[stream] cached complete track to IDB');
+                }
+            }
+        } catch (e) {
+            console.warn('[stream] download error:', e?.message || e);
+        }
+    };
+
+    // Listen for seek requests posted by the SW when a Range fetch lands in
+    // an undownloaded region.
+    let seekDebounce = null;
+    channel.port1.onmessage = (event) => {
+        const msg = event.data;
+        if (!msg || msg.type !== 'seek') return;
+        const off = msg.offset | 0;
+        if (_isFilled(localFilled, off)) return;
+        // If the natural download will reach this byte soon, just wait.
+        if (off >= currentDlPos && off - currentDlPos < 2 * 1024 * 1024) return;
+        clearTimeout(seekDebounce);
+        seekDebounce = setTimeout(() => {
+            if (!teardown && _playGeneration === gen) startDownload(off);
+        }, 120);
+    };
+
+    // Set audio src — SW will start fetching immediately.
+    audio.src = `/audio-stream/${encodeURIComponent(blobKey)}`;
+    _playWithRetry(gen);
+
+    // Kick off the initial sequential download.
+    startDownload(0);
+
+    // Register a teardown hook so the next playTrack call can shut us down.
+    _currentStreamCleanup = () => {
+        teardown = true;
+        clearTimeout(seekDebounce);
+        try { sw.postMessage({ type: 'stream-end', key: blobKey }); } catch {}
+        try { channel.port1.close(); } catch {}
+    };
 }
 
 async function nextTrack() {

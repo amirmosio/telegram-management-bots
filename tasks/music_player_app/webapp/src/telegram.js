@@ -6,6 +6,7 @@ import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { Api } from 'telegram/tl';
 import { Buffer } from 'buffer';
+import bigInt from 'big-integer';
 import { idbGet, idbPut, idbGetAllKeys } from './idb-cache.js';
 
 // Make Buffer available globally for GramJS browser compat
@@ -648,8 +649,10 @@ export function cacheTrackBlob(groupId, trackId, blob) {
     return url;
 }
 
-// Async generator: yields Uint8Array chunks for a track via iterDownload
-export async function* iterTrackDownload(groupId, trackId) {
+// Async generator: yields Uint8Array chunks for a track via iterDownload.
+// `offset` is in bytes and must be 512 KiB-aligned (caller's responsibility).
+// Default 0 — backwards compatible with existing callers.
+export async function* iterTrackDownload(groupId, trackId, offset = 0) {
     const msg = _msgCache[`${groupId}:${trackId}`];
     if (!msg) throw new Error('Track not in cache');
 
@@ -665,12 +668,14 @@ export async function* iterTrackDownload(groupId, trackId) {
         thumbSize: '',
     });
 
-    const iter = client.iterDownload({
+    const iterOpts = {
         file: inputLocation,
-        requestSize: 512 * 1024,  // 512KB chunks (max allowed)
+        requestSize: 512 * 1024,  // 512 KiB chunks (max allowed; aligns with seek alignment)
         fileSize: doc.size,
         dcId: doc.dcId,
-    });
+    };
+    if (offset > 0) iterOpts.offset = bigInt(offset);
+    const iter = client.iterDownload(iterOpts);
 
     for await (const chunk of iter) {
         // Buffer.buffer may reference a larger shared ArrayBuffer;

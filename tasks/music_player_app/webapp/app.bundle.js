@@ -4309,7 +4309,7 @@
     "node_modules/big-integer/BigInteger.js"(exports, module) {
       init_define_process_env();
       var import_process7 = __toESM(require_process());
-      var bigInt = (function(undefined2) {
+      var bigInt2 = (function(undefined2) {
         "use strict";
         var BASE = 1e7, LOG_BASE = 7, MAX_INT = 9007199254740992, MAX_INT_ARR = smallToArray(MAX_INT), DEFAULT_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
         var supportsNativeBigInt = typeof BigInt === "function";
@@ -5053,7 +5053,7 @@
           while (b.isEven()) b = b.divide(2), r++;
           next: for (i2 = 0; i2 < a.length; i2++) {
             if (n.lesser(a[i2])) continue;
-            x = bigInt(a[i2]).modPow(b, n);
+            x = bigInt2(a[i2]).modPow(b, n);
             if (x.isUnit() || x.equals(nPrev)) continue;
             for (d = r - 1; d != 0; d--) {
               x = x.square().mod(n);
@@ -5074,7 +5074,7 @@
           var logN = Math.log(2) * bits.toJSNumber();
           var t = Math.ceil(strict === true ? 2 * Math.pow(logN, 2) : logN);
           for (var a = [], i2 = 0; i2 < t; i2++) {
-            a.push(bigInt(i2 + 2));
+            a.push(bigInt2(i2 + 2));
           }
           return millerRabinTest(n, a);
         };
@@ -5085,13 +5085,13 @@
           var n = this.abs();
           var t = iterations === undefined2 ? 5 : iterations;
           for (var a = [], i2 = 0; i2 < t; i2++) {
-            a.push(bigInt.randBetween(2, n.minus(2), rng));
+            a.push(bigInt2.randBetween(2, n.minus(2), rng));
           }
           return millerRabinTest(n, a);
         };
         NativeBigInt.prototype.isProbablePrime = SmallInteger.prototype.isProbablePrime = BigInteger.prototype.isProbablePrime;
         BigInteger.prototype.modInv = function(n) {
-          var t = bigInt.zero, newT = bigInt.one, r = parseValue(n), newR = this.abs(), q, lastT, lastR;
+          var t = bigInt2.zero, newT = bigInt2.one, r = parseValue(n), newR = this.abs(), q, lastT, lastR;
           while (!newR.isZero()) {
             q = r.divide(newR);
             lastT = t;
@@ -5202,9 +5202,9 @@
             yRem = yDivMod[0];
             result.push(fn(xDigit, yDigit));
           }
-          var sum = fn(xSign ? 1 : 0, ySign ? 1 : 0) !== 0 ? bigInt(-1) : bigInt(0);
+          var sum = fn(xSign ? 1 : 0, ySign ? 1 : 0) !== 0 ? bigInt2(-1) : bigInt2(0);
           for (var i2 = result.length - 1; i2 >= 0; i2 -= 1) {
-            sum = sum.multiply(highestPower2).add(bigInt(result[i2]));
+            sum = sum.multiply(highestPower2).add(bigInt2(result[i2]));
           }
           return sum;
         }
@@ -5243,17 +5243,17 @@
             var t = p.multiply(base);
             return t.compareTo(value) <= 0 ? { p: t, e: e * 2 + 1 } : { p, e: e * 2 };
           }
-          return { p: bigInt(1), e: 0 };
+          return { p: bigInt2(1), e: 0 };
         }
         BigInteger.prototype.bitLength = function() {
           var n = this;
-          if (n.compareTo(bigInt(0)) < 0) {
-            n = n.negate().subtract(bigInt(1));
+          if (n.compareTo(bigInt2(0)) < 0) {
+            n = n.negate().subtract(bigInt2(1));
           }
-          if (n.compareTo(bigInt(0)) === 0) {
-            return bigInt(0);
+          if (n.compareTo(bigInt2(0)) === 0) {
+            return bigInt2(0);
           }
-          return bigInt(integerLogarithm(n, bigInt(2)).e).add(bigInt(1));
+          return bigInt2(integerLogarithm(n, bigInt2(2)).e).add(bigInt2(1));
         };
         NativeBigInt.prototype.bitLength = SmallInteger.prototype.bitLength = BigInteger.prototype.bitLength;
         function max(a, b) {
@@ -5373,7 +5373,7 @@
           return "<" + digit + ">";
         }
         function toBase(n, base) {
-          base = bigInt(base);
+          base = bigInt2(base);
           if (base.isZero()) {
             if (n.isZero()) return { value: [0], isNegative: false };
             throw new Error("Cannot convert nonzero numbers to base 0.");
@@ -5552,11 +5552,11 @@
         return Integer;
       })();
       if (typeof module !== "undefined" && module.hasOwnProperty("exports")) {
-        module.exports = bigInt;
+        module.exports = bigInt2;
       }
       if (typeof define === "function" && define.amd) {
         define(function() {
-          return bigInt;
+          return bigInt2;
         });
       }
     }
@@ -46328,7 +46328,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       init_define_process_env();
       var import_process7 = __toESM(require_process());
       var { inspect } = require_inspect();
-      var bigInt = require_BigInteger();
+      var bigInt2 = require_BigInteger();
       var { generateRandomBytes, readBigIntFromBuffer, isArrayLike, betterConsoleLog } = require_Helpers();
       var tlContent = require_apiTl();
       var schemeContent = require_schemaTl();
@@ -46513,7 +46513,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
             correct = typeof value === type;
             break;
           case "bigInt":
-            correct = bigInt.isInstance(value) || typeof value === "bigint" || typeof value === "number" || typeof value === "string" || value === void 0;
+            correct = bigInt2.isInstance(value) || typeof value === "bigint" || typeof value === "number" || typeof value === "string" || value === void 0;
             break;
           case "true":
             break;
@@ -70987,7 +70987,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return url;
   }
-  async function* iterTrackDownload(groupId, trackId) {
+  async function* iterTrackDownload(groupId, trackId, offset = 0) {
     const msg = _msgCache[`${groupId}:${trackId}`];
     if (!msg) throw new Error("Track not in cache");
     const doc = msg.media?.document;
@@ -70999,13 +70999,15 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       fileReference: doc.fileReference,
       thumbSize: ""
     });
-    const iter = client.iterDownload({
+    const iterOpts = {
       file: inputLocation,
       requestSize: 512 * 1024,
-      // 512KB chunks (max allowed)
+      // 512 KiB chunks (max allowed; aligns with seek alignment)
       fileSize: doc.size,
       dcId: doc.dcId
-    });
+    };
+    if (offset > 0) iterOpts.offset = (0, import_big_integer.default)(offset);
+    const iter = client.iterDownload(iterOpts);
     for await (const chunk of iter) {
       if (chunk.byteOffset !== void 0 && chunk.byteLength !== void 0) {
         yield new Uint8Array(chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength));
@@ -71624,7 +71626,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _initPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _initPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71633,6 +71635,7 @@ ${JSON.stringify(state)}`;
       import_sessions = __toESM(require_sessions());
       import_tl = __toESM(require_tl());
       import_buffer = __toESM(require_buffer());
+      import_big_integer = __toESM(require_BigInteger());
       init_idb_cache();
       if (typeof window !== "undefined") {
         window.Buffer = import_buffer.Buffer;
@@ -72744,6 +72747,13 @@ This will cache them in your browser and may use significant data.`
       });
       async function playTrack(index) {
         if (index < 0 || index >= playerTracks.length) return;
+        if (_currentStreamCleanup) {
+          try {
+            _currentStreamCleanup();
+          } catch {
+          }
+          _currentStreamCleanup = null;
+        }
         const gen = ++_playGeneration;
         _isLoadingAudio = true;
         _committedNextIndex = -1;
@@ -72842,54 +72852,144 @@ This will cache them in your browser and may use significant data.`
           return null;
         }
       }
+      var SEEK_ALIGN = 512 * 1024;
+      function _isFilled(filled, off) {
+        for (const [s, e] of filled) if (off >= s && off < e) return true;
+        return false;
+      }
+      function _addRange(filled, start, end) {
+        const out = [];
+        let inserted = false;
+        for (const [s, e] of filled) {
+          if (e < start) {
+            out.push([s, e]);
+            continue;
+          }
+          if (s > end) {
+            if (!inserted) {
+              out.push([start, end]);
+              inserted = true;
+            }
+            out.push([s, e]);
+            continue;
+          }
+          start = Math.min(start, s);
+          end = Math.max(end, e);
+        }
+        if (!inserted) out.push([start, end]);
+        return out;
+      }
+      function _totalFilled(filled) {
+        let t = 0;
+        for (const [s, e] of filled) t += e - s;
+        return t;
+      }
+      var _currentStreamCleanup = null;
       async function _downloadAndPlay(track, gen) {
         const gId = playerGroupId;
-        const mime = track.mime_type || "audio/mpeg";
         const fileSize = track.file_size || 0;
         const sw = await _getSWController();
         if (_playGeneration !== gen) return;
-        if (sw) {
-          console.log("[player] SW streaming: setting up");
-          const blobKey = `${gId}:${track.id}`;
-          const channel = new MessageChannel();
-          sw.postMessage({ type: "audio-stream", key: blobKey }, [channel.port2]);
-          const streamUrl = `/audio-stream/${encodeURIComponent(blobKey)}?mime=${encodeURIComponent(mime)}` + (fileSize ? `&size=${fileSize}` : "");
-          audio.src = streamUrl;
-          _playWithRetry(gen);
-          const chunks = [];
-          try {
-            for await (const chunk of iterTrackDownload(gId, track.id)) {
-              if (_playGeneration !== gen) {
-                channel.port1.postMessage({ done: true });
-                channel.port1.close();
-                return;
-              }
-              chunks.push(chunk);
-              console.log("[player] chunk", chunks.length, "(" + chunk.byteLength + " bytes)");
-              channel.port1.postMessage({ chunk: chunk.buffer });
-            }
-            channel.port1.postMessage({ done: true });
-            channel.port1.close();
-          } catch (e) {
-            try {
-              channel.port1.postMessage({ error: e.message });
-              channel.port1.close();
-            } catch (_) {
-            }
-            throw e;
-          }
-          if (_playGeneration === gen && chunks.length > 0) {
-            const blob = new Blob(chunks, { type: mime });
-            cacheTrackBlob(gId, track.id, blob);
-            console.log("[player] streamed & cached:", chunks.length, "chunks,", blob.size, "bytes");
-          }
-        } else {
-          console.log("[player] no SW, full download");
-          const blobUrl = await getTrackBlobUrl(gId, track.id, playerTopicId);
-          if (_playGeneration !== gen) return;
-          audio.src = blobUrl;
-          _playWithRetry(gen);
+        if (sw && fileSize > 0) {
+          await _streamWithSeek(track, gen, sw);
+          return;
         }
+        console.log("[player] no SW or unknown size, full download");
+        const blobUrl = await getTrackBlobUrl(gId, track.id, playerTopicId);
+        if (_playGeneration !== gen) return;
+        audio.src = blobUrl;
+        _playWithRetry(gen);
+      }
+      async function _streamWithSeek(track, gen, sw) {
+        const gId = playerGroupId;
+        const mime = track.mime_type || "audio/mpeg";
+        const fileSize = track.file_size;
+        const blobKey = `${gId}:${track.id}`;
+        console.log("[player] streaming", track.title, "(", fileSize, "bytes )");
+        const channel = new MessageChannel();
+        sw.postMessage({
+          type: "stream-init",
+          key: blobKey,
+          fileSize,
+          mime
+        }, [channel.port2]);
+        const localBuffer = new Uint8Array(fileSize);
+        let localFilled = [];
+        let cachedToIdb = false;
+        let dlGen = 0;
+        let currentDlPos = 0;
+        let teardown = false;
+        const startDownload = async (rawOffset) => {
+          const aligned = Math.max(0, Math.floor(rawOffset / SEEK_ALIGN) * SEEK_ALIGN);
+          const myDlGen = ++dlGen;
+          currentDlPos = aligned;
+          console.log("[stream] download from", aligned);
+          let pos = aligned;
+          try {
+            for await (const chunk of iterTrackDownload(gId, track.id, aligned)) {
+              if (teardown || dlGen !== myDlGen || _playGeneration !== gen) return;
+              const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+              if (pos + u8.byteLength > fileSize) {
+                const trim = u8.subarray(0, fileSize - pos);
+                localBuffer.set(trim, pos);
+                localFilled = _addRange(localFilled, pos, pos + trim.byteLength);
+                sw.postMessage({
+                  type: "stream-chunk",
+                  key: blobKey,
+                  offset: pos,
+                  chunk: trim.slice().buffer
+                });
+                pos += trim.byteLength;
+              } else {
+                localBuffer.set(u8, pos);
+                localFilled = _addRange(localFilled, pos, pos + u8.byteLength);
+                sw.postMessage({
+                  type: "stream-chunk",
+                  key: blobKey,
+                  offset: pos,
+                  chunk: u8.slice().buffer
+                });
+                pos += u8.byteLength;
+              }
+              currentDlPos = pos;
+              if (!cachedToIdb && _totalFilled(localFilled) >= fileSize) {
+                cachedToIdb = true;
+                const blob = new Blob([localBuffer], { type: mime });
+                cacheTrackBlob(gId, track.id, blob);
+                console.log("[stream] cached complete track to IDB");
+              }
+            }
+          } catch (e) {
+            console.warn("[stream] download error:", e?.message || e);
+          }
+        };
+        let seekDebounce = null;
+        channel.port1.onmessage = (event) => {
+          const msg = event.data;
+          if (!msg || msg.type !== "seek") return;
+          const off = msg.offset | 0;
+          if (_isFilled(localFilled, off)) return;
+          if (off >= currentDlPos && off - currentDlPos < 2 * 1024 * 1024) return;
+          clearTimeout(seekDebounce);
+          seekDebounce = setTimeout(() => {
+            if (!teardown && _playGeneration === gen) startDownload(off);
+          }, 120);
+        };
+        audio.src = `/audio-stream/${encodeURIComponent(blobKey)}`;
+        _playWithRetry(gen);
+        startDownload(0);
+        _currentStreamCleanup = () => {
+          teardown = true;
+          clearTimeout(seekDebounce);
+          try {
+            sw.postMessage({ type: "stream-end", key: blobKey });
+          } catch {
+          }
+          try {
+            channel.port1.close();
+          } catch {
+          }
+        };
       }
       async function nextTrack() {
         if (playerTracks.length === 0) return;

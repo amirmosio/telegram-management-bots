@@ -1,4 +1,4 @@
-const CACHE_NAME = 'music-player-v4';
+const CACHE_NAME = 'music-player-v5';
 const STATIC_ASSETS = [
     '/',
     '/style.css',
@@ -8,23 +8,110 @@ const STATIC_ASSETS = [
     '/icons/icon-512.svg',
 ];
 
-// ── Audio streaming via MessageChannel ──
-// Main thread posts a port before setting audio.src to /audio-stream/KEY.
-// The fetch handler picks up the port and pipes chunks into a ReadableStream response.
-const _streamPorts = new Map();
-const _streamWaiters = new Map();
+// ══════════════════════════════════════════════════════════════════════
+// Range-aware audio streaming
+// ──────────────────────────────────────────────────────────────────────
+// The main thread:
+//  1. Posts {type:'stream-init', key, fileSize, mime} with a MessagePort.
+//  2. Sets audio.src = /audio-stream/KEY.
+//  3. Posts {type:'stream-chunk', key, offset, chunk: ArrayBuffer} per chunk.
+//  4. Posts {type:'stream-end', key} on track switch.
+//
+// The SW maintains a sparse buffer per key. When the audio element issues a
+// Range request, the SW responds with 206 and waits for missing bytes to
+// arrive. If the requested start byte isn't downloaded yet, the SW posts
+// {type:'seek', offset} back to the main thread, which restarts the GramJS
+// download at that offset.
+// ══════════════════════════════════════════════════════════════════════
+
+const _streams = new Map();          // key -> stream state
+const _streamInitWaiters = new Map(); // key -> resolver for waitForStreamInit
+
+function _isFilled(filled, off) {
+    for (const [s, e] of filled) if (off >= s && off < e) return true;
+    return false;
+}
+function _endOfRun(filled, off) {
+    for (const [s, e] of filled) if (off >= s && off < e) return e;
+    return off;
+}
+function _addRange(filled, start, end) {
+    const out = [];
+    let inserted = false;
+    for (const [s, e] of filled) {
+        if (e < start) { out.push([s, e]); continue; }
+        if (s > end) {
+            if (!inserted) { out.push([start, end]); inserted = true; }
+            out.push([s, e]);
+            continue;
+        }
+        start = Math.min(start, s);
+        end = Math.max(end, e);
+    }
+    if (!inserted) out.push([start, end]);
+    filled.length = 0;
+    for (const r of out) filled.push(r);
+}
+
+function _waitForStreamInit(key, timeoutMs = 5000) {
+    if (_streams.has(key)) return Promise.resolve(_streams.get(key));
+    return new Promise(resolve => {
+        const t = setTimeout(() => {
+            if (_streamInitWaiters.get(key) === resolver) _streamInitWaiters.delete(key);
+            resolve(null);
+        }, timeoutMs);
+        const resolver = (state) => { clearTimeout(t); resolve(state); };
+        _streamInitWaiters.set(key, resolver);
+    });
+}
 
 self.addEventListener('message', (event) => {
-    if (event.data?.type === 'audio-stream') {
-        const { key } = event.data;
+    const data = event.data;
+    if (!data || !data.type) return;
+
+    if (data.type === 'stream-init') {
         const port = event.ports[0];
-        const waiter = _streamWaiters.get(key);
-        if (waiter) {
-            waiter(port);
-            _streamWaiters.delete(key);
-        } else {
-            _streamPorts.set(key, port);
+        const state = {
+            fileSize: data.fileSize,
+            mime: data.mime || 'audio/mpeg',
+            buffer: new Uint8Array(data.fileSize),
+            filled: [],
+            waiters: [],
+            port,
+            ended: false,
+        };
+        _streams.set(data.key, state);
+        const w = _streamInitWaiters.get(data.key);
+        if (w) { _streamInitWaiters.delete(data.key); w(state); }
+        return;
+    }
+
+    if (data.type === 'stream-chunk') {
+        const state = _streams.get(data.key);
+        if (!state) return;
+        const arr = new Uint8Array(data.chunk);
+        const offset = data.offset | 0;
+        if (offset + arr.byteLength > state.fileSize) return; // bounds check
+        state.buffer.set(arr, offset);
+        _addRange(state.filled, offset, offset + arr.byteLength);
+        // Wake any waiters whose target byte is now available.
+        const stillWaiting = [];
+        for (const w of state.waiters) {
+            if (_isFilled(state.filled, w.offset)) w.resolve();
+            else stillWaiting.push(w);
         }
+        state.waiters = stillWaiting;
+        return;
+    }
+
+    if (data.type === 'stream-end') {
+        const state = _streams.get(data.key);
+        if (!state) return;
+        state.ended = true;
+        for (const w of state.waiters) w.resolve();
+        state.waiters = [];
+        _streams.delete(data.key);
+        return;
     }
 });
 
@@ -49,7 +136,7 @@ self.addEventListener('fetch', (event) => {
 
     // Audio streaming endpoint
     if (url.pathname.startsWith('/audio-stream/')) {
-        event.respondWith(handleAudioStream(url));
+        event.respondWith(handleAudioStream(event.request, url));
         return;
     }
 
@@ -83,54 +170,72 @@ self.addEventListener('fetch', (event) => {
     })());
 });
 
-async function handleAudioStream(url) {
+async function handleAudioStream(request, url) {
     const key = decodeURIComponent(url.pathname.slice('/audio-stream/'.length));
-    const mime = url.searchParams.get('mime') || 'audio/mpeg';
-    const size = url.searchParams.get('size');
+    let state = _streams.get(key);
+    if (!state) state = await _waitForStreamInit(key, 5000);
+    if (!state) return new Response('Stream not initialized', { status: 504 });
 
-    // Get port — either already posted or wait for it
-    let port = _streamPorts.get(key);
-    if (!port) {
-        port = await new Promise(resolve => {
-            _streamWaiters.set(key, resolve);
-            // Timeout after 10s to prevent hanging
-            setTimeout(() => {
-                if (_streamWaiters.has(key)) {
-                    _streamWaiters.delete(key);
-                    resolve(null);
-                }
-            }, 10000);
+    const fileSize = state.fileSize;
+    const rangeHeader = request.headers.get('Range');
+    let start = 0, end = fileSize - 1;
+    let isPartial = false;
+    if (rangeHeader) {
+        const m = /bytes=(\d*)-(\d*)/.exec(rangeHeader);
+        if (m) {
+            isPartial = true;
+            if (m[1] !== '') start = parseInt(m[1], 10);
+            if (m[2] !== '') end = parseInt(m[2], 10);
+        }
+    }
+    if (start < 0) start = 0;
+    if (end > fileSize - 1) end = fileSize - 1;
+    if (start > end) {
+        return new Response('Range Not Satisfiable', {
+            status: 416,
+            headers: { 'Content-Range': `bytes */${fileSize}` },
         });
     }
-    _streamPorts.delete(key);
 
-    if (!port) {
-        return new Response('Stream setup timeout', { status: 504 });
+    // If start byte isn't downloaded yet, ask the main thread to (re)start the
+    // GramJS download at that offset.
+    if (!_isFilled(state.filled, start)) {
+        try { state.port.postMessage({ type: 'seek', offset: start }); } catch {}
     }
 
+    let cur = start;
+    let canceled = false;
+
     const stream = new ReadableStream({
-        start(controller) {
-            port.onmessage = (event) => {
-                if (event.data?.done) {
-                    controller.close();
-                } else if (event.data?.chunk) {
-                    controller.enqueue(new Uint8Array(event.data.chunk));
-                } else if (event.data?.error) {
-                    controller.error(new Error(event.data.error));
+        async pull(controller) {
+            if (canceled || cur > end) { try { controller.close(); } catch {} return; }
+            // Wait until cur is filled (or stream ends / cancels).
+            while (!_isFilled(state.filled, cur)) {
+                if (canceled) { try { controller.close(); } catch {} return; }
+                if (state.ended && !_isFilled(state.filled, cur)) {
+                    try { controller.close(); } catch {}
+                    return;
                 }
-            };
+                await new Promise(resolve => state.waiters.push({ offset: cur, resolve }));
+            }
+            if (canceled) { try { controller.close(); } catch {} return; }
+            const runEnd = Math.min(end + 1, _endOfRun(state.filled, cur));
+            // .slice() copies bytes so the live buffer can keep mutating.
+            const out = state.buffer.slice(cur, runEnd);
+            try { controller.enqueue(out); } catch {}
+            cur = runEnd;
+            if (cur > end) { try { controller.close(); } catch {} }
         },
-        cancel() {
-            port.postMessage({ cancel: true });
-            port.close();
-        }
+        cancel() { canceled = true; },
     });
 
     const headers = {
-        'Content-Type': mime,
-        'Accept-Ranges': 'none',
+        'Content-Type': state.mime,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': String(end - start + 1),
+        'Cache-Control': 'no-store',
     };
-    if (size) headers['Content-Length'] = size;
+    if (isPartial) headers['Content-Range'] = `bytes ${start}-${end}/${fileSize}`;
 
-    return new Response(stream, { status: 200, headers });
+    return new Response(stream, { status: isPartial ? 206 : 200, headers });
 }
