@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="Music">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=54">
+    <link rel="stylesheet" href="style.css?v=55">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -209,6 +209,21 @@
         </div>
     </div>
 
+    <!-- Generic confirm modal (used instead of window.confirm() so it works
+         reliably inside iOS Safari standalone PWAs, where native dialogs
+         after awaits are unreliable) -->
+    <div id="confirm-modal" style="display:none">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 id="confirm-modal-title"></h3>
+            <div id="confirm-modal-body"></div>
+            <div id="confirm-modal-actions">
+                <button id="confirm-modal-cancel" class="text-btn">Cancel</button>
+                <button id="confirm-modal-ok" class="text-btn accent">OK</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Search Overlay -->
     <div id="search-overlay">
         <div id="search-overlay-header">
@@ -227,7 +242,7 @@
 
     <!-- Install Banner -->
     <div id="install-banner" style="display:none">
-        <span>Install Music Player for the best experience</span>
+        <span id="install-banner-text">Install Music Player for the best experience</span>
         <button id="btn-install">Install</button>
         <button id="btn-install-dismiss" class="icon-btn">&times;</button>
     </div>
@@ -259,6 +274,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=54"></script>
+    <script src="app.bundle.js?v=55"></script>
 </body>
 </html>

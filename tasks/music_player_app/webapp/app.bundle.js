@@ -72445,17 +72445,36 @@ ${JSON.stringify(state)}`;
         playlistTracksSearch.value = "";
         updateStorageUsage();
       }
+      var _persistState = "unknown";
       async function _requestPersistentStorage() {
-        if (!navigator.storage?.persist) return;
+        if (!navigator.storage?.persist) {
+          _persistState = "unknown";
+          return;
+        }
         try {
           const already = await navigator.storage.persisted?.();
-          if (already) return;
+          if (already) {
+            _persistState = "granted";
+            return;
+          }
           const granted = await navigator.storage.persist();
+          _persistState = granted ? "granted" : "denied";
           console.log("[storage] persist granted:", granted);
         } catch (e) {
+          _persistState = "unknown";
+        } finally {
+          updateStorageUsage();
+          _maybeShowInstallBanner();
         }
       }
       _requestPersistentStorage();
+      function _isStandalone() {
+        return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+      }
+      function _isIOS() {
+        const ua = navigator.userAgent;
+        return /iPad|iPhone|iPod/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+      }
       function _formatBytes(n) {
         if (!n) return "0 B";
         const units = ["B", "KB", "MB", "GB", "TB"];
@@ -72463,12 +72482,14 @@ ${JSON.stringify(state)}`;
         return (n / Math.pow(1024, i)).toFixed(i >= 2 ? 1 : 0) + " " + units[i];
       }
       var storageUsageEl = $("storage-usage");
+      var WARN_ICON = '<svg class="storage-warn-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2L1 21h22L12 2zm0 15h-.01M12 9v5"/></svg>';
       async function updateStorageUsage() {
         if (!storageUsageEl) return;
         const parts = [];
+        let trackCount = 0;
         try {
-          const count = await countCachedTracks();
-          parts.push(`${count} track${count === 1 ? "" : "s"}`);
+          trackCount = await countCachedTracks();
+          parts.push(`${trackCount} track${trackCount === 1 ? "" : "s"}`);
         } catch {
         }
         if (navigator.storage?.estimate) {
@@ -72479,15 +72500,21 @@ ${JSON.stringify(state)}`;
               const pct = usage / quota;
               storageUsageEl.classList.toggle("warn", pct >= 0.7 && pct < 0.9);
               storageUsageEl.classList.toggle("crit", pct >= 0.9);
-              storageUsageEl.title = `Cached audio: ${parts[0]}
-Browser storage: ${(pct * 100).toFixed(1)}% of quota`;
             } else {
               parts.push(_formatBytes(usage));
             }
           } catch {
           }
         }
-        storageUsageEl.textContent = parts.join(" \xB7 ");
+        const unprotected = _persistState === "denied";
+        storageUsageEl.classList.toggle("unprotected", unprotected);
+        const text = parts.join(" \xB7 ");
+        storageUsageEl.innerHTML = (unprotected ? WARN_ICON + " " : "") + text;
+        if (unprotected) {
+          storageUsageEl.title = "Downloads may be cleared by the browser.\n" + (_isIOS() && !_isStandalone() ? "Tap Share \u2192 Add to Home Screen to protect them." : "Install this app to your device to protect them.");
+        } else if (_persistState === "granted") {
+          storageUsageEl.title = `Cached audio: ${trackCount} tracks \u2014 storage is persistent, safe from browser eviction.`;
+        }
       }
       playlistTracksSearch.addEventListener("input", () => {
         clearTimeout(browseSearchTimeout);
@@ -72516,6 +72543,7 @@ Browser storage: ${(pct * 100).toFixed(1)}% of quota`;
           return;
         }
         const topicIdForApi = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
+        if (_persistState !== "granted") _requestPersistentStorage();
         showToast("Counting tracks\u2026");
         try {
           await loadAllTracks(playlistGroupId, topicIdForApi, (newPage) => {
@@ -72537,10 +72565,9 @@ Browser storage: ${(pct * 100).toFixed(1)}% of quota`;
           showToast("All tracks already downloaded");
           return;
         }
-        const ok = window.confirm(
-          `Playlist "${panelTitle.textContent}"
-
-Total tracks: ${total}
+        const ok = await showConfirmModal(
+          `Download "${panelTitle.textContent}"`,
+          `Total tracks: ${total}
 Already downloaded: ${alreadyCount}
 To download: ${notYet.length}
 
@@ -73479,7 +73506,32 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         pendingAddTrack = null;
       }
       modalCancel.addEventListener("click", hidePlaylistPicker);
-      document.querySelector(".modal-backdrop")?.addEventListener("click", hidePlaylistPicker);
+      playlistModal.querySelector(".modal-backdrop")?.addEventListener("click", hidePlaylistPicker);
+      function showConfirmModal(title, message) {
+        return new Promise((resolve) => {
+          const modal = $("confirm-modal");
+          const titleEl = $("confirm-modal-title");
+          const bodyEl = $("confirm-modal-body");
+          const okBtn = $("confirm-modal-ok");
+          const cancelBtn = $("confirm-modal-cancel");
+          const backdrop = modal.querySelector(".modal-backdrop");
+          titleEl.textContent = title;
+          bodyEl.textContent = message;
+          modal.style.display = "flex";
+          const finish = (result) => {
+            modal.style.display = "none";
+            okBtn.removeEventListener("click", onOk);
+            cancelBtn.removeEventListener("click", onCancel);
+            backdrop.removeEventListener("click", onCancel);
+            resolve(result);
+          };
+          const onOk = () => finish(true);
+          const onCancel = () => finish(false);
+          okBtn.addEventListener("click", onOk);
+          cancelBtn.addEventListener("click", onCancel);
+          backdrop.addEventListener("click", onCancel);
+        });
+      }
       async function addTrackToPlaylist(topicId) {
         if (!pendingAddTrack) return;
         const { trackId, groupId } = pendingAddTrack;
@@ -74058,9 +74110,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       window.addEventListener("beforeinstallprompt", (e) => {
         e.preventDefault();
         _deferredInstallPrompt = e;
-        if (!localStorage.getItem("pwa_install_dismissed")) {
-          installBanner.style.display = "flex";
-        }
+        _maybeShowInstallBanner();
       });
       btnInstall.addEventListener("click", async () => {
         if (!_deferredInstallPrompt) return;
@@ -74073,12 +74123,44 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       });
       btnInstallDismiss.addEventListener("click", () => {
         installBanner.style.display = "none";
-        localStorage.setItem("pwa_install_dismissed", "1");
+        if (installBanner.classList.contains("ios-mode")) {
+          localStorage.setItem("pwa_ios_install_dismissed", "1");
+        } else {
+          localStorage.setItem("pwa_install_dismissed", "1");
+        }
       });
       window.addEventListener("appinstalled", () => {
         installBanner.style.display = "none";
         _deferredInstallPrompt = null;
       });
+      function _maybeShowInstallBanner() {
+        if (_isStandalone()) {
+          installBanner.style.display = "none";
+          return;
+        }
+        const bannerText = installBanner.querySelector("#install-banner-text") || installBanner.querySelector("span");
+        if (_isIOS()) {
+          if (localStorage.getItem("pwa_ios_install_dismissed")) return;
+          if (_persistState === "granted") return;
+          bannerText.textContent = "Add to Home Screen (Safari Share \u2192 Add to Home Screen) to keep your downloaded music safe from automatic cleanup.";
+          btnInstall.style.display = "none";
+          installBanner.classList.add("ios-mode");
+          installBanner.style.display = "flex";
+          return;
+        }
+        if (localStorage.getItem("pwa_install_dismissed")) return;
+        if (_deferredInstallPrompt) {
+          bannerText.textContent = "Install Music Player to protect your downloads from being cleared.";
+          btnInstall.style.display = "";
+          installBanner.classList.remove("ios-mode");
+          installBanner.style.display = "flex";
+        } else if (_persistState === "denied") {
+          bannerText.textContent = "Install this app to your home screen so downloads aren\u2019t cleared by the browser.";
+          btnInstall.style.display = "none";
+          installBanner.classList.remove("ios-mode");
+          installBanner.style.display = "flex";
+        }
+      }
       function setUserProfile(user) {
         const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "User";
         $("user-name").textContent = name;

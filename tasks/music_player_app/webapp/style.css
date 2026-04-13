@@ -228,9 +228,21 @@ html, body {
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 #storage-usage.warn { color: #e0a13c; }
 #storage-usage.crit { color: #e05a3c; }
+#storage-usage.unprotected { color: #e0a13c; }
+#storage-usage .storage-warn-icon {
+    flex-shrink: 0;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+}
 #btn-download-all {
     flex-shrink: 0;
     color: var(--text-secondary);
@@ -573,9 +585,29 @@ html, body {
 .icon-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
 
 /* ── Modal ── */
-#playlist-modal {
+#playlist-modal,
+#confirm-modal {
     position: fixed; inset: 0; z-index: 100;
     display: flex; align-items: center; justify-content: center;
+}
+
+#confirm-modal-body {
+    font-size: 14px;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    line-height: 1.5;
+    margin-bottom: 16px;
+}
+
+#confirm-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+#confirm-modal-actions .text-btn.accent {
+    color: var(--accent);
+    font-weight: 600;
 }
 
 .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }

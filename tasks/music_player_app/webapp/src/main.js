@@ -296,17 +296,38 @@ function showPlaylistTracks() {
 }
 
 // ── Persistent storage + usage indicator ──
-// Request the browser keep our IndexedDB data around (no silent eviction).
+// Request the browser keep our IndexedDB data around so cached music
+// isn't silently evicted. The result is tracked so the UI can warn the
+// user when they're running in an unprotected context (e.g. an iOS
+// Safari tab that isn't yet installed to the home screen).
+let _persistState = 'unknown'; // 'granted' | 'denied' | 'unknown'
+
 async function _requestPersistentStorage() {
-    if (!navigator.storage?.persist) return;
+    if (!navigator.storage?.persist) { _persistState = 'unknown'; return; }
     try {
         const already = await navigator.storage.persisted?.();
-        if (already) return;
+        if (already) { _persistState = 'granted'; return; }
         const granted = await navigator.storage.persist();
+        _persistState = granted ? 'granted' : 'denied';
         console.log('[storage] persist granted:', granted);
-    } catch (e) { /* non-critical */ }
+    } catch (e) {
+        _persistState = 'unknown';
+    } finally {
+        updateStorageUsage();
+        _maybeShowInstallBanner();
+    }
 }
 _requestPersistentStorage();
+
+// Runtime detection helpers
+function _isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true;
+}
+function _isIOS() {
+    const ua = navigator.userAgent;
+    return /iPad|iPhone|iPod/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+}
 
 function _formatBytes(n) {
     if (!n) return '0 B';
@@ -316,12 +337,15 @@ function _formatBytes(n) {
 }
 
 const storageUsageEl = $('storage-usage');
+const WARN_ICON = '<svg class="storage-warn-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2L1 21h22L12 2zm0 15h-.01M12 9v5"/></svg>';
+
 async function updateStorageUsage() {
     if (!storageUsageEl) return;
     const parts = [];
+    let trackCount = 0;
     try {
-        const count = await tg.countCachedTracks();
-        parts.push(`${count} track${count === 1 ? '' : 's'}`);
+        trackCount = await tg.countCachedTracks();
+        parts.push(`${trackCount} track${trackCount === 1 ? '' : 's'}`);
     } catch {}
     if (navigator.storage?.estimate) {
         try {
@@ -331,13 +355,25 @@ async function updateStorageUsage() {
                 const pct = usage / quota;
                 storageUsageEl.classList.toggle('warn', pct >= 0.7 && pct < 0.9);
                 storageUsageEl.classList.toggle('crit', pct >= 0.9);
-                storageUsageEl.title = `Cached audio: ${parts[0]}\nBrowser storage: ${(pct * 100).toFixed(1)}% of quota`;
             } else {
                 parts.push(_formatBytes(usage));
             }
         } catch {}
     }
-    storageUsageEl.textContent = parts.join(' · ');
+
+    const unprotected = _persistState === 'denied';
+    storageUsageEl.classList.toggle('unprotected', unprotected);
+    const text = parts.join(' · ');
+    storageUsageEl.innerHTML = (unprotected ? WARN_ICON + ' ' : '') + text;
+
+    if (unprotected) {
+        storageUsageEl.title = 'Downloads may be cleared by the browser.\n' +
+            (_isIOS() && !_isStandalone()
+                ? 'Tap Share → Add to Home Screen to protect them.'
+                : 'Install this app to your device to protect them.');
+    } else if (_persistState === 'granted') {
+        storageUsageEl.title = `Cached audio: ${trackCount} tracks — storage is persistent, safe from browser eviction.`;
+    }
 }
 
 playlistTracksSearch.addEventListener('input', () => {
@@ -370,6 +406,10 @@ btnDownloadAll.addEventListener('click', async () => {
     }
     const topicIdForApi = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
 
+    // Try to upgrade to persistent storage again — Chrome sometimes grants
+    // it only after meaningful user engagement.
+    if (_persistState !== 'granted') _requestPersistentStorage();
+
     // Drain all pages first so we know the true total.
     showToast('Counting tracks…');
     try {
@@ -387,8 +427,8 @@ btnDownloadAll.addEventListener('click', async () => {
     if (total === 0) { showToast('No tracks to download'); return; }
     if (notYet.length === 0) { showToast('All tracks already downloaded'); return; }
 
-    const ok = window.confirm(
-        `Playlist "${panelTitle.textContent}"\n\n` +
+    const ok = await showConfirmModal(
+        `Download "${panelTitle.textContent}"`,
         `Total tracks: ${total}\n` +
         `Already downloaded: ${alreadyCount}\n` +
         `To download: ${notYet.length}\n\n` +
@@ -1407,7 +1447,39 @@ function showPlaylistPicker() {
 
 function hidePlaylistPicker() { playlistModal.style.display = 'none'; pendingAddTrack = null; }
 modalCancel.addEventListener('click', hidePlaylistPicker);
-document.querySelector('.modal-backdrop')?.addEventListener('click', hidePlaylistPicker);
+playlistModal.querySelector('.modal-backdrop')?.addEventListener('click', hidePlaylistPicker);
+
+// ── Generic confirm modal ──
+// iOS Safari (especially in standalone PWAs) silently drops window.confirm()
+// calls after an `await`, because the user-activation token is consumed
+// by the async boundary. Use a DOM modal instead.
+function showConfirmModal(title, message) {
+    return new Promise((resolve) => {
+        const modal = $('confirm-modal');
+        const titleEl = $('confirm-modal-title');
+        const bodyEl = $('confirm-modal-body');
+        const okBtn = $('confirm-modal-ok');
+        const cancelBtn = $('confirm-modal-cancel');
+        const backdrop = modal.querySelector('.modal-backdrop');
+
+        titleEl.textContent = title;
+        bodyEl.textContent = message;
+        modal.style.display = 'flex';
+
+        const finish = (result) => {
+            modal.style.display = 'none';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            backdrop.removeEventListener('click', onCancel);
+            resolve(result);
+        };
+        const onOk = () => finish(true);
+        const onCancel = () => finish(false);
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        backdrop.addEventListener('click', onCancel);
+    });
+}
 
 async function addTrackToPlaylist(topicId) {
     if (!pendingAddTrack) return;
@@ -2024,9 +2096,7 @@ const btnInstallDismiss = $('btn-install-dismiss');
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     _deferredInstallPrompt = e;
-    if (!localStorage.getItem('pwa_install_dismissed')) {
-        installBanner.style.display = 'flex';
-    }
+    _maybeShowInstallBanner();
 });
 
 btnInstall.addEventListener('click', async () => {
@@ -2041,13 +2111,58 @@ btnInstall.addEventListener('click', async () => {
 
 btnInstallDismiss.addEventListener('click', () => {
     installBanner.style.display = 'none';
-    localStorage.setItem('pwa_install_dismissed', '1');
+    // Two separate dismiss keys: one for native prompt-based install (Chrome),
+    // one for the iOS "Add to Home Screen" instructional banner.
+    if (installBanner.classList.contains('ios-mode')) {
+        localStorage.setItem('pwa_ios_install_dismissed', '1');
+    } else {
+        localStorage.setItem('pwa_install_dismissed', '1');
+    }
 });
 
 window.addEventListener('appinstalled', () => {
     installBanner.style.display = 'none';
     _deferredInstallPrompt = null;
 });
+
+// Decide which (if any) install banner to show. Called at boot after
+// _requestPersistentStorage() resolves, and whenever beforeinstallprompt fires.
+function _maybeShowInstallBanner() {
+    // Already installed as a standalone PWA — nothing to nudge.
+    if (_isStandalone()) {
+        installBanner.style.display = 'none';
+        return;
+    }
+
+    const bannerText = installBanner.querySelector('#install-banner-text') || installBanner.querySelector('span');
+
+    // iOS Safari — no beforeinstallprompt ever. Guide user to the share
+    // sheet when storage isn't persistent so their downloads are at risk.
+    if (_isIOS()) {
+        if (localStorage.getItem('pwa_ios_install_dismissed')) return;
+        if (_persistState === 'granted') return; // already protected somehow
+        bannerText.textContent = 'Add to Home Screen (Safari Share → Add to Home Screen) to keep your downloaded music safe from automatic cleanup.';
+        btnInstall.style.display = 'none';
+        installBanner.classList.add('ios-mode');
+        installBanner.style.display = 'flex';
+        return;
+    }
+
+    // Other browsers — show when we have a native install prompt available
+    // OR when persist() was denied and we want to prompt a home-screen install.
+    if (localStorage.getItem('pwa_install_dismissed')) return;
+    if (_deferredInstallPrompt) {
+        bannerText.textContent = 'Install Music Player to protect your downloads from being cleared.';
+        btnInstall.style.display = '';
+        installBanner.classList.remove('ios-mode');
+        installBanner.style.display = 'flex';
+    } else if (_persistState === 'denied') {
+        bannerText.textContent = 'Install this app to your home screen so downloads aren\u2019t cleared by the browser.';
+        btnInstall.style.display = 'none';
+        installBanner.classList.remove('ios-mode');
+        installBanner.style.display = 'flex';
+    }
+}
 
 // ══════════════════════════════════════
 //  BOOT
