@@ -142,8 +142,23 @@ export function hasSavedSession() {
 
 export async function checkAuth() {
     if (!client) await initClient();
+
+    // Offline bailout: if client.connect() didn't come up (or if we're
+    // clearly offline), short-circuit. Otherwise client.getMe() would sit
+    // inside GramJS's auto-reconnect loop forever, blocking boot() and
+    // leaving both the login screen and the app shell invisible.
+    const offlineNow = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (offlineNow || !client.connected) {
+        if (hasSavedSession()) {
+            const cached = getCachedUser();
+            if (cached) return { logged_in: true, user: cached, offline: true };
+        }
+        return { logged_in: false, offline: true };
+    }
+
     try {
-        const me = await client.getMe();
+        // Hard 4s cap on getMe — a half-alive connection must never stall boot.
+        const me = await _withTimeout(client.getMe(), 4000, new Error('getMe-timeout'));
         if (me) {
             const user = {
                 id: me.id?.value || me.id,
@@ -156,7 +171,8 @@ export async function checkAuth() {
             return { logged_in: true, user };
         }
     } catch (e) {
-        // Network/offline — if we have a saved session + cached user, treat as logged in.
+        // Network/offline/timeout — if we have a saved session + cached user,
+        // treat as logged in so the app can keep working from cached data.
         if (hasSavedSession()) {
             const cached = getCachedUser();
             if (cached) return { logged_in: true, user: cached, offline: true };

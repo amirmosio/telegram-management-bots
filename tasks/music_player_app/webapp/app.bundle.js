@@ -70557,8 +70557,16 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function checkAuth() {
     if (!client) await initClient();
+    const offlineNow = typeof navigator !== "undefined" && navigator.onLine === false;
+    if (offlineNow || !client.connected) {
+      if (hasSavedSession()) {
+        const cached = getCachedUser();
+        if (cached) return { logged_in: true, user: cached, offline: true };
+      }
+      return { logged_in: false, offline: true };
+    }
     try {
-      const me = await client.getMe();
+      const me = await _withTimeout(client.getMe(), 4e3, new Error("getMe-timeout"));
       if (me) {
         const user = {
           id: me.id?.value || me.id,
