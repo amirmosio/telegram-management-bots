@@ -1209,10 +1209,13 @@ $('btn-add-playing').addEventListener('click', () => {
 
 function showPlaylistPicker() {
     modalPlaylists.innerHTML = '';
-    if (playlists.length === 0) {
+    // Exclude the synthetic "All" entry and the General/Search topic (id=1)
+    // from the picker — neither is a real destination playlist.
+    const pickable = playlists.filter(p => !p.isAll && p.id !== 1);
+    if (pickable.length === 0) {
         modalPlaylists.innerHTML = '<div class="lyrics-placeholder">No playlists yet.</div>';
     }
-    playlists.forEach(p => {
+    pickable.forEach(p => {
         const el = document.createElement('div');
         el.className = 'modal-playlist-item';
         el.textContent = (p.icon || '') + ' ' + p.title;

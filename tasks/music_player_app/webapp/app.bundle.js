@@ -73183,10 +73183,11 @@ This will cache them in your browser and may use significant data.`
       });
       function showPlaylistPicker() {
         modalPlaylists.innerHTML = "";
-        if (playlists.length === 0) {
+        const pickable = playlists.filter((p) => !p.isAll && p.id !== 1);
+        if (pickable.length === 0) {
           modalPlaylists.innerHTML = '<div class="lyrics-placeholder">No playlists yet.</div>';
         }
-        playlists.forEach((p) => {
+        pickable.forEach((p) => {
           const el = document.createElement("div");
           el.className = "modal-playlist-item";
           el.textContent = (p.icon || "") + " " + p.title;
