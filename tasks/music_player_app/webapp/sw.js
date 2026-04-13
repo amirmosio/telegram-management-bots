@@ -1,4 +1,4 @@
-const CACHE_NAME = 'music-player-v3';
+const CACHE_NAME = 'music-player-v4';
 const STATIC_ASSETS = [
     '/',
     '/style.css',
@@ -53,23 +53,34 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Don't cache API calls or blob URLs
-    if (url.pathname.startsWith('/api/') || url.protocol === 'blob:') {
-        return;
-    }
+    // Don't intercept API calls, blob URLs, or non-GET
+    if (url.pathname.startsWith('/api/') || url.protocol === 'blob:') return;
+    if (event.request.method !== 'GET') return;
 
-    event.respondWith(
-        fetch(event.request)
-            .then(response => {
-                // Cache successful static responses
-                if (response.ok && event.request.method === 'GET') {
-                    const clone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-                }
-                return response;
-            })
-            .catch(() => caches.match(event.request))
-    );
+    // Stale-while-revalidate for static assets — serve from cache instantly
+    // when available (so offline boot is fast), refresh in the background.
+    event.respondWith((async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const cached = await cache.match(event.request);
+        const networkFetch = fetch(event.request).then(response => {
+            if (response && response.ok) cache.put(event.request, response.clone()).catch(() => {});
+            return response;
+        }).catch(() => null);
+
+        if (cached) {
+            // Return cached immediately; refresh in background.
+            networkFetch.catch(() => {});
+            return cached;
+        }
+        const net = await networkFetch;
+        if (net) return net;
+        // No cache + no network → fall back to index.html for navigations
+        if (event.request.mode === 'navigate') {
+            const shell = await cache.match('/');
+            if (shell) return shell;
+        }
+        return new Response('Offline', { status: 503, statusText: 'Offline' });
+    })());
 });
 
 async function handleAudioStream(url) {

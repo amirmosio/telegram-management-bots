@@ -1694,29 +1694,37 @@ $('login-code').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn
 $('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-verify-2fa').click(); });
 
 async function initAfterLogin() {
-    // Restore playlist group ID from localStorage immediately (fast path)
+    // Restore playlist group ID from localStorage immediately (fast path).
+    // This allows the Playlists tab to render from IDB cache even when offline.
     const cachedPgId = localStorage.getItem('playlist_group_id');
     if (cachedPgId) {
         playlistGroupId = parseInt(cachedPgId, 10);
         playlistGroupTitle = localStorage.getItem('playlist_group_title') || '';
+        // Kick off the cached-playlists render right away so users see their
+        // downloaded playlists before any network request.
+        loadPlaylists();
     }
 
     loadGroups();
 
-    // Find or create playlist group (confirms/updates the cached value)
-    try {
-        const pg = await tg.findOrCreatePlaylistGroup();
-        if (pg) {
-            playlistGroupId = pg.id;
-            playlistGroupTitle = pg.title;
-            localStorage.setItem('playlist_group_id', pg.id);
-            localStorage.setItem('playlist_group_title', pg.title);
-            loadPlaylists();
-            tg.muteChat(pg.id); // ensure muted (fire-and-forget)
+    // Find or create playlist group (confirms/updates the cached value).
+    // Fire-and-forget so offline boot doesn't block the UI.
+    (async () => {
+        try {
+            const pg = await tg.findOrCreatePlaylistGroup();
+            if (pg) {
+                const isNew = playlistGroupId !== pg.id;
+                playlistGroupId = pg.id;
+                playlistGroupTitle = pg.title;
+                localStorage.setItem('playlist_group_id', pg.id);
+                localStorage.setItem('playlist_group_title', pg.title);
+                if (isNew || !cachedPgId) loadPlaylists();
+                tg.muteChat(pg.id); // fire-and-forget
+            }
+        } catch (e) {
+            console.warn('Failed to get playlist group (likely offline):', e?.message || e);
         }
-    } catch (e) {
-        console.error('Failed to get playlist group:', e);
-    }
+    })();
 
     // Ensure share channel is muted and archived (if user has used it before)
     const cachedShareId = localStorage.getItem('share_channel_id');
@@ -1804,6 +1812,27 @@ function setUserProfile(user) {
 }
 
 (async function boot() {
+    // Fast path: if we have a saved Telegram session + cached user, render
+    // the app shell immediately. This means the UI works even when offline:
+    // the network-dependent auth check happens in the background and only
+    // bumps us to the login screen if the server actually reports logged-out.
+    const cachedUser = tg.getCachedUser();
+    if (tg.hasSavedSession() && cachedUser) {
+        showApp();
+        setUserProfile(cachedUser);
+        initAfterLogin();
+        // Background auth refresh — don't await, don't block UI.
+        tg.checkAuth().then(auth => {
+            if (!auth.logged_in) {
+                // Only force logout when we got a definitive "not logged in"
+                // from the server (not a network failure — checkAuth already
+                // handles offline by returning the cached user).
+                showLogin();
+            }
+        }).catch(() => { /* offline or transient — keep app shell up */ });
+        return;
+    }
+
     try {
         const auth = await tg.checkAuth();
         if (auth.logged_in) {

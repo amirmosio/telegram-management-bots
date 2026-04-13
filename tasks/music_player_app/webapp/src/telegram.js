@@ -45,26 +45,60 @@ export function getClient() {
     return client;
 }
 
+let _initPromise = null;
 export async function initClient() {
-    const savedSession = localStorage.getItem(SESSION_KEY) || '';
-    const session = new StringSession(savedSession);
-    client = new TelegramClient(session, API_ID, API_HASH, {
-        connectionRetries: 10,
-        useWSS: true,
-        autoReconnect: true,
-        retryDelay: 1000,
-    });
-    await client.connect();
-    return client;
+    if (_initPromise) return _initPromise;
+    _initPromise = (async () => {
+        const savedSession = localStorage.getItem(SESSION_KEY) || '';
+        const session = new StringSession(savedSession);
+        client = new TelegramClient(session, API_ID, API_HASH, {
+            connectionRetries: 10,
+            useWSS: true,
+            autoReconnect: true,
+            retryDelay: 1000,
+        });
+        // Connect with a hard timeout so an offline boot can never hang the UI.
+        try {
+            await Promise.race([
+                client.connect(),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('connect-timeout')), 8000)),
+            ]);
+        } catch (e) {
+            console.warn('[telegram] connect failed:', e?.message || e);
+            // Leave client object around so future ops can retry via _ensureConnected.
+        }
+        return client;
+    })();
+    try { return await _initPromise; }
+    finally { _initPromise = null; }
 }
 
-// Ensure client is connected before any operation
+// Ensure client is connected before any operation.
+// Uses a timeout to avoid hanging forever when the device is offline.
 async function _ensureConnected() {
     if (!client) await initClient();
     if (!client.connected) {
         console.log('Reconnecting...');
-        await client.connect();
+        try {
+            await Promise.race([
+                client.connect(),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('reconnect-timeout')), 5000)),
+            ]);
+        } catch (e) { /* callers that care should check client.connected */ }
     }
+}
+
+const CACHED_USER_KEY = 'cached_user';
+
+export function getCachedUser() {
+    try {
+        const raw = localStorage.getItem(CACHED_USER_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+}
+
+export function hasSavedSession() {
+    return !!localStorage.getItem(SESSION_KEY);
 }
 
 export async function checkAuth() {
@@ -72,19 +106,22 @@ export async function checkAuth() {
     try {
         const me = await client.getMe();
         if (me) {
-            return {
-                logged_in: true,
-                user: {
-                    id: me.id?.value || me.id,
-                    first_name: me.firstName || '',
-                    last_name: me.lastName || '',
-                    username: me.username || '',
-                    phone: me.phone || '',
-                },
+            const user = {
+                id: me.id?.value || me.id,
+                first_name: me.firstName || '',
+                last_name: me.lastName || '',
+                username: me.username || '',
+                phone: me.phone || '',
             };
+            try { localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user)); } catch {}
+            return { logged_in: true, user };
         }
     } catch (e) {
-        // Not authorized
+        // Network/offline — if we have a saved session + cached user, treat as logged in.
+        if (hasSavedSession()) {
+            const cached = getCachedUser();
+            if (cached) return { logged_in: true, user: cached, offline: true };
+        }
     }
     return { logged_in: false };
 }
@@ -176,6 +213,7 @@ export async function logout() {
         await client.invoke(new Api.auth.LogOut());
     } catch (e) { /* ignore */ }
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(CACHED_USER_KEY);
     _groupsCache = {};
     _topicsCache = {};
     _tracksCache = {};
@@ -207,22 +245,30 @@ function _isChannel(entity) {
 }
 
 export async function listGroups(limit = 30) {
-    await _ensureConnected();
-    const dialogs = await client.getDialogs({ limit });
-    const groups = [];
-    for (const d of dialogs) {
-        const entity = d.entity;
-        if (!_isGroup(entity)) continue;
-        const g = {
-            id: _entityId(entity),
-            title: entity.title || String(entity.id),
-            type: _isChannel(entity) ? 'channel' : 'group',
-            forum: !!entity.forum,
-        };
-        _groupsCache[g.id] = entity;
-        groups.push(g);
+    try {
+        await _ensureConnected();
+        if (!client.connected) throw new Error('not-connected');
+        const dialogs = await client.getDialogs({ limit });
+        const groups = [];
+        for (const d of dialogs) {
+            const entity = d.entity;
+            if (!_isGroup(entity)) continue;
+            const g = {
+                id: _entityId(entity),
+                title: entity.title || String(entity.id),
+                type: _isChannel(entity) ? 'channel' : 'group',
+                forum: !!entity.forum,
+            };
+            _groupsCache[g.id] = entity;
+            groups.push(g);
+        }
+        if (groups.length > 0) idbPut('groups', 'list', groups);
+        return groups;
+    } catch (e) {
+        const cached = await idbGet('groups', 'list');
+        if (cached) return cached;
+        throw e;
     }
-    return groups;
 }
 
 export async function searchGroups(keyword) {

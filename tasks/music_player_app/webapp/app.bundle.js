@@ -70460,49 +70460,87 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       init_define_process_env();
       import_process2 = __toESM(require_process());
       DB_NAME = "music_cache";
-      DB_VERSION = 3;
-      STORES = ["audio", "artwork", "lyrics", "track_lists", "topics", "downloaded_index"];
+      DB_VERSION = 4;
+      STORES = ["audio", "artwork", "lyrics", "track_lists", "topics", "downloaded_index", "groups"];
       _db = null;
     }
   });
 
   // src/telegram.js
   async function initClient() {
-    const savedSession = localStorage.getItem(SESSION_KEY) || "";
-    const session = new import_sessions.StringSession(savedSession);
-    client = new import_telegram.TelegramClient(session, API_ID, API_HASH, {
-      connectionRetries: 10,
-      useWSS: true,
-      autoReconnect: true,
-      retryDelay: 1e3
-    });
-    await client.connect();
-    return client;
+    if (_initPromise) return _initPromise;
+    _initPromise = (async () => {
+      const savedSession = localStorage.getItem(SESSION_KEY) || "";
+      const session = new import_sessions.StringSession(savedSession);
+      client = new import_telegram.TelegramClient(session, API_ID, API_HASH, {
+        connectionRetries: 10,
+        useWSS: true,
+        autoReconnect: true,
+        retryDelay: 1e3
+      });
+      try {
+        await Promise.race([
+          client.connect(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("connect-timeout")), 8e3))
+        ]);
+      } catch (e) {
+        console.warn("[telegram] connect failed:", e?.message || e);
+      }
+      return client;
+    })();
+    try {
+      return await _initPromise;
+    } finally {
+      _initPromise = null;
+    }
   }
   async function _ensureConnected() {
     if (!client) await initClient();
     if (!client.connected) {
       console.log("Reconnecting...");
-      await client.connect();
+      try {
+        await Promise.race([
+          client.connect(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("reconnect-timeout")), 5e3))
+        ]);
+      } catch (e) {
+      }
     }
+  }
+  function getCachedUser() {
+    try {
+      const raw = localStorage.getItem(CACHED_USER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+  function hasSavedSession() {
+    return !!localStorage.getItem(SESSION_KEY);
   }
   async function checkAuth() {
     if (!client) await initClient();
     try {
       const me = await client.getMe();
       if (me) {
-        return {
-          logged_in: true,
-          user: {
-            id: me.id?.value || me.id,
-            first_name: me.firstName || "",
-            last_name: me.lastName || "",
-            username: me.username || "",
-            phone: me.phone || ""
-          }
+        const user = {
+          id: me.id?.value || me.id,
+          first_name: me.firstName || "",
+          last_name: me.lastName || "",
+          username: me.username || "",
+          phone: me.phone || ""
         };
+        try {
+          localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+        } catch {
+        }
+        return { logged_in: true, user };
       }
     } catch (e) {
+      if (hasSavedSession()) {
+        const cached = getCachedUser();
+        if (cached) return { logged_in: true, user: cached, offline: true };
+      }
     }
     return { logged_in: false };
   }
@@ -70597,22 +70635,30 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     return entity instanceof import_tl.Api.Channel;
   }
   async function listGroups(limit = 30) {
-    await _ensureConnected();
-    const dialogs = await client.getDialogs({ limit });
-    const groups = [];
-    for (const d of dialogs) {
-      const entity = d.entity;
-      if (!_isGroup(entity)) continue;
-      const g = {
-        id: _entityId(entity),
-        title: entity.title || String(entity.id),
-        type: _isChannel(entity) ? "channel" : "group",
-        forum: !!entity.forum
-      };
-      _groupsCache[g.id] = entity;
-      groups.push(g);
+    try {
+      await _ensureConnected();
+      if (!client.connected) throw new Error("not-connected");
+      const dialogs = await client.getDialogs({ limit });
+      const groups = [];
+      for (const d of dialogs) {
+        const entity = d.entity;
+        if (!_isGroup(entity)) continue;
+        const g = {
+          id: _entityId(entity),
+          title: entity.title || String(entity.id),
+          type: _isChannel(entity) ? "channel" : "group",
+          forum: !!entity.forum
+        };
+        _groupsCache[g.id] = entity;
+        groups.push(g);
+      }
+      if (groups.length > 0) idbPut("groups", "list", groups);
+      return groups;
+    } catch (e) {
+      const cached = await idbGet("groups", "list");
+      if (cached) return cached;
+      throw e;
     }
-    return groups;
   }
   async function searchGroups(keyword) {
     await _ensureConnected();
@@ -71578,7 +71624,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _phoneCodeHash, PAGE_SIZE, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _initPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71610,6 +71656,8 @@ ${JSON.stringify(state)}`;
         } catch {
         }
       })();
+      _initPromise = null;
+      CACHED_USER_KEY = "cached_user";
       _phoneCodeHash = null;
       PAGE_SIZE = 100;
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
@@ -73610,21 +73658,25 @@ ${JSON.stringify(state)}`;
         if (cachedPgId) {
           playlistGroupId = parseInt(cachedPgId, 10);
           playlistGroupTitle = localStorage.getItem("playlist_group_title") || "";
+          loadPlaylists();
         }
         loadGroups();
-        try {
-          const pg = await findOrCreatePlaylistGroup();
-          if (pg) {
-            playlistGroupId = pg.id;
-            playlistGroupTitle = pg.title;
-            localStorage.setItem("playlist_group_id", pg.id);
-            localStorage.setItem("playlist_group_title", pg.title);
-            loadPlaylists();
-            muteChat(pg.id);
+        (async () => {
+          try {
+            const pg = await findOrCreatePlaylistGroup();
+            if (pg) {
+              const isNew = playlistGroupId !== pg.id;
+              playlistGroupId = pg.id;
+              playlistGroupTitle = pg.title;
+              localStorage.setItem("playlist_group_id", pg.id);
+              localStorage.setItem("playlist_group_title", pg.title);
+              if (isNew || !cachedPgId) loadPlaylists();
+              muteChat(pg.id);
+            }
+          } catch (e) {
+            console.warn("Failed to get playlist group (likely offline):", e?.message || e);
           }
-        } catch (e) {
-          console.error("Failed to get playlist group:", e);
-        }
+        })();
         const cachedShareId = localStorage.getItem("share_channel_id");
         if (cachedShareId) {
           const shareId = parseInt(cachedShareId, 10);
@@ -73691,6 +73743,19 @@ ${JSON.stringify(state)}`;
         });
       }
       (async function boot() {
+        const cachedUser = getCachedUser();
+        if (hasSavedSession() && cachedUser) {
+          showApp();
+          setUserProfile(cachedUser);
+          initAfterLogin();
+          checkAuth().then((auth) => {
+            if (!auth.logged_in) {
+              showLogin();
+            }
+          }).catch(() => {
+          });
+          return;
+        }
         try {
           const auth = await checkAuth();
           if (auth.logged_in) {
