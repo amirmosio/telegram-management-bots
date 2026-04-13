@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="Music">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=58">
+    <link rel="stylesheet" href="style.css?v=59">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -130,7 +130,10 @@
                 <span id="now-playing-label">Music Player</span>
                 <div id="top-bar-actions">
                     <button id="btn-recognize" class="icon-btn" title="Identify song (listen to mic)">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M16 8.5c-.9-.9-2.1-1.5-3.5-1.5-2.5 0-4 1.5-4 3s1 2.5 3 3 3 1.5 3 3-1.5 3-4 3c-1.4 0-2.6-.6-3.5-1.5"/>
+                        </svg>
                     </button>
                     <button id="btn-search" class="icon-btn" title="Search music">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -237,10 +240,9 @@
         </div>
         <div id="recognize-content">
             <button id="btn-recognize-record" class="recognize-record-btn" type="button">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2h2v2a5 5 0 0 0 10 0v-2h2z"/>
-                    <path d="M11 19h2v3h-2z"/>
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M16 8.5c-.9-.9-2.1-1.5-3.5-1.5-2.5 0-4 1.5-4 3s1 2.5 3 3 3 1.5 3 3-1.5 3-4 3c-1.4 0-2.6-.6-3.5-1.5"/>
                 </svg>
                 <span class="recognize-pulse"></span>
             </button>
@@ -299,6 +301,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=58"></script>
+    <script src="app.bundle.js?v=59"></script>
 </body>
 </html>
