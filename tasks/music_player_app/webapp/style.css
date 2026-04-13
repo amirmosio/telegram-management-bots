@@ -215,8 +215,15 @@ html, body {
     gap: 8px;
 }
 .search-bar.playlist-tracks-bar input { flex: 1; min-width: 0; }
-#storage-usage {
+.search-bar.playlist-tracks-bar { padding-bottom: 6px; border-bottom: none; }
+
+#storage-usage-row {
+    padding: 0 16px 8px;
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    text-align: right;
+}
+#storage-usage {
     font-size: 11px;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
