@@ -166,7 +166,8 @@ async function loadGroups() {
             }
         }
     } catch (e) {
-        browseGroups.innerHTML = '<div class="lyrics-placeholder">Failed to load</div>';
+        const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        browseGroups.innerHTML = `<div class="lyrics-placeholder">${offline ? 'Offline — groups will load when you\u2019re back online' : 'Failed to load'}</div>`;
     }
     browseGroupsLoading = false;
 }

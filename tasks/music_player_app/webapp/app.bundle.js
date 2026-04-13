@@ -71382,6 +71382,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function findOrCreatePlaylistGroup() {
     const PLAYLIST_GROUP_NAME = "Playlists Cache";
+    await _ensureConnected();
+    if (!client?.connected) return null;
     const dialogs = await client.getDialogs({ limit: 100 });
     for (const d of dialogs) {
       const entity = d.entity;
@@ -72360,7 +72362,8 @@ ${JSON.stringify(state)}`;
             }
           }
         } catch (e) {
-          browseGroups.innerHTML = '<div class="lyrics-placeholder">Failed to load</div>';
+          const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+          browseGroups.innerHTML = `<div class="lyrics-placeholder">${offline ? "Offline \u2014 groups will load when you\u2019re back online" : "Failed to load"}</div>`;
         }
         browseGroupsLoading = false;
       }

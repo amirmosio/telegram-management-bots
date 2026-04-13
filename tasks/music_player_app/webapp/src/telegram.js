@@ -986,6 +986,9 @@ export async function addTracksToPlaylist(destGroupId, topicId, sourceGroupId, t
 export async function findOrCreatePlaylistGroup() {
     const PLAYLIST_GROUP_NAME = 'Playlists Cache';
 
+    await _ensureConnected();
+    if (!client?.connected) return null; // offline — callers already use cached id
+
     // Search existing
     const dialogs = await client.getDialogs({ limit: 100 });
     for (const d of dialogs) {
