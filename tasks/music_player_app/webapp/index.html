@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="Music">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=45">
+    <link rel="stylesheet" href="style.css?v=46">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -107,6 +107,7 @@
             <div id="tab-playlist-tracks" class="tab-content">
                 <div class="search-bar playlist-tracks-bar">
                     <input id="playlist-tracks-search" type="text" placeholder="Search tracks..." autocomplete="off">
+                    <span id="storage-usage" title="Browser storage used by cached tracks"></span>
                     <button id="btn-download-all" class="icon-btn" title="Download all tracks in this playlist">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                     </button>
@@ -256,6 +257,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=45"></script>
+    <script src="app.bundle.js?v=46"></script>
 </body>
 </html>

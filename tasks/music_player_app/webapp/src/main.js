@@ -292,6 +292,41 @@ function showPlaylistTracks() {
     tabPlaylistTracks.classList.add('active');
     panelSubheader.style.display = 'flex';
     playlistTracksSearch.value = '';
+    updateStorageUsage();
+}
+
+// ── Persistent storage + usage indicator ──
+// Request the browser keep our IndexedDB data around (no silent eviction).
+async function _requestPersistentStorage() {
+    if (!navigator.storage?.persist) return;
+    try {
+        const already = await navigator.storage.persisted?.();
+        if (already) return;
+        const granted = await navigator.storage.persist();
+        console.log('[storage] persist granted:', granted);
+    } catch (e) { /* non-critical */ }
+}
+_requestPersistentStorage();
+
+function _formatBytes(n) {
+    if (!n) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+    return (n / Math.pow(1024, i)).toFixed(i >= 2 ? 1 : 0) + ' ' + units[i];
+}
+
+const storageUsageEl = $('storage-usage');
+async function updateStorageUsage() {
+    if (!storageUsageEl || !navigator.storage?.estimate) return;
+    try {
+        const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+        if (!quota) { storageUsageEl.textContent = _formatBytes(usage); return; }
+        const pct = usage / quota;
+        storageUsageEl.textContent = `${_formatBytes(usage)} / ${_formatBytes(quota)}`;
+        storageUsageEl.classList.toggle('warn', pct >= 0.7 && pct < 0.9);
+        storageUsageEl.classList.toggle('crit', pct >= 0.9);
+        storageUsageEl.title = `Browser storage used: ${(pct * 100).toFixed(1)}% of quota`;
+    } catch { /* ignore */ }
 }
 
 playlistTracksSearch.addEventListener('input', () => {
@@ -371,6 +406,7 @@ btnDownloadAll.addEventListener('click', async () => {
         setProgress();
         if ((done + failed) % 3 === 0 || (done + failed) === notYet.length) {
             showToast(`Downloading ${done + failed}/${notYet.length}…`);
+            updateStorageUsage();
         }
     }
 
@@ -381,6 +417,7 @@ btnDownloadAll.addEventListener('click', async () => {
     btnDownloadAll.title = 'Download all tracks in this playlist';
     const secs = Math.round((Date.now() - startedAt) / 1000);
     showToast(`Downloaded ${done}/${notYet.length}${failed ? ` (${failed} failed)` : ''} in ${secs}s`);
+    updateStorageUsage();
 });
 
 btnNewPlaylist.addEventListener('click', async () => {

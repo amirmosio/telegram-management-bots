@@ -215,6 +215,15 @@ html, body {
     gap: 8px;
 }
 .search-bar.playlist-tracks-bar input { flex: 1; min-width: 0; }
+#storage-usage {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+#storage-usage.warn { color: #e0a13c; }
+#storage-usage.crit { color: #e05a3c; }
 #btn-download-all {
     flex-shrink: 0;
     color: var(--text-secondary);
