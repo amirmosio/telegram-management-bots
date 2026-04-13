@@ -313,6 +313,65 @@ playlistTracksSearch.addEventListener('input', () => {
     }, 400);
 });
 
+// ── Download-all button inside an open playlist ──
+const btnDownloadAll = $('btn-download-all');
+let _downloadAllInFlight = false;
+btnDownloadAll.addEventListener('click', async () => {
+    if (_downloadAllInFlight) return;
+    if (!playlistGroupId || currentPlaylistTopicId === null) {
+        showToast('Open a playlist first');
+        return;
+    }
+    const topicIdForApi = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+
+    // Drain all pages first so we know the true total.
+    showToast('Counting tracks…');
+    try {
+        await tg.loadAllTracks(playlistGroupId, topicIdForApi, (newPage) => {
+            const ctx = { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false };
+            for (const track of newPage) {
+                playlistTracksContainer.appendChild(_createTrackEl(track, playlistTracks, ctx));
+            }
+        });
+    } catch (e) { /* best effort */ }
+
+    const total = playlistTracks.length;
+    const notYet = playlistTracks.filter(t => !tg.isTrackDownloaded(playlistGroupId, t.id));
+    if (total === 0) { showToast('No tracks to download'); return; }
+    if (notYet.length === 0) { showToast('All tracks already downloaded'); return; }
+
+    const ok = window.confirm(
+        `Download all ${notYet.length} track${notYet.length === 1 ? '' : 's'} in "${panelTitle.textContent}" for offline play?\n\n` +
+        `This will cache them in your browser and may use significant data.`
+    );
+    if (!ok) return;
+
+    _downloadAllInFlight = true;
+    btnDownloadAll.classList.add('downloading');
+    btnDownloadAll.setAttribute('disabled', 'true');
+
+    let done = 0, failed = 0;
+    const startedAt = Date.now();
+    const updateToast = () => showToast(`Downloading ${done}/${notYet.length}…`);
+    updateToast();
+
+    for (const track of notYet) {
+        try {
+            await tg.prefetchTrack(playlistGroupId, track.id);
+            done++;
+        } catch (e) {
+            failed++;
+        }
+        if (done % 3 === 0 || done === notYet.length) updateToast();
+    }
+
+    _downloadAllInFlight = false;
+    btnDownloadAll.classList.remove('downloading');
+    btnDownloadAll.removeAttribute('disabled');
+    const secs = Math.round((Date.now() - startedAt) / 1000);
+    showToast(`Downloaded ${done}/${notYet.length}${failed ? ` (${failed} failed)` : ''} in ${secs}s`);
+});
+
 btnNewPlaylist.addEventListener('click', async () => {
     if (!playlistGroupId) { showToast('Playlist group not ready'); return; }
     const name = prompt('Playlist name:');

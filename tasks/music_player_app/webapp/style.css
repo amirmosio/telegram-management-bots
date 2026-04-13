@@ -209,6 +209,24 @@ html, body {
     flex-shrink: 0;
 }
 
+.search-bar.playlist-tracks-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.search-bar.playlist-tracks-bar input { flex: 1; min-width: 0; }
+#btn-download-all {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    transition: color 0.15s;
+}
+#btn-download-all:hover { color: var(--accent); }
+#btn-download-all.downloading {
+    color: var(--accent);
+    animation: shuffle-drain-pulse 1.2s ease-in-out infinite;
+}
+#btn-download-all[disabled] { opacity: 0.5; pointer-events: none; }
+
 .search-bar input {
     width: 100%;
     padding: 8px 12px;
