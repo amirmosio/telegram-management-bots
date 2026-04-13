@@ -922,6 +922,160 @@ html, body {
     padding: 0;
 }
 
+/* ── Recognize overlay (Shazam-style mic capture) ── */
+#recognize-overlay {
+    position: fixed;
+    top: 52px;
+    right: 24px;
+    width: 360px;
+    max-height: 500px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    transform: scale(0.95) translateY(-8px);
+    transform-origin: top right;
+    opacity: 0;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+    pointer-events: none;
+}
+#recognize-overlay.open {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+}
+#recognize-overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+}
+#recognize-overlay-header .overlay-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+#recognize-overlay-close { display: none; }
+#recognize-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 24px 16px;
+    gap: 12px;
+    overflow-y: auto;
+}
+.recognize-record-btn {
+    position: relative;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+    transition: transform 0.15s, background 0.2s;
+}
+.recognize-record-btn:hover { transform: scale(1.03); }
+.recognize-record-btn:active { transform: scale(0.97); }
+.recognize-record-btn[disabled] { opacity: 0.6; cursor: default; }
+.recognize-pulse {
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 3px solid var(--accent);
+    opacity: 0;
+    pointer-events: none;
+}
+.recognize-record-btn.recording .recognize-pulse {
+    animation: recognize-pulse 1.4s ease-out infinite;
+}
+@keyframes recognize-pulse {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(1.4); opacity: 0; }
+}
+#recognize-status {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+    min-height: 18px;
+}
+#recognize-result {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px;
+}
+#recognize-result .recognize-cover {
+    width: 140px;
+    height: 140px;
+    border-radius: var(--radius-sm);
+    object-fit: cover;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+#recognize-result .recognize-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-align: center;
+}
+#recognize-result .recognize-artist {
+    font-size: 13px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+#recognize-result .recognize-tap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s;
+    outline: none;
+}
+#recognize-result .recognize-tap:hover,
+#recognize-result .recognize-tap:focus-visible {
+    background: var(--bg-hover);
+}
+#recognize-result .recognize-hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+}
+#recognize-result .recognize-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin-top: 8px;
+}
+#recognize-result .recognize-link {
+    font-size: 12px;
+    color: var(--accent);
+    text-decoration: none;
+    padding: 4px 10px;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+}
+#recognize-result .recognize-link:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
 /* ── Install Banner ── */
 #install-banner {
     position: fixed;
@@ -1079,12 +1233,14 @@ html, body {
 
 /* ── Mobile ── */
 @media (max-width: 700px) {
-    #search-overlay {
+    #search-overlay,
+    #recognize-overlay {
         top: 56px; right: 8px; left: 8px;
         width: auto; max-height: 60vh;
         transform-origin: top right;
     }
-    #search-overlay-close { display: flex; }
+    #search-overlay-close,
+    #recognize-overlay-close { display: flex; }
     #side-panel {
         position: fixed; left: -320px; top: 0; bottom: 0;
         transition: left 0.3s ease; z-index: 20;

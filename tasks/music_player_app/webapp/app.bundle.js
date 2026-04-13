@@ -72687,6 +72687,150 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       document.addEventListener("click", (e) => {
         if (searchOverlay.classList.contains("open") && !searchOverlay.contains(e.target) && !btnSearch.contains(e.target)) closeSearch();
       });
+      var btnRecognize = $("btn-recognize");
+      var recognizeOverlay = $("recognize-overlay");
+      var btnRecognizeRecord = $("btn-recognize-record");
+      var recognizeStatus = $("recognize-status");
+      var recognizeResult = $("recognize-result");
+      var _recMediaRec = null;
+      var _recStream = null;
+      var _recAutoStopTimer = null;
+      function openRecognize() {
+        recognizeResult.innerHTML = "";
+        recognizeStatus.textContent = "Tap to listen";
+        btnRecognizeRecord.classList.remove("recording");
+        recognizeOverlay.classList.add("open");
+      }
+      function closeRecognize() {
+        recognizeOverlay.classList.remove("open");
+        _recStopRecording(true);
+      }
+      btnRecognize.addEventListener("click", () => {
+        if (recognizeOverlay.classList.contains("open")) closeRecognize();
+        else openRecognize();
+      });
+      $("recognize-overlay-close").addEventListener("click", closeRecognize);
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && recognizeOverlay.classList.contains("open")) closeRecognize();
+      });
+      document.addEventListener("click", (e) => {
+        if (recognizeOverlay.classList.contains("open") && !recognizeOverlay.contains(e.target) && !btnRecognize.contains(e.target)) closeRecognize();
+      });
+      btnRecognizeRecord.addEventListener("click", async () => {
+        if (_recMediaRec?.state === "recording") {
+          _recStopRecording();
+          return;
+        }
+        await _recStartRecording();
+      });
+      async function _recStartRecording() {
+        recognizeResult.innerHTML = "";
+        recognizeStatus.textContent = "Listening\u2026";
+        btnRecognizeRecord.classList.add("recording");
+        try {
+          _recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch (e) {
+          recognizeStatus.textContent = "Microphone access denied";
+          btnRecognizeRecord.classList.remove("recording");
+          return;
+        }
+        const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
+        _recMediaRec = new MediaRecorder(_recStream, mime ? { mimeType: mime } : {});
+        const chunks = [];
+        _recMediaRec.ondataavailable = (e) => {
+          if (e.data?.size > 0) chunks.push(e.data);
+        };
+        _recMediaRec.onstop = () => _recUpload(chunks, mime || (chunks[0]?.type || "audio/webm"));
+        _recMediaRec.start();
+        clearTimeout(_recAutoStopTimer);
+        _recAutoStopTimer = setTimeout(() => {
+          if (_recMediaRec?.state === "recording") _recMediaRec.stop();
+        }, 7e3);
+      }
+      function _recStopRecording(silent = false) {
+        clearTimeout(_recAutoStopTimer);
+        _recAutoStopTimer = null;
+        if (_recMediaRec && _recMediaRec.state === "recording") {
+          if (silent) {
+            _recMediaRec.onstop = null;
+            _recMediaRec.stop();
+          } else {
+            _recMediaRec.stop();
+          }
+        }
+        _recStream?.getTracks().forEach((t) => t.stop());
+        _recStream = null;
+        if (silent) {
+          btnRecognizeRecord.classList.remove("recording");
+          _recMediaRec = null;
+        }
+      }
+      async function _recUpload(chunks, mime) {
+        btnRecognizeRecord.classList.remove("recording");
+        _recStream?.getTracks().forEach((t) => t.stop());
+        _recStream = null;
+        _recMediaRec = null;
+        if (chunks.length === 0) {
+          recognizeStatus.textContent = "No audio captured. Tap to try again.";
+          return;
+        }
+        const blob = new Blob(chunks, { type: mime });
+        recognizeStatus.textContent = "Identifying\u2026";
+        try {
+          const fd = new FormData();
+          fd.append("audio", blob, "recording.webm");
+          const res = await fetch("/api/recognize", { method: "POST", body: fd });
+          if (!res.ok) {
+            if (res.status === 429) {
+              recognizeStatus.textContent = "Too many requests. Wait a moment and try again.";
+              return;
+            }
+            throw new Error(`server ${res.status}`);
+          }
+          const json = await res.json();
+          if (!json.recognized) {
+            recognizeStatus.textContent = "No match found. Tap to try again.";
+            return;
+          }
+          recognizeStatus.textContent = "";
+          _renderRecognizeResult(json);
+        } catch (e) {
+          console.warn("[recognize] upload failed", e);
+          recognizeStatus.textContent = "Recognition failed. Tap to try again.";
+        }
+      }
+      function _renderRecognizeResult(json) {
+        const title = json.title || "";
+        const artist = json.artist || "";
+        const cover = json.cover ? `<img class="recognize-cover" src="${json.cover}" alt="">` : "";
+        const links = [];
+        if (json.shazam_url) links.push(`<a class="recognize-link" href="${json.shazam_url}" target="_blank" rel="noopener">Shazam</a>`);
+        for (const p of json.providers || []) {
+          const action = (p.actions || []).find((a) => a?.type === "uri" || a?.uri);
+          if (action?.uri) links.push(`<a class="recognize-link" href="${action.uri}" target="_blank" rel="noopener">${escapeHtml(p.caption || p.type || "Open")}</a>`);
+        }
+        recognizeResult.innerHTML = `
+        <div class="recognize-tap" role="button" tabindex="0">
+            ${cover}
+            <div class="recognize-title">${escapeHtml(title)}</div>
+            <div class="recognize-artist">${escapeHtml(artist)}</div>
+            <div class="recognize-hint">Tap to search in your library</div>
+        </div>
+        ${links.length ? `<div class="recognize-links">${links.join("")}</div>` : ""}
+    `;
+        const tap = recognizeResult.querySelector(".recognize-tap");
+        const runSearch = () => {
+          const q = `${title} ${artist}`.trim();
+          closeRecognize();
+          openSearch();
+          searchQuery.value = q;
+          setTimeout(() => performSearch(), 50);
+        };
+        tap.addEventListener("click", runSearch);
+        tap.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") runSearch();
+        });
+      }
       searchQuery.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
