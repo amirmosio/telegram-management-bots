@@ -70515,6 +70515,10 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         autoReconnect: true,
         retryDelay: 1e3
       });
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        console.log("[telegram] navigator.onLine=false, skipping initial connect");
+        return client;
+      }
       try {
         await Promise.race([
           client.connect(),

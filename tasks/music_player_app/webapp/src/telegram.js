@@ -96,6 +96,13 @@ export async function initClient() {
             autoReconnect: true,
             retryDelay: 1000,
         });
+        // If the browser reports it's offline, don't even attempt a connect —
+        // we'd just waste 8 seconds on a connect-timeout before the UI can
+        // render the login screen or the cached app shell.
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            console.log('[telegram] navigator.onLine=false, skipping initial connect');
+            return client;
+        }
         // Connect with a hard timeout so an offline boot can never hang the UI.
         try {
             await Promise.race([
