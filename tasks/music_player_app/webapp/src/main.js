@@ -590,8 +590,13 @@ function closeRecognize() {
     _recStopRecording(true);
 }
 btnRecognize.addEventListener('click', () => {
-    if (recognizeOverlay.classList.contains('open')) closeRecognize();
-    else openRecognize();
+    if (recognizeOverlay.classList.contains('open')) {
+        closeRecognize();
+        return;
+    }
+    openRecognize();
+    // Start listening immediately — no second tap required.
+    _recStartRecording();
 });
 $('recognize-overlay-close').addEventListener('click', closeRecognize);
 document.addEventListener('keydown', (e) => {
@@ -693,15 +698,10 @@ function _renderRecognizeResult(json) {
     const title = json.title || '';
     const artist = json.artist || '';
     const cover = json.cover ? `<img class="recognize-cover" src="${json.cover}" alt="">` : '';
-    const links = [];
-    if (json.shazam_url) links.push(`<a class="recognize-link" href="${json.shazam_url}" target="_blank" rel="noopener">Shazam</a>`);
-    for (const p of (json.providers || [])) {
-        const action = (p.actions || []).find(a => a?.type === 'uri' || a?.uri);
-        if (action?.uri) links.push(`<a class="recognize-link" href="${action.uri}" target="_blank" rel="noopener">${escapeHtml(p.caption || p.type || 'Open')}</a>`);
-    }
-    // Wrap the core info in a clickable area so tapping it kicks off a
-    // search in the existing Search overlay — reusing the feature the
-    // user already knows for "play this in my library".
+    // The whole block is a tap target — tapping it closes recognize,
+    // opens the search overlay with "title artist" pre-filled, and
+    // fires performSearch() so the user lands on matching library
+    // results immediately.
     recognizeResult.innerHTML = `
         <div class="recognize-tap" role="button" tabindex="0">
             ${cover}
@@ -709,19 +709,22 @@ function _renderRecognizeResult(json) {
             <div class="recognize-artist">${escapeHtml(artist)}</div>
             <div class="recognize-hint">Tap to search in your library</div>
         </div>
-        ${links.length ? `<div class="recognize-links">${links.join('')}</div>` : ''}
     `;
     const tap = recognizeResult.querySelector('.recognize-tap');
-    const runSearch = () => {
+    const runSearch = (e) => {
+        // Stop the click from bubbling to the document-level outside-click
+        // handler, which would otherwise immediately close the search overlay
+        // we're about to open.
+        if (e) e.stopPropagation();
         const q = `${title} ${artist}`.trim();
         closeRecognize();
         openSearch();
         searchQuery.value = q;
-        // Give the overlay the animation frame to open before firing search.
+        // Let the open animation start, then fire the search.
         setTimeout(() => performSearch(), 50);
     };
     tap.addEventListener('click', runSearch);
-    tap.addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
+    tap.addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(e); });
 }
 
 searchQuery.addEventListener('keydown', (e) => {

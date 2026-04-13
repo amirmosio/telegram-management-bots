@@ -72706,8 +72706,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _recStopRecording(true);
       }
       btnRecognize.addEventListener("click", () => {
-        if (recognizeOverlay.classList.contains("open")) closeRecognize();
-        else openRecognize();
+        if (recognizeOverlay.classList.contains("open")) {
+          closeRecognize();
+          return;
+        }
+        openRecognize();
+        _recStartRecording();
       });
       $("recognize-overlay-close").addEventListener("click", closeRecognize);
       document.addEventListener("keydown", (e) => {
@@ -72803,12 +72807,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const title = json.title || "";
         const artist = json.artist || "";
         const cover = json.cover ? `<img class="recognize-cover" src="${json.cover}" alt="">` : "";
-        const links = [];
-        if (json.shazam_url) links.push(`<a class="recognize-link" href="${json.shazam_url}" target="_blank" rel="noopener">Shazam</a>`);
-        for (const p of json.providers || []) {
-          const action = (p.actions || []).find((a) => a?.type === "uri" || a?.uri);
-          if (action?.uri) links.push(`<a class="recognize-link" href="${action.uri}" target="_blank" rel="noopener">${escapeHtml(p.caption || p.type || "Open")}</a>`);
-        }
         recognizeResult.innerHTML = `
         <div class="recognize-tap" role="button" tabindex="0">
             ${cover}
@@ -72816,10 +72814,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             <div class="recognize-artist">${escapeHtml(artist)}</div>
             <div class="recognize-hint">Tap to search in your library</div>
         </div>
-        ${links.length ? `<div class="recognize-links">${links.join("")}</div>` : ""}
     `;
         const tap = recognizeResult.querySelector(".recognize-tap");
-        const runSearch = () => {
+        const runSearch = (e) => {
+          if (e) e.stopPropagation();
           const q = `${title} ${artist}`.trim();
           closeRecognize();
           openSearch();
@@ -72828,7 +72826,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         };
         tap.addEventListener("click", runSearch);
         tap.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") runSearch();
+          if (e.key === "Enter") runSearch(e);
         });
       }
       searchQuery.addEventListener("keydown", (e) => {
