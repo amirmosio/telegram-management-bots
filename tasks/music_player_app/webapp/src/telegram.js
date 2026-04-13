@@ -496,8 +496,12 @@ export async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
 }
 
 // Load next page of tracks, appending to existing cache.
-// Returns the new tracks added (empty array if no more / offline).
-export async function loadMoreTracks(groupId, topicId = null) {
+// Returns the new tracks added ([] when there's truly nothing more).
+// By default, network errors are swallowed into [] so infinite-scroll and
+// background prefetches degrade gracefully when offline — pass
+// { silentOnError: false } to let callers distinguish "end of history"
+// from "transient error" and retry.
+export async function loadMoreTracks(groupId, topicId = null, { silentOnError = true } = {}) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     const existing = _tracksCache[cacheKey] || [];
     if (existing.length === 0) return [];
@@ -507,7 +511,10 @@ export async function loadMoreTracks(groupId, topicId = null) {
     let entity;
     try {
         entity = await _getEntity(groupId);
-    } catch { return []; }
+    } catch (e) {
+        if (silentOnError) return [];
+        throw e;
+    }
     const params = { entity, limit: PAGE_SIZE, offsetId: lastTrack.id };
     if (topicId !== null) params.replyTo = topicId;
 
@@ -520,7 +527,10 @@ export async function loadMoreTracks(groupId, topicId = null) {
                 _msgCache[`${groupId}:${msg.id}`] = msg;
             }
         }
-    } catch { return []; }
+    } catch (e) {
+        if (silentOnError) return [];
+        throw e;
+    }
 
     existing.push(...newTracks);
     _tracksCache[cacheKey] = existing;
@@ -530,13 +540,29 @@ export async function loadMoreTracks(groupId, topicId = null) {
 
 // Eagerly drain every remaining page for a (group, topic) track list.
 // Calls onPage(newTracks) after each page so callers can update live UI
-// or in-place mutate their playerTracks array. Cancellable via cancelDrain().
+// or in-place mutate their playerTracks array. Retries transient errors
+// with exponential backoff so flaky connections don't silently truncate
+// the track list. Cancellable via cancelDrain().
 export async function loadAllTracks(groupId, topicId = null, onPage = null) {
     const gen = ++_drainGeneration;
+    let failures = 0;
     while (true) {
-        const page = await loadMoreTracks(groupId, topicId);
         if (gen !== _drainGeneration) return; // cancelled
-        if (page.length === 0) return;
+        let page;
+        try {
+            page = await loadMoreTracks(groupId, topicId, { silentOnError: false });
+            failures = 0;
+        } catch (e) {
+            failures++;
+            console.warn('[drain] loadMoreTracks failed, retrying:', e?.message || e);
+            if (failures >= 4) {
+                console.warn('[drain] giving up after 4 consecutive failures');
+                return;
+            }
+            await new Promise(r => setTimeout(r, 800 * failures));
+            continue;
+        }
+        if (page.length === 0) return; // true end-of-history
         if (onPage) {
             try { onPage(page); } catch { /* ignore UI errors */ }
         }
@@ -547,33 +573,72 @@ export function cancelDrain() {
     _drainGeneration++;
 }
 
-// Prefetch a track's audio into IDB (for background next-track).
-// No-op if already cached. Returns when the blob is fully stored.
+// Refetch a single message from Telegram so its fileReference is fresh.
+// Telegram invalidates fileReferences after ~1 hour, so any download
+// attempted via a cached msg object older than that will fail with
+// FILE_REFERENCE_EXPIRED until we refresh.
+async function _refreshTrackMsg(groupId, trackId) {
+    try {
+        const entity = await _getEntity(groupId);
+        const msgs = await client.getMessages(entity, { ids: [trackId] });
+        if (msgs && msgs[0]) {
+            _msgCache[`${groupId}:${trackId}`] = msgs[0];
+            return msgs[0];
+        }
+    } catch (e) {
+        console.warn('[refresh-msg] failed', trackId, e?.message || e);
+    }
+    return null;
+}
+
+// Prefetch a track's audio into IDB (for background next-track / bulk
+// download). Returns a status string so callers can count accurately:
+//   'already' — already cached, nothing to do
+//   'cached'  — downloaded and stored in IDB
+// Throws on any real failure (missing msg, no document, empty download,
+// network/API errors after a file-reference refresh retry).
 export async function prefetchTrack(groupId, trackId) {
     const blobKey = `${groupId}:${trackId}`;
-    if (_blobCache[blobKey]) return;
+    if (_blobCache[blobKey]) return 'already';
     const existing = await idbGet('audio', blobKey);
     if (existing) {
         _blobCache[blobKey] = URL.createObjectURL(existing);
-        return;
+        _downloadedIds.add(blobKey);
+        return 'already';
     }
 
-    const msg = _msgCache[blobKey];
-    if (!msg) return; // not in memory — can't prefetch without the message
+    let msg = _msgCache[blobKey];
+    if (!msg) msg = await _refreshTrackMsg(groupId, trackId);
+    if (!msg) throw new Error('Track message not found');
     const doc = msg.media?.document;
-    if (!doc) return;
+    if (!doc) throw new Error('Track has no document');
     const mime = doc.mimeType || 'audio/mpeg';
 
-    try {
+    const runDownload = async () => {
         const chunks = [];
         for await (const chunk of iterTrackDownload(groupId, trackId)) {
             chunks.push(chunk);
         }
-        if (chunks.length === 0) return;
+        if (chunks.length === 0) throw new Error('Empty download');
         const blob = new Blob(chunks, { type: mime });
         cacheTrackBlob(groupId, trackId, blob);
+    };
+
+    try {
+        await runDownload();
+        return 'cached';
     } catch (e) {
-        console.warn('[prefetch] failed', trackId, e?.message || e);
+        const m = String(e?.message || e);
+        if (m.includes('FILE_REFERENCE')) {
+            // File reference expired — refresh and retry once.
+            console.warn('[prefetch] file ref expired, refreshing', trackId);
+            const refreshed = await _refreshTrackMsg(groupId, trackId);
+            if (refreshed) {
+                await runDownload();
+                return 'cached';
+            }
+        }
+        throw e;
     }
 }
 

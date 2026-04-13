@@ -70858,7 +70858,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       throw e;
     }
   }
-  async function loadMoreTracks(groupId, topicId = null) {
+  async function loadMoreTracks(groupId, topicId = null, { silentOnError = true } = {}) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     const existing = _tracksCache[cacheKey] || [];
     if (existing.length === 0) return [];
@@ -70866,8 +70866,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     let entity;
     try {
       entity = await _getEntity(groupId);
-    } catch {
-      return [];
+    } catch (e) {
+      if (silentOnError) return [];
+      throw e;
     }
     const params = { entity, limit: PAGE_SIZE, offsetId: lastTrack.id };
     if (topicId !== null) params.replyTo = topicId;
@@ -70880,8 +70881,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           _msgCache[`${groupId}:${msg.id}`] = msg;
         }
       }
-    } catch {
-      return [];
+    } catch (e) {
+      if (silentOnError) return [];
+      throw e;
     }
     existing.push(...newTracks);
     _tracksCache[cacheKey] = existing;
@@ -70890,9 +70892,23 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function loadAllTracks(groupId, topicId = null, onPage = null) {
     const gen = ++_drainGeneration;
+    let failures = 0;
     while (true) {
-      const page = await loadMoreTracks(groupId, topicId);
       if (gen !== _drainGeneration) return;
+      let page;
+      try {
+        page = await loadMoreTracks(groupId, topicId, { silentOnError: false });
+        failures = 0;
+      } catch (e) {
+        failures++;
+        console.warn("[drain] loadMoreTracks failed, retrying:", e?.message || e);
+        if (failures >= 4) {
+          console.warn("[drain] giving up after 4 consecutive failures");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 800 * failures));
+        continue;
+      }
       if (page.length === 0) return;
       if (onPage) {
         try {
@@ -70905,29 +70921,57 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   function cancelDrain() {
     _drainGeneration++;
   }
+  async function _refreshTrackMsg(groupId, trackId) {
+    try {
+      const entity = await _getEntity(groupId);
+      const msgs = await client.getMessages(entity, { ids: [trackId] });
+      if (msgs && msgs[0]) {
+        _msgCache[`${groupId}:${trackId}`] = msgs[0];
+        return msgs[0];
+      }
+    } catch (e) {
+      console.warn("[refresh-msg] failed", trackId, e?.message || e);
+    }
+    return null;
+  }
   async function prefetchTrack(groupId, trackId) {
     const blobKey = `${groupId}:${trackId}`;
-    if (_blobCache[blobKey]) return;
+    if (_blobCache[blobKey]) return "already";
     const existing = await idbGet("audio", blobKey);
     if (existing) {
       _blobCache[blobKey] = URL.createObjectURL(existing);
-      return;
+      _downloadedIds.add(blobKey);
+      return "already";
     }
-    const msg = _msgCache[blobKey];
-    if (!msg) return;
+    let msg = _msgCache[blobKey];
+    if (!msg) msg = await _refreshTrackMsg(groupId, trackId);
+    if (!msg) throw new Error("Track message not found");
     const doc = msg.media?.document;
-    if (!doc) return;
+    if (!doc) throw new Error("Track has no document");
     const mime = doc.mimeType || "audio/mpeg";
-    try {
+    const runDownload = async () => {
       const chunks = [];
       for await (const chunk of iterTrackDownload(groupId, trackId)) {
         chunks.push(chunk);
       }
-      if (chunks.length === 0) return;
+      if (chunks.length === 0) throw new Error("Empty download");
       const blob = new Blob(chunks, { type: mime });
       cacheTrackBlob(groupId, trackId, blob);
+    };
+    try {
+      await runDownload();
+      return "cached";
     } catch (e) {
-      console.warn("[prefetch] failed", trackId, e?.message || e);
+      const m = String(e?.message || e);
+      if (m.includes("FILE_REFERENCE")) {
+        console.warn("[prefetch] file ref expired, refreshing", trackId);
+        const refreshed = await _refreshTrackMsg(groupId, trackId);
+        if (refreshed) {
+          await runDownload();
+          return "cached";
+        }
+      }
+      throw e;
     }
   }
   function isTrackDownloaded(groupId, trackId) {
@@ -72423,25 +72467,33 @@ This will cache them in your browser and may use significant data.`
         btnDownloadAll.classList.add("downloading");
         btnDownloadAll.setAttribute("disabled", "true");
         btnDownloadAll.style.setProperty("--progress", "0");
-        let done = 0, failed = 0;
+        const toDo = notYet.length;
+        let done = 0, failed = 0, already = 0;
         const startedAt = Date.now();
+        const processed = () => done + failed + already;
         const setProgress = () => {
-          const pct = Math.round((done + failed) / notYet.length * 100);
+          const n = processed();
+          const pct = toDo ? Math.round(n / toDo * 100) : 0;
           btnDownloadAll.style.setProperty("--progress", String(pct));
-          btnDownloadAll.title = `Downloading ${done + failed}/${notYet.length} (${pct}%)`;
+          btnDownloadAll.title = `Downloading ${n}/${toDo} (${pct}%)`;
         };
         setProgress();
-        showToast(`Downloading 0/${notYet.length}\u2026`);
+        showToast(`Downloading 0/${toDo}\u2026`);
+        const failures = [];
         for (const track of notYet) {
           try {
-            await prefetchTrack(playlistGroupId, track.id);
-            done++;
+            const status = await prefetchTrack(playlistGroupId, track.id);
+            if (status === "already") already++;
+            else done++;
           } catch (e) {
             failed++;
+            const msg = String(e?.message || e);
+            failures.push({ title: track.title, id: track.id, msg });
+            console.warn("[download-all] FAIL", track.id, track.title, "\u2014", msg);
           }
           setProgress();
-          if ((done + failed) % 3 === 0 || done + failed === notYet.length) {
-            showToast(`Downloading ${done + failed}/${notYet.length}\u2026`);
+          if (processed() % 3 === 0 || processed() === toDo) {
+            showToast(`Downloading ${processed()}/${toDo}\u2026`);
             updateStorageUsage();
           }
         }
@@ -72451,7 +72503,13 @@ This will cache them in your browser and may use significant data.`
         btnDownloadAll.style.removeProperty("--progress");
         btnDownloadAll.title = "Download all tracks in this playlist";
         const secs = Math.round((Date.now() - startedAt) / 1e3);
-        showToast(`Downloaded ${done}/${notYet.length}${failed ? ` (${failed} failed)` : ""} in ${secs}s`);
+        const summary = `Downloaded ${done + already}/${toDo}` + (failed ? ` \u2014 ${failed} failed (see console)` : "") + ` in ${secs}s`;
+        showToast(summary);
+        if (failures.length > 0) {
+          console.group(`[download-all] ${failures.length} failures`);
+          for (const f of failures) console.warn(`#${f.id} "${f.title}": ${f.msg}`);
+          console.groupEnd();
+        }
         updateStorageUsage();
       });
       btnNewPlaylist.addEventListener("click", async () => {

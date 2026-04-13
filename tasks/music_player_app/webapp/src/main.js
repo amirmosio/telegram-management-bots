@@ -386,26 +386,34 @@ btnDownloadAll.addEventListener('click', async () => {
     btnDownloadAll.setAttribute('disabled', 'true');
     btnDownloadAll.style.setProperty('--progress', '0');
 
-    let done = 0, failed = 0;
+    const toDo = notYet.length;
+    let done = 0, failed = 0, already = 0;
     const startedAt = Date.now();
+    const processed = () => done + failed + already;
     const setProgress = () => {
-        const pct = Math.round(((done + failed) / notYet.length) * 100);
+        const n = processed();
+        const pct = toDo ? Math.round((n / toDo) * 100) : 0;
         btnDownloadAll.style.setProperty('--progress', String(pct));
-        btnDownloadAll.title = `Downloading ${done + failed}/${notYet.length} (${pct}%)`;
+        btnDownloadAll.title = `Downloading ${n}/${toDo} (${pct}%)`;
     };
     setProgress();
-    showToast(`Downloading 0/${notYet.length}…`);
+    showToast(`Downloading 0/${toDo}…`);
 
+    const failures = []; // track failures for diagnostics
     for (const track of notYet) {
         try {
-            await tg.prefetchTrack(playlistGroupId, track.id);
-            done++;
+            const status = await tg.prefetchTrack(playlistGroupId, track.id);
+            if (status === 'already') already++;
+            else done++;
         } catch (e) {
             failed++;
+            const msg = String(e?.message || e);
+            failures.push({ title: track.title, id: track.id, msg });
+            console.warn('[download-all] FAIL', track.id, track.title, '—', msg);
         }
         setProgress();
-        if ((done + failed) % 3 === 0 || (done + failed) === notYet.length) {
-            showToast(`Downloading ${done + failed}/${notYet.length}…`);
+        if (processed() % 3 === 0 || processed() === toDo) {
+            showToast(`Downloading ${processed()}/${toDo}…`);
             updateStorageUsage();
         }
     }
@@ -416,7 +424,15 @@ btnDownloadAll.addEventListener('click', async () => {
     btnDownloadAll.style.removeProperty('--progress');
     btnDownloadAll.title = 'Download all tracks in this playlist';
     const secs = Math.round((Date.now() - startedAt) / 1000);
-    showToast(`Downloaded ${done}/${notYet.length}${failed ? ` (${failed} failed)` : ''} in ${secs}s`);
+    const summary = `Downloaded ${done + already}/${toDo}` +
+        (failed ? ` — ${failed} failed (see console)` : '') +
+        ` in ${secs}s`;
+    showToast(summary);
+    if (failures.length > 0) {
+        console.group(`[download-all] ${failures.length} failures`);
+        for (const f of failures) console.warn(`#${f.id} "${f.title}": ${f.msg}`);
+        console.groupEnd();
+    }
     updateStorageUsage();
 });
 
