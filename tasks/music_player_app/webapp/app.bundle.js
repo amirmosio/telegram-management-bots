@@ -72384,10 +72384,16 @@ This will cache them in your browser and may use significant data.`
         _downloadAllInFlight = true;
         btnDownloadAll.classList.add("downloading");
         btnDownloadAll.setAttribute("disabled", "true");
+        btnDownloadAll.style.setProperty("--progress", "0");
         let done = 0, failed = 0;
         const startedAt = Date.now();
-        const updateToast = () => showToast(`Downloading ${done}/${notYet.length}\u2026`);
-        updateToast();
+        const setProgress = () => {
+          const pct = Math.round((done + failed) / notYet.length * 100);
+          btnDownloadAll.style.setProperty("--progress", String(pct));
+          btnDownloadAll.title = `Downloading ${done + failed}/${notYet.length} (${pct}%)`;
+        };
+        setProgress();
+        showToast(`Downloading 0/${notYet.length}\u2026`);
         for (const track of notYet) {
           try {
             await prefetchTrack(playlistGroupId, track.id);
@@ -72395,11 +72401,16 @@ This will cache them in your browser and may use significant data.`
           } catch (e) {
             failed++;
           }
-          if (done % 3 === 0 || done === notYet.length) updateToast();
+          setProgress();
+          if ((done + failed) % 3 === 0 || done + failed === notYet.length) {
+            showToast(`Downloading ${done + failed}/${notYet.length}\u2026`);
+          }
         }
         _downloadAllInFlight = false;
         btnDownloadAll.classList.remove("downloading");
         btnDownloadAll.removeAttribute("disabled");
+        btnDownloadAll.style.removeProperty("--progress");
+        btnDownloadAll.title = "Download all tracks in this playlist";
         const secs = Math.round((Date.now() - startedAt) / 1e3);
         showToast(`Downloaded ${done}/${notYet.length}${failed ? ` (${failed} failed)` : ""} in ${secs}s`);
       });

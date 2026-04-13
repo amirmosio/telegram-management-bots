@@ -219,13 +219,32 @@ html, body {
     flex-shrink: 0;
     color: var(--text-secondary);
     transition: color 0.15s;
+    position: relative;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 #btn-download-all:hover { color: var(--accent); }
-#btn-download-all.downloading {
-    color: var(--accent);
-    animation: shuffle-drain-pulse 1.2s ease-in-out infinite;
+
+/* Circular progress ring around the download icon while downloading.
+   Driven by --progress (0-100), updated from JS after each track. */
+#btn-download-all.downloading { color: var(--accent); }
+#btn-download-all.downloading::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background:
+        conic-gradient(var(--accent) calc(var(--progress, 0) * 1%), var(--border) 0);
+    -webkit-mask: radial-gradient(circle, transparent 60%, #000 62%);
+            mask: radial-gradient(circle, transparent 60%, #000 62%);
+    transition: background 0.15s linear;
+    pointer-events: none;
 }
-#btn-download-all[disabled] { opacity: 0.5; pointer-events: none; }
+#btn-download-all.downloading svg { position: relative; z-index: 1; }
+#btn-download-all[disabled] { opacity: 0.9; pointer-events: none; cursor: default; }
 
 .search-bar input {
     width: 100%;
