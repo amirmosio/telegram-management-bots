@@ -70436,9 +70436,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   async function idbPut(store, key, value) {
     try {
       const db = await openDB();
-      const tx = db.transaction(store, "readwrite");
-      tx.objectStore(store).put(value, key);
-    } catch {
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(store, "readwrite");
+        const req = tx.objectStore(store).put(value, key);
+        req.onerror = () => reject(req.error || new Error("idb-put-req-failed"));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error || new Error("idb-put-tx-failed"));
+        tx.onabort = () => reject(tx.error || new Error("idb-put-tx-aborted"));
+      });
+    } catch (e) {
+      console.warn("[idb] put failed", store, key, e?.message || e);
+      throw e;
     }
   }
   async function idbGetAllKeys(store) {
@@ -70454,6 +70462,32 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       return [];
     }
   }
+  async function idbCount(store) {
+    try {
+      const db = await openDB();
+      return await new Promise((resolve) => {
+        const tx = db.transaction(store, "readonly");
+        const req = tx.objectStore(store).count();
+        req.onsuccess = () => resolve(req.result ?? 0);
+        req.onerror = () => resolve(0);
+      });
+    } catch {
+      return 0;
+    }
+  }
+  async function idbDelete(store, key) {
+    try {
+      const db = await openDB();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(store, "readwrite");
+        tx.objectStore(store).delete(key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch {
+      return false;
+    }
+  }
   var import_process2, DB_NAME, DB_VERSION, STORES, _db;
   var init_idb_cache = __esm({
     "src/idb-cache.js"() {
@@ -70467,6 +70501,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   });
 
   // src/telegram.js
+  async function countCachedTracks() {
+    return idbCount("audio");
+  }
   async function initClient() {
     if (_initPromise) return _initPromise;
     _initPromise = (async () => {
@@ -70956,7 +70993,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
       if (chunks.length === 0) throw new Error("Empty download");
       const blob = new Blob(chunks, { type: mime });
-      cacheTrackBlob(groupId, trackId, blob);
+      await cacheTrackBlob(groupId, trackId, blob);
     };
     try {
       await runDownload();
@@ -71018,16 +71055,21 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
-  function cacheTrackBlob(groupId, trackId, blob) {
+  async function cacheTrackBlob(groupId, trackId, blob) {
     const blobKey = `${groupId}:${trackId}`;
     const url = URL.createObjectURL(blob);
     _blobCache[blobKey] = url;
-    idbPut("audio", blobKey, blob);
-    _downloadedIds.add(blobKey);
-    idbPut("downloaded_index", blobKey, 1);
     try {
-      window.dispatchEvent(new CustomEvent("track-downloaded", { detail: { groupId, trackId } }));
-    } catch {
+      await idbPut("audio", blobKey, blob);
+      await idbPut("downloaded_index", blobKey, 1);
+      _downloadedIds.add(blobKey);
+      try {
+        window.dispatchEvent(new CustomEvent("track-downloaded", { detail: { groupId, trackId } }));
+      } catch {
+      }
+    } catch (e) {
+      console.warn("[cache] failed to persist", blobKey, e?.message || e);
+      throw e;
     }
     return url;
   }
@@ -71698,9 +71740,36 @@ ${JSON.stringify(state)}`;
       _drainGeneration = 0;
       (async () => {
         try {
-          const keys = await idbGetAllKeys("downloaded_index");
-          for (const k of keys) _downloadedIds.add(k);
-        } catch {
+          const [audioKeys, indexKeys] = await Promise.all([
+            idbGetAllKeys("audio"),
+            idbGetAllKeys("downloaded_index")
+          ]);
+          const audioSet = new Set(audioKeys);
+          const indexSet = new Set(indexKeys);
+          let removed = 0;
+          for (const k of indexKeys) {
+            if (!audioSet.has(k)) {
+              await idbDelete("downloaded_index", k);
+              removed++;
+            }
+          }
+          let added = 0;
+          for (const k of audioKeys) {
+            if (!indexSet.has(k)) {
+              try {
+                await idbPut("downloaded_index", k, 1);
+                added++;
+              } catch {
+              }
+            }
+          }
+          _downloadedIds = new Set(audioKeys);
+          if (removed || added) {
+            console.log("[cache] reconciled downloaded_index: +" + added + " -" + removed);
+          }
+          console.log("[cache] audio blobs:", audioKeys.length);
+        } catch (e) {
+          console.warn("[cache] init reconcile failed:", e?.message || e);
         }
       })();
       _initPromise = null;
@@ -72395,20 +72464,30 @@ ${JSON.stringify(state)}`;
       }
       var storageUsageEl = $("storage-usage");
       async function updateStorageUsage() {
-        if (!storageUsageEl || !navigator.storage?.estimate) return;
+        if (!storageUsageEl) return;
+        const parts = [];
         try {
-          const { usage = 0, quota = 0 } = await navigator.storage.estimate();
-          if (!quota) {
-            storageUsageEl.textContent = _formatBytes(usage);
-            return;
-          }
-          const pct = usage / quota;
-          storageUsageEl.textContent = `${_formatBytes(usage)} / ${_formatBytes(quota)}`;
-          storageUsageEl.classList.toggle("warn", pct >= 0.7 && pct < 0.9);
-          storageUsageEl.classList.toggle("crit", pct >= 0.9);
-          storageUsageEl.title = `Browser storage used: ${(pct * 100).toFixed(1)}% of quota`;
+          const count = await countCachedTracks();
+          parts.push(`${count} track${count === 1 ? "" : "s"}`);
         } catch {
         }
+        if (navigator.storage?.estimate) {
+          try {
+            const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+            if (quota) {
+              parts.push(`${_formatBytes(usage)} / ${_formatBytes(quota)}`);
+              const pct = usage / quota;
+              storageUsageEl.classList.toggle("warn", pct >= 0.7 && pct < 0.9);
+              storageUsageEl.classList.toggle("crit", pct >= 0.9);
+              storageUsageEl.title = `Cached audio: ${parts[0]}
+Browser storage: ${(pct * 100).toFixed(1)}% of quota`;
+            } else {
+              parts.push(_formatBytes(usage));
+            }
+          } catch {
+          }
+        }
+        storageUsageEl.textContent = parts.join(" \xB7 ");
       }
       playlistTracksSearch.addEventListener("input", () => {
         clearTimeout(browseSearchTimeout);
@@ -73018,8 +73097,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               if (!cachedToIdb && _totalFilled(localFilled) >= fileSize) {
                 cachedToIdb = true;
                 const blob = new Blob([localBuffer], { type: mime });
-                cacheTrackBlob(gId, track.id, blob);
-                console.log("[stream] cached complete track to IDB");
+                cacheTrackBlob(gId, track.id, blob).then(() => console.log("[stream] cached complete track to IDB")).catch((e) => console.warn("[stream] cache failed:", e?.message || e));
               }
             }
           } catch (e) {

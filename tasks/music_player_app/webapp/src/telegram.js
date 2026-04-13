@@ -7,7 +7,7 @@ import { StringSession } from 'telegram/sessions';
 import { Api } from 'telegram/tl';
 import { Buffer } from 'buffer';
 import bigInt from 'big-integer';
-import { idbGet, idbPut, idbGetAllKeys } from './idb-cache.js';
+import { idbGet, idbPut, idbGetAllKeys, idbCount, idbDelete } from './idb-cache.js';
 
 // Make Buffer available globally for GramJS browser compat
 if (typeof window !== 'undefined') {
@@ -29,13 +29,51 @@ let _downloadedIds = new Set(); // `${groupId}:${trackId}` for rows already in I
 let _drainGeneration = 0; // cancellation token for loadAllTracks
 
 // Preload the set of already-downloaded track ids from IDB so the sidebar
-// can render a "downloaded" marker on first paint.
+// can render a "downloaded" marker on first paint. Also reconciles the
+// downloaded_index with the audio store so mismatches (e.g. from an older
+// version that didn't await writes) heal automatically.
 (async () => {
     try {
-        const keys = await idbGetAllKeys('downloaded_index');
-        for (const k of keys) _downloadedIds.add(k);
-    } catch { /* ignore */ }
+        const [audioKeys, indexKeys] = await Promise.all([
+            idbGetAllKeys('audio'),
+            idbGetAllKeys('downloaded_index'),
+        ]);
+        const audioSet = new Set(audioKeys);
+        const indexSet = new Set(indexKeys);
+
+        // Any key in downloaded_index but missing from audio was a phantom
+        // — drop it so the green checkmark disappears.
+        let removed = 0;
+        for (const k of indexKeys) {
+            if (!audioSet.has(k)) {
+                await idbDelete('downloaded_index', k);
+                removed++;
+            }
+        }
+
+        // Any audio blob missing from the index — fix it up silently.
+        let added = 0;
+        for (const k of audioKeys) {
+            if (!indexSet.has(k)) {
+                try { await idbPut('downloaded_index', k, 1); added++; } catch {}
+            }
+        }
+
+        // Rebuild the in-memory set from the authoritative audio store.
+        _downloadedIds = new Set(audioKeys);
+
+        if (removed || added) {
+            console.log('[cache] reconciled downloaded_index: +' + added + ' -' + removed);
+        }
+        console.log('[cache] audio blobs:', audioKeys.length);
+    } catch (e) {
+        console.warn('[cache] init reconcile failed:', e?.message || e);
+    }
 })();
+
+export async function countCachedTracks() {
+    return idbCount('audio');
+}
 
 
 // ════════════════════════════════════
@@ -621,7 +659,7 @@ export async function prefetchTrack(groupId, trackId) {
         }
         if (chunks.length === 0) throw new Error('Empty download');
         const blob = new Blob(chunks, { type: mime });
-        cacheTrackBlob(groupId, trackId, blob);
+        await cacheTrackBlob(groupId, trackId, blob);
     };
 
     try {
@@ -702,15 +740,23 @@ export async function getCachedTrackUrl(groupId, trackId) {
     return null;
 }
 
-// Cache a completed blob and store in IDB
-export function cacheTrackBlob(groupId, trackId, blob) {
+// Cache a completed blob. The in-memory URL is set immediately so playback
+// can start, but the IndexedDB write is awaited and only after it commits
+// do we mark the track as "downloaded". This keeps the green checkmark and
+// the downloaded_index in lockstep with the actual 'audio' store contents.
+export async function cacheTrackBlob(groupId, trackId, blob) {
     const blobKey = `${groupId}:${trackId}`;
     const url = URL.createObjectURL(blob);
     _blobCache[blobKey] = url;
-    idbPut('audio', blobKey, blob);
-    _downloadedIds.add(blobKey);
-    idbPut('downloaded_index', blobKey, 1);
-    try { window.dispatchEvent(new CustomEvent('track-downloaded', { detail: { groupId, trackId } })); } catch {}
+    try {
+        await idbPut('audio', blobKey, blob);
+        await idbPut('downloaded_index', blobKey, 1);
+        _downloadedIds.add(blobKey);
+        try { window.dispatchEvent(new CustomEvent('track-downloaded', { detail: { groupId, trackId } })); } catch {}
+    } catch (e) {
+        console.warn('[cache] failed to persist', blobKey, e?.message || e);
+        throw e;
+    }
     return url;
 }
 

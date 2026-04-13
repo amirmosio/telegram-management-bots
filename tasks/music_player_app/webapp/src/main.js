@@ -317,16 +317,27 @@ function _formatBytes(n) {
 
 const storageUsageEl = $('storage-usage');
 async function updateStorageUsage() {
-    if (!storageUsageEl || !navigator.storage?.estimate) return;
+    if (!storageUsageEl) return;
+    const parts = [];
     try {
-        const { usage = 0, quota = 0 } = await navigator.storage.estimate();
-        if (!quota) { storageUsageEl.textContent = _formatBytes(usage); return; }
-        const pct = usage / quota;
-        storageUsageEl.textContent = `${_formatBytes(usage)} / ${_formatBytes(quota)}`;
-        storageUsageEl.classList.toggle('warn', pct >= 0.7 && pct < 0.9);
-        storageUsageEl.classList.toggle('crit', pct >= 0.9);
-        storageUsageEl.title = `Browser storage used: ${(pct * 100).toFixed(1)}% of quota`;
-    } catch { /* ignore */ }
+        const count = await tg.countCachedTracks();
+        parts.push(`${count} track${count === 1 ? '' : 's'}`);
+    } catch {}
+    if (navigator.storage?.estimate) {
+        try {
+            const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+            if (quota) {
+                parts.push(`${_formatBytes(usage)} / ${_formatBytes(quota)}`);
+                const pct = usage / quota;
+                storageUsageEl.classList.toggle('warn', pct >= 0.7 && pct < 0.9);
+                storageUsageEl.classList.toggle('crit', pct >= 0.9);
+                storageUsageEl.title = `Cached audio: ${parts[0]}\nBrowser storage: ${(pct * 100).toFixed(1)}% of quota`;
+            } else {
+                parts.push(_formatBytes(usage));
+            }
+        } catch {}
+    }
+    storageUsageEl.textContent = parts.join(' · ');
 }
 
 playlistTracksSearch.addEventListener('input', () => {
@@ -1022,8 +1033,9 @@ async function _streamWithSeek(track, gen, sw) {
                 if (!cachedToIdb && _totalFilled(localFilled) >= fileSize) {
                     cachedToIdb = true;
                     const blob = new Blob([localBuffer], { type: mime });
-                    tg.cacheTrackBlob(gId, track.id, blob);
-                    console.log('[stream] cached complete track to IDB');
+                    tg.cacheTrackBlob(gId, track.id, blob)
+                        .then(() => console.log('[stream] cached complete track to IDB'))
+                        .catch(e => console.warn('[stream] cache failed:', e?.message || e));
                 }
             }
         } catch (e) {
