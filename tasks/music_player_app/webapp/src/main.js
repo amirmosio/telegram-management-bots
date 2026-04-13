@@ -319,6 +319,15 @@ async function _requestPersistentStorage() {
 }
 _requestPersistentStorage();
 
+// When the browser regains connectivity, re-run the data fetches so the
+// browse and playlist tabs pick up the latest remote state. Both tabs
+// render from IDB when offline, so this is how they come back in sync.
+window.addEventListener('online', () => {
+    console.log('[online] refreshing groups + playlists');
+    try { loadGroups(); } catch {}
+    try { if (playlistGroupId) loadPlaylists(); } catch {}
+});
+
 // Runtime detection helpers
 function _isStandalone() {
     return window.matchMedia('(display-mode: standalone)').matches ||
@@ -2008,10 +2017,13 @@ async function restoreSession() {
         }
 
             if (!s.playerGroupId || !s.currentTrackId) {
-            // No local state — try Telegram sync
+            // No local state — try Telegram sync (best effort, short timeout)
             if (playlistGroupId) {
                 try {
-                    const remote = await tg.getSyncState(playlistGroupId);
+                    const remote = await Promise.race([
+                        tg.getSyncState(playlistGroupId),
+                        new Promise((resolve) => setTimeout(() => resolve(null), 3500)),
+                    ]);
                     if (remote?.gId && remote?.trk) {
                         s.playerGroupId = remote.gId;
                         s.playerTopicId = remote.tId || null;
@@ -2030,7 +2042,10 @@ async function restoreSession() {
         // ── 2. Check Telegram for newer state from another device ──
         if (playlistGroupId) {
             try {
-                const remote = await tg.getSyncState(playlistGroupId);
+                const remote = await Promise.race([
+                    tg.getSyncState(playlistGroupId),
+                    new Promise((resolve) => setTimeout(() => resolve(null), 3500)),
+                ]);
                 const localTs = parseInt(localStorage.getItem('last_sync_ts') || '0', 10);
                 if (remote?.ts > localTs && remote?.gId && remote?.trk) {
                     s.playerGroupId = remote.gId;

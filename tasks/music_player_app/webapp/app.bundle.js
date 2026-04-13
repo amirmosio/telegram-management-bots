@@ -70719,9 +70719,21 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   async function _getEntity(groupId) {
     if (_groupsCache[groupId]) return _groupsCache[groupId];
     await _ensureConnected();
-    const entity = await client.getEntity(groupId);
+    if (!client.connected) throw new Error("not-connected");
+    const entity = await _withTimeout(
+      client.getEntity(groupId),
+      4e3,
+      new Error("getEntity timeout")
+    );
     _groupsCache[groupId] = entity;
     return entity;
+  }
+  function _withTimeout(promise, ms, onTimeout) {
+    let t;
+    const timeoutP = new Promise((_, reject) => {
+      t = setTimeout(() => reject(onTimeout || new Error("timeout")), ms);
+    });
+    return Promise.race([promise, timeoutP]).finally(() => clearTimeout(t));
   }
   async function getGroupPhoto(groupId) {
     const cacheKey = `groupPhoto:${groupId}`;
@@ -71651,6 +71663,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function saveSyncState(groupId, state) {
     await _ensureConnected();
+    if (!client.connected) return;
     const entity = await _getEntity(groupId);
     const peer = await client.getInputEntity(groupId);
     const text = `\u{1F3B5} Now Playing: ${state.title || "Unknown"}${state.artist ? " - " + state.artist : ""}
@@ -71685,30 +71698,43 @@ ${JSON.stringify(state)}`;
   }
   async function getSyncState(groupId) {
     await _ensureConnected();
-    const entity = await _getEntity(groupId);
+    if (!client.connected) return null;
+    let entity;
+    try {
+      entity = await _getEntity(groupId);
+    } catch (e) {
+      return null;
+    }
     const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
     if (cachedId) {
       try {
-        const msgs = await client.getMessages(entity, { ids: [cachedId] });
+        const msgs = await _withTimeout(
+          client.getMessages(entity, { ids: [cachedId] }),
+          3e3
+        );
         const msg = msgs?.[0];
         if (msg?.message?.startsWith("\u{1F3B5}")) {
           const json = msg.message.split("\n").slice(1).join("\n");
           return JSON.parse(json);
         }
       } catch (e) {
-        localStorage.removeItem(SYNC_MSG_KEY);
+        if (e?.message !== "timeout") localStorage.removeItem(SYNC_MSG_KEY);
       }
     }
     try {
-      for await (const msg of client.iterMessages(entity, { limit: 15, replyTo: 1 })) {
-        if (msg.message?.startsWith("\u{1F3B5}") && msg.message.includes("{")) {
-          localStorage.setItem(SYNC_MSG_KEY, String(msg.id));
-          const json = msg.message.split("\n").slice(1).join("\n");
-          return JSON.parse(json);
+      const iter = (async () => {
+        for await (const msg of client.iterMessages(entity, { limit: 15, replyTo: 1 })) {
+          if (msg.message?.startsWith("\u{1F3B5}") && msg.message.includes("{")) {
+            localStorage.setItem(SYNC_MSG_KEY, String(msg.id));
+            const json = msg.message.split("\n").slice(1).join("\n");
+            return JSON.parse(json);
+          }
         }
-      }
+        return null;
+      })();
+      return await _withTimeout(iter, 4e3);
     } catch (e) {
-      console.warn("getSyncState search failed:", e.message);
+      console.warn("getSyncState search failed:", e?.message || e);
     }
     return null;
   }
@@ -72468,6 +72494,17 @@ ${JSON.stringify(state)}`;
         }
       }
       _requestPersistentStorage();
+      window.addEventListener("online", () => {
+        console.log("[online] refreshing groups + playlists");
+        try {
+          loadGroups();
+        } catch {
+        }
+        try {
+          if (playlistGroupId) loadPlaylists();
+        } catch {
+        }
+      });
       function _isStandalone() {
         return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
       }
@@ -74003,7 +74040,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           if (!s.playerGroupId || !s.currentTrackId) {
             if (playlistGroupId) {
               try {
-                const remote = await getSyncState(playlistGroupId);
+                const remote = await Promise.race([
+                  getSyncState(playlistGroupId),
+                  new Promise((resolve) => setTimeout(() => resolve(null), 3500))
+                ]);
                 if (remote?.gId && remote?.trk) {
                   s.playerGroupId = remote.gId;
                   s.playerTopicId = remote.tId || null;
@@ -74028,7 +74068,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
           if (playlistGroupId) {
             try {
-              const remote = await getSyncState(playlistGroupId);
+              const remote = await Promise.race([
+                getSyncState(playlistGroupId),
+                new Promise((resolve) => setTimeout(() => resolve(null), 3500))
+              ]);
               const localTs = parseInt(localStorage.getItem("last_sync_ts") || "0", 10);
               if (remote?.ts > localTs && remote?.gId && remote?.trk) {
                 s.playerGroupId = remote.gId;

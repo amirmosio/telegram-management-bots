@@ -333,9 +333,27 @@ export async function searchGroups(keyword) {
 async function _getEntity(groupId) {
     if (_groupsCache[groupId]) return _groupsCache[groupId];
     await _ensureConnected();
-    const entity = await client.getEntity(groupId);
+    // Fail fast when offline so callers (listTopics, scanTracks, …) can
+    // hit their IDB fallback branches immediately instead of hanging on a
+    // real Telegram API call that will never complete.
+    if (!client.connected) throw new Error('not-connected');
+    const entity = await _withTimeout(
+        client.getEntity(groupId),
+        4000,
+        new Error('getEntity timeout'),
+    );
     _groupsCache[groupId] = entity;
     return entity;
+}
+
+// Generic timeout wrapper. Rejects with `onTimeout` if the underlying
+// promise doesn't settle within `ms` milliseconds.
+function _withTimeout(promise, ms, onTimeout) {
+    let t;
+    const timeoutP = new Promise((_, reject) => {
+        t = setTimeout(() => reject(onTimeout || new Error('timeout')), ms);
+    });
+    return Promise.race([promise, timeoutP]).finally(() => clearTimeout(t));
 }
 
 export async function getGroupPhoto(groupId) {
@@ -1346,6 +1364,7 @@ const SYNC_MSG_KEY = 'sync_msg_id';
 
 export async function saveSyncState(groupId, state) {
     await _ensureConnected();
+    if (!client.connected) return; // offline — silently skip
     const entity = await _getEntity(groupId);
     const peer = await client.getInputEntity(groupId);
     const text = `🎵 Now Playing: ${state.title || 'Unknown'}${state.artist ? ' - ' + state.artist : ''}\n${JSON.stringify(state)}`;
@@ -1387,34 +1406,49 @@ export async function saveSyncState(groupId, state) {
 
 export async function getSyncState(groupId) {
     await _ensureConnected();
-    const entity = await _getEntity(groupId);
+    if (!client.connected) return null; // offline — no state to report
+    let entity;
+    try {
+        entity = await _getEntity(groupId);
+    } catch (e) {
+        return null;
+    }
 
-    // Try cached message ID first
+    // Try cached message ID first (hard 3s timeout so a dodgy network can't
+    // block restoreSession or the pause handler).
     const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
     if (cachedId) {
         try {
-            const msgs = await client.getMessages(entity, { ids: [cachedId] });
+            const msgs = await _withTimeout(
+                client.getMessages(entity, { ids: [cachedId] }),
+                3000,
+            );
             const msg = msgs?.[0];
             if (msg?.message?.startsWith('🎵')) {
                 const json = msg.message.split('\n').slice(1).join('\n');
                 return JSON.parse(json);
             }
         } catch (e) {
-            localStorage.removeItem(SYNC_MSG_KEY);
+            // Timeout or real error — fall through and try the search.
+            if (e?.message !== 'timeout') localStorage.removeItem(SYNC_MSG_KEY);
         }
     }
 
     // Search recent messages in General topic for our sync message
     try {
-        for await (const msg of client.iterMessages(entity, { limit: 15, replyTo: 1 })) {
-            if (msg.message?.startsWith('🎵') && msg.message.includes('{')) {
-                localStorage.setItem(SYNC_MSG_KEY, String(msg.id));
-                const json = msg.message.split('\n').slice(1).join('\n');
-                return JSON.parse(json);
+        const iter = (async () => {
+            for await (const msg of client.iterMessages(entity, { limit: 15, replyTo: 1 })) {
+                if (msg.message?.startsWith('🎵') && msg.message.includes('{')) {
+                    localStorage.setItem(SYNC_MSG_KEY, String(msg.id));
+                    const json = msg.message.split('\n').slice(1).join('\n');
+                    return JSON.parse(json);
+                }
             }
-        }
+            return null;
+        })();
+        return await _withTimeout(iter, 4000);
     } catch (e) {
-        console.warn('getSyncState search failed:', e.message);
+        console.warn('getSyncState search failed:', e?.message || e);
     }
 
     return null;
