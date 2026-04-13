@@ -753,11 +753,19 @@ async function performSearch() {
         if (thisSearch.cancelled) return;
 
         // Search and get the parsed result list
-        const results = await tg.searchMusic(playlistGroupId, query);
+        const rawResults = await tg.searchMusic(playlistGroupId, query);
         if (thisSearch.cancelled) return;
 
+        // The bot emits a line per track with a file size (💾 X MB). Some
+        // entries in the response don't include a size — drop those so the
+        // user only sees tracks with a known, downloadable file size.
+        const results = rawResults.filter(r => r.sizeMB && r.sizeMB > 0);
+
         if (results.length === 0) {
-            searchResultsContainer.innerHTML = '<div class="lyrics-placeholder">No results found</div>';
+            const msg = rawResults.length > 0
+                ? 'No results with a listed size'
+                : 'No results found';
+            searchResultsContainer.innerHTML = `<div class="lyrics-placeholder">${msg}</div>`;
             return;
         }
 
@@ -775,7 +783,12 @@ function renderSearchResults(results, searchRef) {
     for (const item of results) {
         const el = document.createElement('div');
         el.className = 'track-item';
-        const subtitle = [item.artist, formatTime(item.duration)].filter(Boolean).join(' · ');
+        const subtitleParts = [
+            item.artist,
+            formatTime(item.duration),
+            item.sizeMB ? `${item.sizeMB.toFixed(1)} MB` : '',
+        ].filter(Boolean);
+        const subtitle = subtitleParts.join(' · ');
         el.innerHTML = `
             <div class="track-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>
             <div class="track-info"><div class="track-name">${item.title}</div><div class="track-artist">${subtitle}</div></div>
