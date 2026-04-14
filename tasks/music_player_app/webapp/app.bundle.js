@@ -71003,6 +71003,26 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   function cancelDrain() {
     _drainGeneration++;
   }
+  async function loadAllTracksForCache(groupId, topicId = null, { pauseMs = 200 } = {}) {
+    let failures = 0;
+    while (true) {
+      let page;
+      try {
+        page = await loadMoreTracks(groupId, topicId, { silentOnError: false });
+        failures = 0;
+      } catch (e) {
+        failures++;
+        if (failures >= 4) {
+          console.warn("[cache-drain] giving up after 4 failures:", e?.message || e);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 800 * failures));
+        continue;
+      }
+      if (page.length === 0) return;
+      if (pauseMs > 0) await new Promise((r) => setTimeout(r, pauseMs));
+    }
+  }
   async function getAudioTotalCount(groupId, topicId = null) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     if (_totalCountCache.has(cacheKey)) return _totalCountCache.get(cacheKey);
@@ -72553,24 +72573,22 @@ ${JSON.stringify(state)}`;
       async function _warmUpPlaylistCaches(topics) {
         if (_warmUpInFlight) return;
         _warmUpInFlight = true;
-        console.log("[warmup] caching", topics.length, "playlist track lists");
+        console.log("[warmup] caching all pages of", topics.length, "playlists");
+        const warmOne = async (topicId, label) => {
+          try {
+            await scanTracks(playlistGroupId, topicId);
+            await loadAllTracksForCache(playlistGroupId, topicId);
+          } catch (e) {
+            console.warn("[warmup] failed for", label, e?.message || e);
+          }
+        };
         try {
           for (const t of topics) {
             if (!playlistGroupId) break;
-            if (getCachedTracks(playlistGroupId, t.id).length > 0) continue;
-            try {
-              await scanTracks(playlistGroupId, t.id);
-            } catch (e) {
-              console.warn("[warmup] scan failed for topic", t.id, e?.message || e);
-            }
+            await warmOne(t.id, `topic ${t.id} (${t.title})`);
             await new Promise((r) => setTimeout(r, 400));
           }
-          if (playlistGroupId && getCachedTracks(playlistGroupId, null).length === 0) {
-            try {
-              await scanTracks(playlistGroupId, null);
-            } catch {
-            }
-          }
+          if (playlistGroupId) await warmOne(null, '"All"');
           console.log("[warmup] done");
         } finally {
           _warmUpInFlight = false;

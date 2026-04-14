@@ -681,6 +681,31 @@ export function cancelDrain() {
     _drainGeneration++;
 }
 
+// Background cache warm-up drainer — like loadAllTracks but without the
+// _drainGeneration cancellation, so it can run concurrently with shuffle's
+// own drain fallback without either cancelling the other. Sleeps `pauseMs`
+// between pages to be friendly to Telegram's flood-wait limits.
+export async function loadAllTracksForCache(groupId, topicId = null, { pauseMs = 200 } = {}) {
+    let failures = 0;
+    while (true) {
+        let page;
+        try {
+            page = await loadMoreTracks(groupId, topicId, { silentOnError: false });
+            failures = 0;
+        } catch (e) {
+            failures++;
+            if (failures >= 4) {
+                console.warn('[cache-drain] giving up after 4 failures:', e?.message || e);
+                return;
+            }
+            await new Promise(r => setTimeout(r, 800 * failures));
+            continue;
+        }
+        if (page.length === 0) return;
+        if (pauseMs > 0) await new Promise(r => setTimeout(r, pauseMs));
+    }
+}
+
 // Total number of audio messages in a group or topic. Uses messages.Search
 // with InputMessagesFilterMusic + limit=1 — the response exposes a .count
 // field on all MessagesSlice-shaped results. Cached per (groupId, topicId).
