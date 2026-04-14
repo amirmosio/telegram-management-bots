@@ -1181,12 +1181,17 @@ async function _downloadAndPlay(track, gen) {
     if (_playGeneration !== gen) return;
 
     if (sw && fileSize > 0) {
-        await _streamWithSeek(track, gen, sw);
-        return;
+        try {
+            await _streamWithSeek(track, gen, sw);
+            return;
+        } catch (e) {
+            console.warn('[player] streaming setup failed, falling back to full download:', e?.message || e);
+        }
     }
 
+    if (_playGeneration !== gen) return;
     // ── Fallback: full download then play ──
-    console.log('[player] no SW or unknown size, full download');
+    console.log('[player] no SW or streaming failed, full download →', track.title);
     const blobUrl = await tg.getTrackBlobUrl(gId, track.id, playerTopicId);
     if (_playGeneration !== gen) return;
     audio.src = blobUrl;
@@ -2369,24 +2374,28 @@ function setUserProfile(user) {
 }
 
 (async function boot() {
-    // Fast path: if we have a saved Telegram session + cached user, render
-    // the app shell immediately. This means the UI works even when offline:
-    // the network-dependent auth check happens in the background and only
-    // bumps us to the login screen if the server actually reports logged-out.
-    const cachedUser = tg.getCachedUser();
-    if (tg.hasSavedSession() && cachedUser) {
+    // Fast path: if we have a saved Telegram session, render the app shell
+    // immediately. We don't gate on cached_user — users who logged in before
+    // that storage key existed would otherwise be stuck on the login screen
+    // when they open the app offline.
+    //
+    // If cached_user is missing we render with a placeholder profile; the
+    // background checkAuth() will populate the real user when online.
+    if (tg.hasSavedSession()) {
+        const cachedUser = tg.getCachedUser() || { first_name: 'You', last_name: '', username: '' };
         showApp();
         setUserProfile(cachedUser);
         initAfterLogin();
-        // Background auth refresh — don't await, don't block UI.
+        // Background auth refresh — don't await, don't block UI. Only force
+        // logout when the server gives a definitive "not logged in" answer;
+        // offline/transient failures leave the app shell up.
         tg.checkAuth().then(auth => {
-            if (!auth.logged_in) {
-                // Only force logout when we got a definitive "not logged in"
-                // from the server (not a network failure — checkAuth already
-                // handles offline by returning the cached user).
+            if (auth.logged_in && auth.user) {
+                setUserProfile(auth.user);
+            } else if (!auth.logged_in && !auth.offline) {
                 showLogin();
             }
-        }).catch(() => { /* offline or transient — keep app shell up */ });
+        }).catch(() => { /* keep app shell up */ });
         return;
     }
 

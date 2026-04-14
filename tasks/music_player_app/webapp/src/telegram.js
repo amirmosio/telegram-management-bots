@@ -230,15 +230,14 @@ export async function verifyCode(phone, code) {
         const sessionStr = client.session.save();
         localStorage.setItem(SESSION_KEY, sessionStr);
         const me = await client.getMe();
-        return {
-            logged_in: true,
-            user: {
-                id: me.id?.value || me.id,
-                first_name: me.firstName || '',
-                last_name: me.lastName || '',
-                username: me.username || '',
-            },
+        const user = {
+            id: me.id?.value || me.id,
+            first_name: me.firstName || '',
+            last_name: me.lastName || '',
+            username: me.username || '',
         };
+        try { localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user)); } catch {}
+        return { logged_in: true, user };
     } catch (e) {
         if (e.message?.includes('SESSION_PASSWORD_NEEDED')) {
             return { needs_2fa: true };
@@ -256,15 +255,14 @@ export async function verify2FA(password) {
         const sessionStr = client.session.save();
         localStorage.setItem(SESSION_KEY, sessionStr);
         const me = await client.getMe();
-        return {
-            logged_in: true,
-            user: {
-                id: me.id?.value || me.id,
-                first_name: me.firstName || '',
-                last_name: me.lastName || '',
-                username: me.username || '',
-            },
+        const user = {
+            id: me.id?.value || me.id,
+            first_name: me.firstName || '',
+            last_name: me.lastName || '',
+            username: me.username || '',
         };
+        try { localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user)); } catch {}
+        return { logged_in: true, user };
     } catch (e) {
         return { logged_in: false, error: e.message };
     }

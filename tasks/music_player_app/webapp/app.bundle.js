@@ -70631,15 +70631,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       const sessionStr = client.session.save();
       localStorage.setItem(SESSION_KEY, sessionStr);
       const me = await client.getMe();
-      return {
-        logged_in: true,
-        user: {
-          id: me.id?.value || me.id,
-          first_name: me.firstName || "",
-          last_name: me.lastName || "",
-          username: me.username || ""
-        }
+      const user = {
+        id: me.id?.value || me.id,
+        first_name: me.firstName || "",
+        last_name: me.lastName || "",
+        username: me.username || ""
       };
+      try {
+        localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+      } catch {
+      }
+      return { logged_in: true, user };
     } catch (e) {
       if (e.message?.includes("SESSION_PASSWORD_NEEDED")) {
         return { needs_2fa: true };
@@ -70656,15 +70658,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       const sessionStr = client.session.save();
       localStorage.setItem(SESSION_KEY, sessionStr);
       const me = await client.getMe();
-      return {
-        logged_in: true,
-        user: {
-          id: me.id?.value || me.id,
-          first_name: me.firstName || "",
-          last_name: me.lastName || "",
-          username: me.username || ""
-        }
+      const user = {
+        id: me.id?.value || me.id,
+        first_name: me.firstName || "",
+        last_name: me.lastName || "",
+        username: me.username || ""
       };
+      try {
+        localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user));
+      } catch {
+      }
+      return { logged_in: true, user };
     } catch (e) {
       return { logged_in: false, error: e.message };
     }
@@ -73261,10 +73265,15 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const sw = await _getSWController();
         if (_playGeneration !== gen) return;
         if (sw && fileSize > 0) {
-          await _streamWithSeek(track, gen, sw);
-          return;
+          try {
+            await _streamWithSeek(track, gen, sw);
+            return;
+          } catch (e) {
+            console.warn("[player] streaming setup failed, falling back to full download:", e?.message || e);
+          }
         }
-        console.log("[player] no SW or unknown size, full download");
+        if (_playGeneration !== gen) return;
+        console.log("[player] no SW or streaming failed, full download \u2192", track.title);
         const blobUrl = await getTrackBlobUrl(gId, track.id, playerTopicId);
         if (_playGeneration !== gen) return;
         audio.src = blobUrl;
@@ -74379,13 +74388,15 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         });
       }
       (async function boot() {
-        const cachedUser = getCachedUser();
-        if (hasSavedSession() && cachedUser) {
+        if (hasSavedSession()) {
+          const cachedUser = getCachedUser() || { first_name: "You", last_name: "", username: "" };
           showApp();
           setUserProfile(cachedUser);
           initAfterLogin();
           checkAuth().then((auth) => {
-            if (!auth.logged_in) {
+            if (auth.logged_in && auth.user) {
+              setUserProfile(auth.user);
+            } else if (!auth.logged_in && !auth.offline) {
               showLogin();
             }
           }).catch(() => {
