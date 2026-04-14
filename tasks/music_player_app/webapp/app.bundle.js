@@ -70510,10 +70510,12 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       const savedSession = localStorage.getItem(SESSION_KEY) || "";
       const session = new import_sessions.StringSession(savedSession);
       client = new import_telegram.TelegramClient(session, API_ID, API_HASH, {
-        connectionRetries: 10,
+        connectionRetries: 3,
+        // was 10 — too aggressive; fed the cascade
         useWSS: true,
         autoReconnect: true,
-        retryDelay: 1e3
+        retryDelay: 2e3
+        // was 1000 — slower backoff
       });
       try {
         client.setLogLevel?.("error");
@@ -70545,16 +70547,22 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function _ensureConnected() {
     if (!client) await initClient();
-    if (!client.connected) {
+    if (client.connected) return;
+    if (!_reconnectPromise) {
       console.log("Reconnecting...");
-      try {
-        await Promise.race([
-          client.connect(),
-          new Promise((_, rej) => setTimeout(() => rej(new Error("reconnect-timeout")), 5e3))
-        ]);
-      } catch (e) {
-      }
+      _reconnectPromise = (async () => {
+        try {
+          await Promise.race([
+            client.connect(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error("reconnect-timeout")), 5e3))
+          ]);
+        } catch (e) {
+        } finally {
+          _reconnectPromise = null;
+        }
+      })();
     }
+    await _reconnectPromise;
   }
   function getCachedUser() {
     try {
@@ -70925,7 +70933,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     try {
       const entity = await _getEntity(groupId);
       const tracks = [];
-      const params = { entity, limit };
+      const params = {
+        entity,
+        limit,
+        filter: new import_tl.Api.InputMessagesFilterMusic()
+      };
       if (topicId !== null) params.replyTo = topicId;
       for await (const msg of client.iterMessages(entity, params)) {
         const meta = _extractAudioMeta(msg);
@@ -70960,7 +70972,12 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       if (silentOnError) return [];
       throw e;
     }
-    const params = { entity, limit: PAGE_SIZE, offsetId: lastTrack.id };
+    const params = {
+      entity,
+      limit: PAGE_SIZE,
+      offsetId: lastTrack.id,
+      filter: new import_tl.Api.InputMessagesFilterMusic()
+    };
     if (topicId !== null) params.replyTo = topicId;
     const newTracks = [];
     try {
@@ -71011,6 +71028,10 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   function cancelDrain() {
     _drainGeneration++;
   }
+  function _isExhaustionError(e) {
+    const m = String(e?.message || e || "");
+    return EXHAUSTION_PATTERNS.some((p) => m.includes(p));
+  }
   async function loadAllTracksForCache(groupId, topicId = null, { pauseMs = 200 } = {}) {
     const label = `${groupId}:${topicId ?? "all"}`;
     let failures = 0;
@@ -71022,12 +71043,16 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         failures = 0;
       } catch (e) {
         failures++;
-        console.warn(`[cache-drain] ${label} page fetch failed (#${failures}):`, e?.message || e);
+        const exhausted = _isExhaustionError(e);
+        const label2 = exhausted ? "exhaustion" : "error";
+        console.warn(`[cache-drain] ${label} page fetch failed (#${failures} ${label2}):`, e?.message || e);
         if (failures >= 4) {
           console.warn(`[cache-drain] ${label} giving up after 4 failures`);
           return totalFetched;
         }
-        await new Promise((r) => setTimeout(r, 800 * failures));
+        const wait = exhausted ? 3e4 : 800 * failures;
+        console.log(`[cache-drain] ${label} backing off ${wait}ms`);
+        await new Promise((r) => setTimeout(r, wait));
         continue;
       }
       if (page.length === 0) {
@@ -71874,7 +71899,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _initPromise, CACHED_USER_KEY, PROFILE_PHOTO_KEY, _phoneCodeHash, PAGE_SIZE, _tracksCacheStale, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _initPromise, _reconnectPromise, CACHED_USER_KEY, PROFILE_PHOTO_KEY, _phoneCodeHash, PAGE_SIZE, _tracksCacheStale, EXHAUSTION_PATTERNS, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71935,11 +71960,20 @@ ${JSON.stringify(state)}`;
         }
       })();
       _initPromise = null;
+      _reconnectPromise = null;
       CACHED_USER_KEY = "cached_user";
       PROFILE_PHOTO_KEY = "__me_profile_photo__";
       _phoneCodeHash = null;
       PAGE_SIZE = 100;
       _tracksCacheStale = /* @__PURE__ */ new Set();
+      EXHAUSTION_PATTERNS = [
+        "Insufficient resources",
+        "ERR_INTERNET_DISCONNECTED",
+        "ERR_INSUFFICIENT_RESOURCES",
+        "getEntity timeout",
+        "reconnect-timeout",
+        "not-connected"
+      ];
       _totalCountCache = /* @__PURE__ */ new Map();
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
       SHARE_CHANNEL_TITLE = "TG Music Player Shared";

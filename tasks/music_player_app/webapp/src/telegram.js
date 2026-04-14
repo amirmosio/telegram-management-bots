@@ -91,10 +91,10 @@ export async function initClient() {
         const savedSession = localStorage.getItem(SESSION_KEY) || '';
         const session = new StringSession(savedSession);
         client = new TelegramClient(session, API_ID, API_HASH, {
-            connectionRetries: 10,
+            connectionRetries: 3,      // was 10 — too aggressive; fed the cascade
             useWSS: true,
             autoReconnect: true,
-            retryDelay: 1000,
+            retryDelay: 2000,          // was 1000 — slower backoff
         });
         // Silence GramJS's internal reconnect chatter ("Connection closed
         // while receiving data" + stack dumps). autoReconnect:true handles
@@ -126,17 +126,29 @@ export async function initClient() {
 
 // Ensure client is connected before any operation.
 // Uses a timeout to avoid hanging forever when the device is offline.
+// Deduplicated reconnect: if the connection is down and several callers
+// hit this simultaneously (e.g. parallel loadMoreTracks calls during the
+// warmup drain), only ONE client.connect() is in flight at a time. Without
+// this, every caller opens its own WebSocket to vesta.web.telegram.org and
+// Chrome eventually responds with net::ERR_INSUFFICIENT_RESOURCES, at which
+// point GramJS's autoReconnect amplifies the problem into a cascade.
+let _reconnectPromise = null;
 async function _ensureConnected() {
     if (!client) await initClient();
-    if (!client.connected) {
+    if (client.connected) return;
+    if (!_reconnectPromise) {
         console.log('Reconnecting...');
-        try {
-            await Promise.race([
-                client.connect(),
-                new Promise((_, rej) => setTimeout(() => rej(new Error('reconnect-timeout')), 5000)),
-            ]);
-        } catch (e) { /* callers that care should check client.connected */ }
+        _reconnectPromise = (async () => {
+            try {
+                await Promise.race([
+                    client.connect(),
+                    new Promise((_, rej) => setTimeout(() => rej(new Error('reconnect-timeout')), 5000)),
+                ]);
+            } catch (e) { /* callers that care should check client.connected */ }
+            finally { _reconnectPromise = null; }
+        })();
     }
+    await _reconnectPromise;
 }
 
 const CACHED_USER_KEY = 'cached_user';
@@ -578,7 +590,11 @@ export async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
     try {
         const entity = await _getEntity(groupId);
         const tracks = [];
-        const params = { entity, limit };
+        const params = {
+            entity,
+            limit,
+            filter: new Api.InputMessagesFilterMusic(),
+        };
         if (topicId !== null) params.replyTo = topicId;
 
         for await (const msg of client.iterMessages(entity, params)) {
@@ -614,6 +630,11 @@ export async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
 // background prefetches degrade gracefully when offline — pass
 // { silentOnError: false } to let callers distinguish "end of history"
 // from "transient error" and retry.
+//
+// Uses iterMessages with filter:InputMessagesFilterMusic so every page
+// returns 100 AUDIO messages (not 100 mixed messages that then get
+// filtered down to 5 audio). Roughly 2×-10× speedup for topics with
+// lots of non-audio traffic.
 export async function loadMoreTracks(groupId, topicId = null, { silentOnError = true } = {}) {
     const cacheKey = _trackCacheKey(groupId, topicId);
     const existing = _tracksCache[cacheKey] || [];
@@ -628,7 +649,12 @@ export async function loadMoreTracks(groupId, topicId = null, { silentOnError = 
         if (silentOnError) return [];
         throw e;
     }
-    const params = { entity, limit: PAGE_SIZE, offsetId: lastTrack.id };
+    const params = {
+        entity,
+        limit: PAGE_SIZE,
+        offsetId: lastTrack.id,
+        filter: new Api.InputMessagesFilterMusic(),
+    };
     if (topicId !== null) params.replyTo = topicId;
 
     const newTracks = [];
@@ -688,8 +714,27 @@ export function cancelDrain() {
 
 // Background cache warm-up drainer — like loadAllTracks but without the
 // _drainGeneration cancellation, so it can run concurrently with shuffle's
-// own drain fallback without either cancelling the other. Sleeps `pauseMs`
-// between pages to be friendly to Telegram's flood-wait limits.
+// own drain fallback without either cancelling the other.
+//
+// Behavior notes:
+//  - pauseMs between pages keeps us under Telegram's flood-wait threshold.
+//  - Errors matching EXHAUSTION_PATTERNS (connection pile-up / internet
+//    loss / socket exhaustion) trigger a much longer 30 s backoff before
+//    retry, so Chrome has time to drain its pending-WebSocket queue and
+//    GramJS's auto-reconnect loop can actually succeed.
+const EXHAUSTION_PATTERNS = [
+    'Insufficient resources',
+    'ERR_INTERNET_DISCONNECTED',
+    'ERR_INSUFFICIENT_RESOURCES',
+    'getEntity timeout',
+    'reconnect-timeout',
+    'not-connected',
+];
+function _isExhaustionError(e) {
+    const m = String(e?.message || e || '');
+    return EXHAUSTION_PATTERNS.some(p => m.includes(p));
+}
+
 export async function loadAllTracksForCache(groupId, topicId = null, { pauseMs = 200 } = {}) {
     const label = `${groupId}:${topicId ?? 'all'}`;
     let failures = 0;
@@ -701,12 +746,16 @@ export async function loadAllTracksForCache(groupId, topicId = null, { pauseMs =
             failures = 0;
         } catch (e) {
             failures++;
-            console.warn(`[cache-drain] ${label} page fetch failed (#${failures}):`, e?.message || e);
+            const exhausted = _isExhaustionError(e);
+            const label2 = exhausted ? 'exhaustion' : 'error';
+            console.warn(`[cache-drain] ${label} page fetch failed (#${failures} ${label2}):`, e?.message || e);
             if (failures >= 4) {
                 console.warn(`[cache-drain] ${label} giving up after 4 failures`);
                 return totalFetched;
             }
-            await new Promise(r => setTimeout(r, 800 * failures));
+            const wait = exhausted ? 30000 : 800 * failures;
+            console.log(`[cache-drain] ${label} backing off ${wait}ms`);
+            await new Promise(r => setTimeout(r, wait));
             continue;
         }
         if (page.length === 0) {
