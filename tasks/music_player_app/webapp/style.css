@@ -584,6 +584,17 @@ html, body {
 
 .icon-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
 
+/* ── App version label (bottom of side panel) ── */
+#app-version {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 4px 8px 6px;
+    user-select: none;
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
 /* ── Modal ── */
 #playlist-modal,
 #confirm-modal {

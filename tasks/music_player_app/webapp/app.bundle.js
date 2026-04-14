@@ -72513,6 +72513,23 @@ ${JSON.stringify(state)}`;
         }
       }
       _requestPersistentStorage();
+      (function showAppVersion() {
+        try {
+          const el = $("app-version");
+          if (!el) return;
+          const scripts = document.querySelectorAll('script[src*="app.bundle.js"]');
+          let version = null;
+          for (const s of scripts) {
+            const m = /[?&]v=([^&]+)/.exec(s.src);
+            if (m) {
+              version = m[1];
+              break;
+            }
+          }
+          el.textContent = version ? `v${version}` : "";
+        } catch {
+        }
+      })();
       window.addEventListener("online", () => {
         console.log("[online] refreshing groups + playlists");
         try {

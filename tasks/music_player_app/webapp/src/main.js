@@ -320,6 +320,24 @@ async function _requestPersistentStorage() {
 }
 _requestPersistentStorage();
 
+// ── App version label ──
+// Shown at the bottom of the side panel in tiny font so the user can
+// confirm which build they're on. Auto-populated by reading the v= query
+// param on the app.bundle.js <script> tag — no separate constant to bump.
+(function showAppVersion() {
+    try {
+        const el = $('app-version');
+        if (!el) return;
+        const scripts = document.querySelectorAll('script[src*="app.bundle.js"]');
+        let version = null;
+        for (const s of scripts) {
+            const m = /[?&]v=([^&]+)/.exec(s.src);
+            if (m) { version = m[1]; break; }
+        }
+        el.textContent = version ? `v${version}` : '';
+    } catch { /* non-critical */ }
+})();
+
 // When the browser regains connectivity, re-run the data fetches so the
 // browse and playlist tabs pick up the latest remote state. Both tabs
 // render from IDB when offline, so this is how they come back in sync.
