@@ -96,6 +96,11 @@ export async function initClient() {
             autoReconnect: true,
             retryDelay: 1000,
         });
+        // Silence GramJS's internal reconnect chatter ("Connection closed
+        // while receiving data" + stack dumps). autoReconnect:true handles
+        // these transparently; the log spam is just noise.
+        try { client.setLogLevel?.('error'); } catch {}
+        try { client._log?.setLevel?.('none'); } catch {}
         // If the browser reports it's offline, don't even attempt a connect —
         // we'd just waste 8 seconds on a connect-timeout before the UI can
         // render the login screen or the cached app shell.
