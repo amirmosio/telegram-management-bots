@@ -8,8 +8,28 @@ import { corsFetch } from './cors-proxy.js';
 const TIMEOUT = 10000;
 const cache = {}; // `${title}|${artist}` -> url
 
+function _artworkCacheKey(title, artist = '') {
+    return `${String(title || '').toLowerCase()}|${String(artist || '').toLowerCase()}`;
+}
+
+// Cache-only lookup: returns the previously-discovered artwork URL (or null)
+// without making any network calls. Used by the sidebar track rows so they
+// can show artwork for tracks the user has played before.
+export async function getCachedArtwork(title, artist = '') {
+    const key = _artworkCacheKey(title, artist);
+    if (key in cache) return cache[key];
+    try {
+        const stored = await idbGet('artwork', key);
+        if (stored !== null && stored !== undefined) {
+            cache[key] = stored;
+            return stored;
+        }
+    } catch {}
+    return null;
+}
+
 export async function searchArtwork(title, artist = '') {
-    const key = `${title.toLowerCase()}|${artist.toLowerCase()}`;
+    const key = _artworkCacheKey(title, artist);
     if (key in cache) return cache[key];
 
     // Check IndexedDB

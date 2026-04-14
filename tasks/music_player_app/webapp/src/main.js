@@ -4,7 +4,7 @@
  */
 import * as tg from './telegram.js';
 import { searchLyrics, parseTrackInfo } from './lyrics.js';
-import { searchArtwork } from './artwork.js';
+import { searchArtwork, getCachedArtwork } from './artwork.js';
 
 // ══════════════════════════════════════
 //  STATE
@@ -889,20 +889,37 @@ function _createTrackEl(track, trackList, context) {
         ${addBtn}
     `;
 
+    // Thumb resolution order:
+    //   1. Embedded Telegram thumbnail (has_thumb)
+    //   2. Previously-cached internet artwork (iTunes/Deezer/Discogs),
+    //      looked up via the same title|artist key searchArtwork uses.
+    const _swapToImg = (url) => {
+        if (!url) return;
+        const placeholder = el.querySelector('.track-item-thumb-placeholder');
+        if (!placeholder) return;
+        const img = document.createElement('img');
+        img.className = 'track-item-thumb';
+        img.src = url;
+        img.alt = '';
+        img.loading = 'lazy';
+        img.onerror = () => { /* fall back to the already-replaced icon area */ };
+        placeholder.replaceWith(img);
+    };
+
     if (track.has_thumb) {
         tg.getThumbBlobUrl(context.groupId, track.id).then(url => {
-            if (url) {
-                const placeholder = el.querySelector('.track-item-thumb-placeholder');
-                if (placeholder) {
-                    const img = document.createElement('img');
-                    img.className = 'track-item-thumb';
-                    img.src = url;
-                    img.alt = '';
-                    img.loading = 'lazy';
-                    placeholder.replaceWith(img);
-                }
-            }
-        }).catch(() => {});
+            if (url) _swapToImg(url);
+            else _tryCachedArtwork();
+        }).catch(_tryCachedArtwork);
+    } else {
+        _tryCachedArtwork();
+    }
+
+    function _tryCachedArtwork() {
+        try {
+            const { title: t, artist: a } = parseTrackInfo(track.title, track.artist);
+            getCachedArtwork(t, a).then(url => { if (url) _swapToImg(url); }).catch(() => {});
+        } catch {}
     }
 
     el.addEventListener('click', (e) => {

@@ -72230,8 +72230,24 @@ ${JSON.stringify(state)}`;
   });
 
   // src/artwork.js
+  function _artworkCacheKey(title, artist = "") {
+    return `${String(title || "").toLowerCase()}|${String(artist || "").toLowerCase()}`;
+  }
+  async function getCachedArtwork(title, artist = "") {
+    const key = _artworkCacheKey(title, artist);
+    if (key in cache2) return cache2[key];
+    try {
+      const stored = await idbGet("artwork", key);
+      if (stored !== null && stored !== void 0) {
+        cache2[key] = stored;
+        return stored;
+      }
+    } catch {
+    }
+    return null;
+  }
   async function searchArtwork(title, artist = "") {
-    const key = `${title.toLowerCase()}|${artist.toLowerCase()}`;
+    const key = _artworkCacheKey(title, artist);
     if (key in cache2) return cache2[key];
     const cached = await idbGet("artwork", key);
     if (cached !== null) {
@@ -73085,21 +73101,36 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         <span class="track-item-duration">${formatTime(track.duration)}</span>
         ${addBtn}
     `;
+        const _swapToImg = (url) => {
+          if (!url) return;
+          const placeholder = el.querySelector(".track-item-thumb-placeholder");
+          if (!placeholder) return;
+          const img = document.createElement("img");
+          img.className = "track-item-thumb";
+          img.src = url;
+          img.alt = "";
+          img.loading = "lazy";
+          img.onerror = () => {
+          };
+          placeholder.replaceWith(img);
+        };
         if (track.has_thumb) {
           getThumbBlobUrl(context.groupId, track.id).then((url) => {
-            if (url) {
-              const placeholder = el.querySelector(".track-item-thumb-placeholder");
-              if (placeholder) {
-                const img = document.createElement("img");
-                img.className = "track-item-thumb";
-                img.src = url;
-                img.alt = "";
-                img.loading = "lazy";
-                placeholder.replaceWith(img);
-              }
-            }
-          }).catch(() => {
-          });
+            if (url) _swapToImg(url);
+            else _tryCachedArtwork();
+          }).catch(_tryCachedArtwork);
+        } else {
+          _tryCachedArtwork();
+        }
+        function _tryCachedArtwork() {
+          try {
+            const { title: t, artist: a } = parseTrackInfo(track.title, track.artist);
+            getCachedArtwork(t, a).then((url) => {
+              if (url) _swapToImg(url);
+            }).catch(() => {
+            });
+          } catch {
+          }
         }
         el.addEventListener("click", (e) => {
           if (e.target.closest(".track-add-btn")) return;
