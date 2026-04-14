@@ -246,9 +246,44 @@ async function loadPlaylists() {
         const topics = await tg.listTopics(playlistGroupId);
         playlists = [{ id: null, title: 'All', icon: '🎵', isAll: true }, ...topics];
         renderPlaylists();
+        // Warm up every playlist's track metadata in the background so
+        // users can browse any playlist offline after one online visit.
+        _warmUpPlaylistCaches(topics);
     } catch (e) {
         playlists = [{ id: null, title: 'All', icon: '🎵', isAll: true }];
         renderPlaylists();
+    }
+}
+
+// Fire-and-forget: sequentially scanTracks() each playlist so its track
+// list lands in IDB. Skips topics that already have an in-memory cache
+// (means someone already scanned them this session). Sleeps 400 ms between
+// requests to avoid Telegram flood-wait.
+let _warmUpInFlight = false;
+async function _warmUpPlaylistCaches(topics) {
+    if (_warmUpInFlight) return;
+    _warmUpInFlight = true;
+    console.log('[warmup] caching', topics.length, 'playlist track lists');
+    try {
+        for (const t of topics) {
+            if (!playlistGroupId) break;
+            // Skip if this topic's track list is already cached this session.
+            if (tg.getCachedTracks(playlistGroupId, t.id).length > 0) continue;
+            try {
+                await tg.scanTracks(playlistGroupId, t.id);
+            } catch (e) {
+                console.warn('[warmup] scan failed for topic', t.id, e?.message || e);
+            }
+            await new Promise(r => setTimeout(r, 400));
+        }
+        // Also warm up the "All" view, which uses topicId=null and is the
+        // most common entry point for cross-topic browsing.
+        if (playlistGroupId && tg.getCachedTracks(playlistGroupId, null).length === 0) {
+            try { await tg.scanTracks(playlistGroupId, null); } catch {}
+        }
+        console.log('[warmup] done');
+    } finally {
+        _warmUpInFlight = false;
     }
 }
 

@@ -72543,9 +72543,37 @@ ${JSON.stringify(state)}`;
           const topics = await listTopics(playlistGroupId);
           playlists = [{ id: null, title: "All", icon: "\u{1F3B5}", isAll: true }, ...topics];
           renderPlaylists();
+          _warmUpPlaylistCaches(topics);
         } catch (e) {
           playlists = [{ id: null, title: "All", icon: "\u{1F3B5}", isAll: true }];
           renderPlaylists();
+        }
+      }
+      var _warmUpInFlight = false;
+      async function _warmUpPlaylistCaches(topics) {
+        if (_warmUpInFlight) return;
+        _warmUpInFlight = true;
+        console.log("[warmup] caching", topics.length, "playlist track lists");
+        try {
+          for (const t of topics) {
+            if (!playlistGroupId) break;
+            if (getCachedTracks(playlistGroupId, t.id).length > 0) continue;
+            try {
+              await scanTracks(playlistGroupId, t.id);
+            } catch (e) {
+              console.warn("[warmup] scan failed for topic", t.id, e?.message || e);
+            }
+            await new Promise((r) => setTimeout(r, 400));
+          }
+          if (playlistGroupId && getCachedTracks(playlistGroupId, null).length === 0) {
+            try {
+              await scanTracks(playlistGroupId, null);
+            } catch {
+            }
+          }
+          console.log("[warmup] done");
+        } finally {
+          _warmUpInFlight = false;
         }
       }
       function renderPlaylists() {
