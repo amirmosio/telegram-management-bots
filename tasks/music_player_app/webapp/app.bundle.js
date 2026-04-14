@@ -70407,6 +70407,12 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       const req = indexedDB.open(DB_NAME, DB_VERSION);
       req.onupgradeneeded = () => {
         const db = req.result;
+        const existing = [...db.objectStoreNames];
+        for (const name of existing) {
+          if (!STORES.includes(name)) {
+            db.deleteObjectStore(name);
+          }
+        }
         for (const name of STORES) {
           if (!db.objectStoreNames.contains(name)) {
             db.createObjectStore(name);
@@ -70475,34 +70481,129 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       return 0;
     }
   }
-  async function idbDelete(store, key) {
-    try {
-      const db = await openDB();
-      return await new Promise((resolve, reject) => {
-        const tx = db.transaction(store, "readwrite");
-        tx.objectStore(store).delete(key);
-        tx.oncomplete = () => resolve(true);
-        tx.onerror = () => reject(tx.error);
-      });
-    } catch {
-      return false;
-    }
-  }
   var import_process2, DB_NAME, DB_VERSION, STORES, _db;
   var init_idb_cache = __esm({
     "src/idb-cache.js"() {
       init_define_process_env();
       import_process2 = __toESM(require_process());
       DB_NAME = "music_cache";
-      DB_VERSION = 5;
-      STORES = ["audio", "artwork", "lyrics", "track_lists", "topics", "downloaded_index", "groups", "warmup_state"];
+      DB_VERSION = 6;
+      STORES = ["tracks"];
       _db = null;
     }
   });
 
   // src/telegram.js
   async function countCachedTracks() {
-    return idbCount("audio");
+    return idbCount(TRACKS_STORE);
+  }
+  function isTrackDownloaded(groupId, trackId) {
+    return _downloadedRecords.has(_trackKey(groupId, trackId));
+  }
+  async function listDownloadedTopics(groupId) {
+    await ready;
+    const byId = /* @__PURE__ */ new Map();
+    for (const rec of _downloadedRecords.values()) {
+      if (rec.groupId !== groupId) continue;
+      if (rec.topicId == null) continue;
+      if (!byId.has(rec.topicId)) {
+        byId.set(rec.topicId, { id: rec.topicId, title: rec.topicTitle || "Topic" });
+      }
+    }
+    return [...byId.values()];
+  }
+  async function listDownloadedTracksInTopic(groupId, topicId) {
+    await ready;
+    const out = [];
+    for (const rec of _downloadedRecords.values()) {
+      if (rec.groupId !== groupId) continue;
+      if (topicId === null || rec.topicId === topicId) out.push(rec.track);
+    }
+    out.sort((a, b) => (b.id || 0) - (a.id || 0));
+    return out;
+  }
+  async function getCachedTrackRecord(groupId, trackId) {
+    return idbGet(TRACKS_STORE, _trackKey(groupId, trackId));
+  }
+  function _deriveTopicContext(groupId, trackId, override = {}) {
+    let topicId = override.topicId;
+    let topicTitle = override.topicTitle;
+    if (topicId == null) {
+      const msg = _msgCache[_trackKey(groupId, trackId)];
+      topicId = msg?.replyTo?.replyToTopId || msg?.replyTo?.replyToMsgId || null;
+    }
+    if (topicTitle == null && topicId != null) {
+      const topic = (_topicsCache[groupId] || []).find((t) => t.id === topicId);
+      if (topic) topicTitle = topic.title;
+    }
+    return { topicId, topicTitle };
+  }
+  async function _upsertTrackRow(groupId, trackId, patch) {
+    const key = _trackKey(groupId, trackId);
+    const existing = await idbGet(TRACKS_STORE, key) || {
+      groupId,
+      trackId,
+      topicId: null,
+      topicTitle: null,
+      track: null,
+      audio: null,
+      lyrics: null,
+      artwork: null
+    };
+    const row = { ...existing, ...patch, groupId, trackId, cachedAt: Date.now() };
+    await idbPut(TRACKS_STORE, key, row);
+    if (row.audio && row.track) {
+      _downloadedRecords.set(key, {
+        groupId: row.groupId,
+        topicId: row.topicId,
+        topicTitle: row.topicTitle,
+        track: row.track
+      });
+    }
+    return row;
+  }
+  async function cacheTrack(groupId, trackId, { blob, topicId, topicTitle, track } = {}) {
+    const key = _trackKey(groupId, trackId);
+    const url = URL.createObjectURL(blob);
+    _blobCache[key] = url;
+    const ctx = _deriveTopicContext(groupId, trackId, { topicId, topicTitle });
+    const patch = { audio: blob };
+    if (track) patch.track = track;
+    if (ctx.topicId != null) patch.topicId = ctx.topicId;
+    if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;
+    try {
+      await _upsertTrackRow(groupId, trackId, patch);
+      try {
+        window.dispatchEvent(new CustomEvent("track-downloaded", { detail: { groupId, trackId } }));
+      } catch {
+      }
+    } catch (e) {
+      console.warn("[cache] cacheTrack failed", key, e?.message || e);
+      throw e;
+    }
+    return url;
+  }
+  async function updateTrackLyrics(groupId, trackId, lyrics, context = {}) {
+    const ctx = _deriveTopicContext(groupId, trackId, context);
+    const patch = { lyrics };
+    if (context.track) patch.track = context.track;
+    if (ctx.topicId != null) patch.topicId = ctx.topicId;
+    if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;
+    try {
+      await _upsertTrackRow(groupId, trackId, patch);
+    } catch {
+    }
+  }
+  async function updateTrackArtwork(groupId, trackId, artworkBlob, context = {}) {
+    const ctx = _deriveTopicContext(groupId, trackId, context);
+    const patch = { artwork: artworkBlob };
+    if (context.track) patch.track = context.track;
+    if (ctx.topicId != null) patch.topicId = ctx.topicId;
+    if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;
+    try {
+      await _upsertTrackRow(groupId, trackId, patch);
+    } catch {
+    }
   }
   async function initClient() {
     if (_initPromise) return _initPromise;
@@ -70609,14 +70710,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return { logged_in: false };
   }
-  async function getCachedProfilePhotoUrl() {
-    try {
-      const blob = await idbGet("artwork", PROFILE_PHOTO_KEY);
-      if (blob) return URL.createObjectURL(blob);
-    } catch {
-    }
-    return null;
-  }
   async function getMyProfilePhoto() {
     await _ensureConnected();
     if (!client?.connected) return null;
@@ -70625,10 +70718,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       const photo = await client.downloadProfilePhoto(me);
       if (photo && photo.length > 0) {
         const blob = new Blob([photo], { type: "image/jpeg" });
-        try {
-          await idbPut("artwork", PROFILE_PHOTO_KEY, blob);
-        } catch {
-        }
         return URL.createObjectURL(blob);
       }
     } catch (e) {
@@ -70717,30 +70806,23 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     return entity instanceof import_tl.Api.Channel;
   }
   async function listGroups(limit = 30) {
-    try {
-      await _ensureConnected();
-      if (!client.connected) throw new Error("not-connected");
-      const dialogs = await client.getDialogs({ limit });
-      const groups = [];
-      for (const d of dialogs) {
-        const entity = d.entity;
-        if (!_isGroup(entity)) continue;
-        const g = {
-          id: _entityId(entity),
-          title: entity.title || String(entity.id),
-          type: _isChannel(entity) ? "channel" : "group",
-          forum: !!entity.forum
-        };
-        _groupsCache[g.id] = entity;
-        groups.push(g);
-      }
-      if (groups.length > 0) idbPut("groups", "list", groups);
-      return groups;
-    } catch (e) {
-      const cached = await idbGet("groups", "list");
-      if (cached) return cached;
-      throw e;
+    await _ensureConnected();
+    if (!client.connected) return [];
+    const dialogs = await client.getDialogs({ limit });
+    const groups = [];
+    for (const d of dialogs) {
+      const entity = d.entity;
+      if (!_isGroup(entity)) continue;
+      const g = {
+        id: _entityId(entity),
+        title: entity.title || String(entity.id),
+        type: _isChannel(entity) ? "channel" : "group",
+        forum: !!entity.forum
+      };
+      _groupsCache[g.id] = entity;
+      groups.push(g);
     }
+    return groups;
   }
   async function searchGroups(keyword) {
     await _ensureConnected();
@@ -70796,17 +70878,16 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
+  async function _topicsFromDownloads(groupId) {
+    const downloaded = await listDownloadedTopics(groupId);
+    return downloaded.map((t) => ({ id: t.id, title: t.title, icon: "\u{1F3B5}" }));
+  }
   async function listTopics(groupId) {
     let entity;
     try {
       entity = await _getEntity(groupId);
     } catch (e) {
-      const cached = await idbGet("topics", String(groupId));
-      if (cached) {
-        _topicsCache[groupId] = cached;
-        return cached;
-      }
-      throw e;
+      return _topicsFromDownloads(groupId);
     }
     const topics = [];
     try {
@@ -70863,15 +70944,10 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
       }
     } catch (e) {
-      console.error("GetForumTopics failed:", e);
-      const cached = await idbGet("topics", String(groupId));
-      if (cached) {
-        _topicsCache[groupId] = cached;
-        return cached;
-      }
+      console.warn("GetForumTopics failed:", e?.message || e);
+      return _topicsFromDownloads(groupId);
     }
     _topicsCache[groupId] = topics;
-    if (topics.length > 0) idbPut("topics", String(groupId), topics);
     return topics;
   }
   async function createTopic(groupId, title) {
@@ -70927,9 +71003,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
     const cacheKey = _trackCacheKey(groupId, topicId);
-    if (_tracksCache[cacheKey] && !_tracksCacheStale.has(cacheKey)) {
-      return _tracksCache[cacheKey];
-    }
+    if (_tracksCache[cacheKey]) return _tracksCache[cacheKey];
     try {
       const entity = await _getEntity(groupId);
       const tracks = [];
@@ -70947,17 +71021,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
       }
       _tracksCache[cacheKey] = tracks;
-      _tracksCacheStale.delete(cacheKey);
-      if (tracks.length > 0) idbPut("track_lists", cacheKey, { tracks, cachedAt: Date.now() });
       return tracks;
     } catch (e) {
-      const stored = await idbGet("track_lists", cacheKey);
-      if (stored?.tracks) {
-        _tracksCache[cacheKey] = stored.tracks;
-        _tracksCacheStale.add(cacheKey);
-        return stored.tracks;
-      }
-      throw e;
+      const downloaded = await listDownloadedTracksInTopic(groupId, topicId);
+      _tracksCache[cacheKey] = downloaded;
+      return downloaded;
     }
   }
   async function loadMoreTracks(groupId, topicId = null, { silentOnError = true } = {}) {
@@ -70994,7 +71062,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     existing.push(...newTracks);
     _tracksCache[cacheKey] = existing;
-    if (newTracks.length > 0) idbPut("track_lists", cacheKey, { tracks: existing, cachedAt: Date.now() });
     return newTracks;
   }
   async function loadAllTracks(groupId, topicId = null, onPage = null) {
@@ -71027,44 +71094,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   function cancelDrain() {
     _drainGeneration++;
-  }
-  function _isExhaustionError(e) {
-    const m = String(e?.message || e || "");
-    return EXHAUSTION_PATTERNS.some((p) => m.includes(p));
-  }
-  async function loadAllTracksForCache(groupId, topicId = null, { pauseMs = 200 } = {}) {
-    const label = `${groupId}:${topicId ?? "all"}`;
-    let failures = 0;
-    let totalFetched = 0;
-    while (true) {
-      let page;
-      try {
-        page = await loadMoreTracks(groupId, topicId, { silentOnError: false });
-        failures = 0;
-      } catch (e) {
-        failures++;
-        const exhausted = _isExhaustionError(e);
-        const label2 = exhausted ? "exhaustion" : "error";
-        console.warn(`[cache-drain] ${label} page fetch failed (#${failures} ${label2}):`, e?.message || e);
-        if (failures >= 4) {
-          console.warn(`[cache-drain] ${label} giving up after 4 failures`);
-          return totalFetched;
-        }
-        const wait = exhausted ? 3e4 : 800 * failures;
-        console.log(`[cache-drain] ${label} backing off ${wait}ms`);
-        await new Promise((r) => setTimeout(r, wait));
-        continue;
-      }
-      if (page.length === 0) {
-        const cached2 = _tracksCache[_trackCacheKey(groupId, topicId)] || [];
-        console.log(`[cache-drain] ${label} done, total=${cached2.length}`);
-        return totalFetched;
-      }
-      totalFetched += page.length;
-      const cached = _tracksCache[_trackCacheKey(groupId, topicId)] || [];
-      console.log(`[cache-drain] ${label} +${page.length} (cache=${cached.length})`);
-      if (pauseMs > 0) await new Promise((r) => setTimeout(r, pauseMs));
-    }
   }
   async function getAudioTotalCount(groupId, topicId = null) {
     const cacheKey = _trackCacheKey(groupId, topicId);
@@ -71142,13 +71171,18 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
-  async function prefetchTrack(groupId, trackId) {
-    const blobKey = `${groupId}:${trackId}`;
+  async function prefetchTrack(groupId, trackId, context = {}) {
+    const blobKey = _trackKey(groupId, trackId);
     if (_blobCache[blobKey]) return "already";
-    const existing = await idbGet("audio", blobKey);
-    if (existing) {
-      _blobCache[blobKey] = URL.createObjectURL(existing);
-      _downloadedIds.add(blobKey);
+    const existingRow = await idbGet(TRACKS_STORE, blobKey);
+    if (existingRow?.audio) {
+      _blobCache[blobKey] = URL.createObjectURL(existingRow.audio);
+      _downloadedRecords.set(blobKey, {
+        groupId: existingRow.groupId,
+        topicId: existingRow.topicId,
+        topicTitle: existingRow.topicTitle,
+        track: existingRow.track
+      });
       return "already";
     }
     let msg = _msgCache[blobKey];
@@ -71157,6 +71191,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     const doc = msg.media?.document;
     if (!doc) throw new Error("Track has no document");
     const mime = doc.mimeType || "audio/mpeg";
+    const track = context.track || _extractAudioMeta(msg);
     const runDownload = async () => {
       const chunks = [];
       for await (const chunk of iterTrackDownload(groupId, trackId)) {
@@ -71164,7 +71199,12 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
       if (chunks.length === 0) throw new Error("Empty download");
       const blob = new Blob(chunks, { type: mime });
-      await cacheTrackBlob(groupId, trackId, blob);
+      await cacheTrack(groupId, trackId, {
+        blob,
+        track,
+        topicId: context.topicId,
+        topicTitle: context.topicTitle
+      });
     };
     try {
       await runDownload();
@@ -71181,9 +71221,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
       throw e;
     }
-  }
-  function isTrackDownloaded(groupId, trackId) {
-    return _downloadedIds.has(`${groupId}:${trackId}`);
   }
   async function searchTracksInChat(groupId, topicId = null, query = "") {
     if (!query.trim()) return [];
@@ -71216,33 +71253,15 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
   }
   async function getCachedTrackUrl(groupId, trackId) {
-    const blobKey = `${groupId}:${trackId}`;
+    const blobKey = _trackKey(groupId, trackId);
     if (_blobCache[blobKey]) return _blobCache[blobKey];
-    const cached = await idbGet("audio", blobKey);
-    if (cached) {
-      const url = URL.createObjectURL(cached);
+    const row = await idbGet(TRACKS_STORE, blobKey);
+    if (row?.audio) {
+      const url = URL.createObjectURL(row.audio);
       _blobCache[blobKey] = url;
       return url;
     }
     return null;
-  }
-  async function cacheTrackBlob(groupId, trackId, blob) {
-    const blobKey = `${groupId}:${trackId}`;
-    const url = URL.createObjectURL(blob);
-    _blobCache[blobKey] = url;
-    try {
-      await idbPut("audio", blobKey, blob);
-      await idbPut("downloaded_index", blobKey, 1);
-      _downloadedIds.add(blobKey);
-      try {
-        window.dispatchEvent(new CustomEvent("track-downloaded", { detail: { groupId, trackId } }));
-      } catch {
-      }
-    } catch (e) {
-      console.warn("[cache] failed to persist", blobKey, e?.message || e);
-      throw e;
-    }
-    return url;
   }
   async function* iterTrackDownload(groupId, trackId, offset = 0) {
     const msg = _msgCache[`${groupId}:${trackId}`];
@@ -71273,18 +71292,23 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
     }
   }
-  async function getTrackBlobUrl(groupId, trackId, topicId = null) {
+  async function getTrackBlobUrl(groupId, trackId, context = {}) {
     const url = await getCachedTrackUrl(groupId, trackId);
     if (url) return url;
-    const msg = _msgCache[`${groupId}:${trackId}`];
+    const msg = _msgCache[_trackKey(groupId, trackId)];
     if (!msg) throw new Error("Track not in cache");
     await _ensureConnected();
     const buffer = await client.downloadMedia(msg);
     if (!buffer) throw new Error("Download failed");
-    const track = getCachedTracks(groupId, topicId).find((t) => t.id === trackId);
+    const track = context.track || getCachedTracks(groupId, context.topicId ?? null).find((t) => t.id === trackId) || _extractAudioMeta(msg);
     const mime = track?.mime_type || "audio/mpeg";
     const blob = new Blob([buffer], { type: mime });
-    return cacheTrackBlob(groupId, trackId, blob);
+    return cacheTrack(groupId, trackId, {
+      blob,
+      track,
+      topicId: context.topicId,
+      topicTitle: context.topicTitle
+    });
   }
   async function getThumbBlobUrl(groupId, trackId) {
     const key = `thumb:${groupId}:${trackId}`;
@@ -71899,7 +71923,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _initPromise, _reconnectPromise, CACHED_USER_KEY, PROFILE_PHOTO_KEY, _phoneCodeHash, PAGE_SIZE, _tracksCacheStale, EXHAUSTION_PATTERNS, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71923,38 +71947,24 @@ ${JSON.stringify(state)}`;
       _msgCache = {};
       _blobCache = {};
       _thumbBlobCache = {};
-      _downloadedIds = /* @__PURE__ */ new Set();
       _drainGeneration = 0;
-      (async () => {
+      TRACKS_STORE = "tracks";
+      _trackKey = (groupId, trackId) => `${groupId}:${trackId}`;
+      _downloadedRecords = /* @__PURE__ */ new Map();
+      ready = (async () => {
         try {
-          const [audioKeys, indexKeys] = await Promise.all([
-            idbGetAllKeys("audio"),
-            idbGetAllKeys("downloaded_index")
-          ]);
-          const audioSet = new Set(audioKeys);
-          const indexSet = new Set(indexKeys);
-          let removed = 0;
-          for (const k of indexKeys) {
-            if (!audioSet.has(k)) {
-              await idbDelete("downloaded_index", k);
-              removed++;
-            }
+          const keys = await idbGetAllKeys(TRACKS_STORE);
+          for (const key of keys) {
+            const row = await idbGet(TRACKS_STORE, key);
+            if (!row || !row.audio || !row.track) continue;
+            _downloadedRecords.set(key, {
+              groupId: row.groupId,
+              topicId: row.topicId,
+              topicTitle: row.topicTitle,
+              track: row.track
+            });
           }
-          let added = 0;
-          for (const k of audioKeys) {
-            if (!indexSet.has(k)) {
-              try {
-                await idbPut("downloaded_index", k, 1);
-                added++;
-              } catch {
-              }
-            }
-          }
-          _downloadedIds = new Set(audioKeys);
-          if (removed || added) {
-            console.log("[cache] reconciled downloaded_index: +" + added + " -" + removed);
-          }
-          console.log("[cache] audio blobs:", audioKeys.length);
+          console.log("[cache] downloaded tracks:", _downloadedRecords.size);
         } catch (e) {
           console.warn("[cache] init reconcile failed:", e?.message || e);
         }
@@ -71962,18 +71972,8 @@ ${JSON.stringify(state)}`;
       _initPromise = null;
       _reconnectPromise = null;
       CACHED_USER_KEY = "cached_user";
-      PROFILE_PHOTO_KEY = "__me_profile_photo__";
       _phoneCodeHash = null;
       PAGE_SIZE = 100;
-      _tracksCacheStale = /* @__PURE__ */ new Set();
-      EXHAUSTION_PATTERNS = [
-        "Insufficient resources",
-        "ERR_INTERNET_DISCONNECTED",
-        "ERR_INSUFFICIENT_RESOURCES",
-        "getEntity timeout",
-        "reconnect-timeout",
-        "not-connected"
-      ];
       _totalCountCache = /* @__PURE__ */ new Map();
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
       SHARE_CHANNEL_TITLE = "TG Music Player Shared";
@@ -72006,11 +72006,6 @@ ${JSON.stringify(state)}`;
     const { title: t, artist: a } = parseTrackInfo(title, artist);
     const key = `${t.toLowerCase()}|${a.toLowerCase()}`;
     if (cache[key]) return cache[key];
-    const cached = await idbGet("lyrics", key);
-    if (cached !== null) {
-      cache[key] = cached;
-      return cached;
-    }
     const results = await Promise.allSettled([
       tryLrclib(t, a, duration),
       tryMusixmatch(t, a),
@@ -72025,11 +72020,8 @@ ${JSON.stringify(state)}`;
       if (v.synced && !bestSynced) bestSynced = v;
       if (v.plain && !bestPlain) bestPlain = v;
     }
-    let winner = bestSynced || bestPlain || { synced: null, plain: null, source: null };
+    const winner = bestSynced || bestPlain || { synced: null, plain: null, source: null };
     cache[key] = winner;
-    if (winner.synced || winner.plain) {
-      idbPut("lyrics", key, winner);
-    }
     return winner;
   }
   async function tryLrclib(title, artist, duration = 0) {
@@ -72293,7 +72285,6 @@ ${JSON.stringify(state)}`;
     "src/lyrics.js"() {
       init_define_process_env();
       import_process5 = __toESM(require_process());
-      init_idb_cache();
       init_cors_proxy();
       TIMEOUT2 = 1e4;
       MXM_TOKEN_KEY = "mxm_token";
@@ -72305,32 +72296,13 @@ ${JSON.stringify(state)}`;
   function _artworkCacheKey(title, artist = "") {
     return `${String(title || "").toLowerCase()}|${String(artist || "").toLowerCase()}`;
   }
-  async function getCachedArtwork(title, artist = "") {
-    const key = _artworkCacheKey(title, artist);
-    if (key in cache2) return cache2[key];
-    try {
-      const stored = await idbGet("artwork", key);
-      if (stored !== null && stored !== void 0) {
-        cache2[key] = stored;
-        return stored;
-      }
-    } catch {
-    }
-    return null;
-  }
   async function searchArtwork(title, artist = "") {
     const key = _artworkCacheKey(title, artist);
     if (key in cache2) return cache2[key];
-    const cached = await idbGet("artwork", key);
-    if (cached !== null) {
-      cache2[key] = cached;
-      return cached;
-    }
     let url = await tryItunes(title, artist);
     if (!url) url = await tryDeezer(title, artist);
     if (!url) url = await tryDiscogs(title, artist);
     cache2[key] = url;
-    if (url) idbPut("artwork", key, url);
     return url;
   }
   function fetchWithTimeout2(url, opts = {}) {
@@ -72400,7 +72372,6 @@ ${JSON.stringify(state)}`;
     "src/artwork.js"() {
       init_define_process_env();
       import_process6 = __toESM(require_process());
-      init_idb_cache();
       init_cors_proxy();
       TIMEOUT3 = 1e4;
       cache2 = {};
@@ -72415,7 +72386,6 @@ ${JSON.stringify(state)}`;
       init_telegram();
       init_lyrics();
       init_artwork();
-      init_idb_cache();
       var browseGroupId = null;
       var browseGroupTitle = "";
       var browseTracks = [];
@@ -72612,96 +72582,13 @@ ${JSON.stringify(state)}`;
       });
       async function loadPlaylists() {
         playlistsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+        let topics = [];
         try {
-          const topics = await listTopics(playlistGroupId);
-          playlists = [{ id: null, title: "All", icon: "\u{1F3B5}", isAll: true }, ...topics];
-          renderPlaylists();
-          _warmUpPlaylistCaches(topics);
-        } catch (e) {
-          playlists = [{ id: null, title: "All", icon: "\u{1F3B5}", isAll: true }];
-          renderPlaylists();
-        }
-      }
-      var WARMUP_FRESH_MS = 6 * 60 * 60 * 1e3;
-      var _warmUpInFlight = false;
-      var warmupStatusEl = $("warmup-status");
-      function _warmupKey(topicId) {
-        return `${playlistGroupId}:${topicId ?? "all"}`;
-      }
-      async function _isWarmupFresh(topicId) {
-        try {
-          const state = await idbGet("warmup_state", _warmupKey(topicId));
-          if (!state) return false;
-          const age = Date.now() - (state.completedAt || 0);
-          return age < WARMUP_FRESH_MS;
-        } catch {
-          return false;
-        }
-      }
-      async function _markWarmupComplete(topicId, totalTracks) {
-        try {
-          await idbPut("warmup_state", _warmupKey(topicId), {
-            completedAt: Date.now(),
-            totalTracks
-          });
+          topics = await listTopics(playlistGroupId);
         } catch {
         }
-      }
-      function _setWarmupStatus(text, state) {
-        if (!warmupStatusEl) return;
-        warmupStatusEl.textContent = text;
-        warmupStatusEl.classList.toggle("syncing", state === "syncing");
-        warmupStatusEl.classList.toggle("done", state === "done");
-        if (state === "done") {
-          setTimeout(() => {
-            if (warmupStatusEl.classList.contains("done")) {
-              warmupStatusEl.classList.remove("done");
-              warmupStatusEl.textContent = "";
-            }
-          }, 4e3);
-        }
-      }
-      async function _warmUpPlaylistCaches(topics) {
-        if (_warmUpInFlight) return;
-        _warmUpInFlight = true;
-        console.log("[warmup] starting: caching all pages of", topics.length + 1, "playlists");
-        const warmOne = async (topicId, label) => {
-          try {
-            if (await _isWarmupFresh(topicId)) {
-              console.log(`[warmup] ${label} still fresh (<6h), skipping`);
-              return;
-            }
-            console.log(`[warmup] ${label} scanning page 1\u2026`);
-            await scanTracks(playlistGroupId, topicId);
-            console.log(`[warmup] ${label} draining remaining pages\u2026`);
-            await loadAllTracksForCache(playlistGroupId, topicId);
-            const final = getCachedTracks(playlistGroupId, topicId).length;
-            await _markWarmupComplete(topicId, final);
-            console.log(`[warmup] ${label} DONE, ${final} tracks cached`);
-          } catch (e) {
-            console.warn("[warmup]", label, "failed:", e?.message || e);
-          }
-        };
-        try {
-          const allJobs = [
-            ...topics.map((t) => ({ id: t.id, label: `topic ${t.id} (${t.title})` })),
-            { id: null, label: '"All"' }
-          ];
-          let done = 0;
-          const total = allJobs.length;
-          _setWarmupStatus(`Syncing 0 / ${total} playlists\u2026`, "syncing");
-          for (const job of allJobs) {
-            if (!playlistGroupId) break;
-            await warmOne(job.id, job.label);
-            done++;
-            _setWarmupStatus(`Syncing ${done} / ${total} playlists\u2026`, "syncing");
-            await new Promise((r) => setTimeout(r, 400));
-          }
-          console.log("[warmup] all playlists processed");
-          _setWarmupStatus("Offline cache up to date", "done");
-        } finally {
-          _warmUpInFlight = false;
-        }
+        playlists = [{ id: null, title: "All", icon: "\u{1F3B5}", isAll: true }, ...topics];
+        renderPlaylists();
       }
       function renderPlaylists() {
         playlistsContainer.innerHTML = "";
@@ -73265,27 +73152,21 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           img.src = url;
           img.alt = "";
           img.loading = "lazy";
-          img.onerror = () => {
-          };
           placeholder.replaceWith(img);
         };
         if (track.has_thumb) {
           getThumbBlobUrl(context.groupId, track.id).then((url) => {
             if (url) _swapToImg(url);
-            else _tryCachedArtwork();
-          }).catch(_tryCachedArtwork);
+            else _tryRowArtwork();
+          }).catch(_tryRowArtwork);
         } else {
-          _tryCachedArtwork();
+          _tryRowArtwork();
         }
-        function _tryCachedArtwork() {
-          try {
-            const { title: t, artist: a } = parseTrackInfo(track.title, track.artist);
-            getCachedArtwork(t, a).then((url) => {
-              if (url) _swapToImg(url);
-            }).catch(() => {
-            });
-          } catch {
-          }
+        function _tryRowArtwork() {
+          getCachedTrackRecord(context.groupId, track.id).then((row) => {
+            if (row?.artwork) _swapToImg(URL.createObjectURL(row.artwork));
+          }).catch(() => {
+          });
         }
         el.addEventListener("click", (e) => {
           if (e.target.closest(".track-add-btn")) return;
@@ -73672,7 +73553,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               if (!cachedToIdb && _totalFilled(localFilled) >= fileSize) {
                 cachedToIdb = true;
                 const blob = new Blob([localBuffer], { type: mime });
-                cacheTrackBlob(gId, track.id, blob).then(() => console.log("[stream] cached complete track to IDB")).catch((e) => console.warn("[stream] cache failed:", e?.message || e));
+                const topicIdForCache = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
+                cacheTrack(gId, track.id, {
+                  blob,
+                  track,
+                  topicId: topicIdForCache,
+                  topicTitle: panelTitle?.textContent || null
+                }).then(() => console.log("[stream] cached complete track to IDB")).catch((e) => console.warn("[stream] cache failed:", e?.message || e));
               }
             }
           } catch (e) {
@@ -73983,19 +73870,40 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         } catch (e) {
         }
       }
+      function _renderLyricsResult(result) {
+        if (result?.synced && result.synced.length > 0) {
+          syncedLyrics = result.synced;
+          renderSyncedLyrics();
+        } else if (result?.plain) {
+          syncedLyrics = [];
+          renderPlainLyrics(result.plain);
+        } else {
+          syncedLyrics = [];
+          lyricsContent.innerHTML = '<div class="lyrics-placeholder">No lyrics available</div>';
+        }
+      }
       async function fetchLyricsForTrack(track, gen) {
+        try {
+          const row = await getCachedTrackRecord(playerGroupId, track.id);
+          if (_playGeneration !== gen) return;
+          if (row?.lyrics && (row.lyrics.synced || row.lyrics.plain)) {
+            _renderLyricsResult(row.lyrics);
+            return;
+          }
+        } catch {
+        }
         try {
           const result = await searchLyrics(track.title, track.artist, track.duration);
           if (_playGeneration !== gen) return;
-          if (result.synced && result.synced.length > 0) {
-            syncedLyrics = result.synced;
-            renderSyncedLyrics();
-          } else if (result.plain) {
-            syncedLyrics = [];
-            renderPlainLyrics(result.plain);
-          } else {
-            syncedLyrics = [];
-            lyricsContent.innerHTML = '<div class="lyrics-placeholder">No lyrics available</div>';
+          _renderLyricsResult(result);
+          if (result?.synced || result?.plain) {
+            const topicIdForRow = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
+            updateTrackLyrics(playerGroupId, track.id, result, {
+              topicId: playerTopicId ?? topicIdForRow,
+              topicTitle: panelTitle?.textContent || null,
+              track
+            }).catch(() => {
+            });
           }
         } catch (e) {
           if (_playGeneration !== gen) return;
@@ -74049,26 +73957,29 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         });
         if (idx >= 0 && lines[idx]) lines[idx].scrollIntoView({ behavior: "smooth", block: "center" });
       }
-      async function fetchArtworkForTrack(track, gen) {
+      function _showArtwork(src, gen) {
         const artworkIcon = $("artwork-icon");
         const artworkImg = $("artwork-img");
+        artworkImg.src = src;
+        artworkImg.onload = () => {
+          if (_playGeneration !== gen) return;
+          artworkIcon.style.display = "none";
+          artworkImg.style.display = "block";
+          updateMediaSession();
+        };
+        artworkImg.onerror = () => {
+          if (_playGeneration !== gen) return;
+          artworkIcon.style.display = "flex";
+          artworkImg.style.display = "none";
+        };
+      }
+      async function fetchArtworkForTrack(track, gen) {
         if (track.has_thumb) {
           try {
             const thumbUrl = await getThumbBlobUrl(playerGroupId, track.id);
             if (_playGeneration !== gen) return;
             if (thumbUrl) {
-              artworkImg.src = thumbUrl;
-              artworkImg.onload = () => {
-                if (_playGeneration !== gen) return;
-                artworkIcon.style.display = "none";
-                artworkImg.style.display = "block";
-                updateMediaSession();
-              };
-              artworkImg.onerror = () => {
-                if (_playGeneration !== gen) return;
-                artworkIcon.style.display = "flex";
-                artworkImg.style.display = "none";
-              };
+              _showArtwork(thumbUrl, gen);
               return;
             }
           } catch (e) {
@@ -74076,22 +73987,30 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         if (_playGeneration !== gen) return;
         try {
+          const row = await getCachedTrackRecord(playerGroupId, track.id);
+          if (_playGeneration !== gen) return;
+          if (row?.artwork) {
+            _showArtwork(URL.createObjectURL(row.artwork), gen);
+            return;
+          }
+        } catch {
+        }
+        if (_playGeneration !== gen) return;
+        try {
           const { title, artist } = parseTrackInfo(track.title, track.artist);
           const url = await searchArtwork(title, artist);
           if (_playGeneration !== gen) return;
           if (url) {
-            artworkImg.src = url;
-            artworkImg.onload = () => {
-              if (_playGeneration !== gen) return;
-              artworkIcon.style.display = "none";
-              artworkImg.style.display = "block";
-              updateMediaSession();
-            };
-            artworkImg.onerror = () => {
-              if (_playGeneration !== gen) return;
-              artworkIcon.style.display = "flex";
-              artworkImg.style.display = "none";
-            };
+            _showArtwork(url, gen);
+            fetch(url).then((r) => r.blob()).then((blob) => {
+              const topicIdForRow = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
+              updateTrackArtwork(playerGroupId, track.id, blob, {
+                topicId: playerTopicId ?? topicIdForRow,
+                topicTitle: panelTitle?.textContent || null,
+                track
+              });
+            }).catch(() => {
+            });
           }
         } catch (e) {
         }
@@ -74795,10 +74714,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       function setUserProfile(user) {
         const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "User";
         $("user-name").textContent = name;
-        getCachedProfilePhotoUrl().then((url) => {
-          if (url) $("user-avatar").innerHTML = `<img src="${url}" alt="">`;
-        }).catch(() => {
-        });
         const tryFetch = () => getMyProfilePhoto().then((url) => {
           if (url) $("user-avatar").innerHTML = `<img src="${url}" alt="">`;
           else if (!_profilePhotoRetryScheduled) {

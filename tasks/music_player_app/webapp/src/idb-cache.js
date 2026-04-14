@@ -1,11 +1,25 @@
 /**
- * Shared IndexedDB cache — one DB with multiple object stores.
- * Used for persistent caching of audio, artwork, and lyrics.
+ * Shared IndexedDB cache — single `tracks` store.
+ *
+ * Each row is a full downloaded track:
+ *   key   = `${groupId}:${trackId}`
+ *   value = {
+ *     groupId, trackId, topicId, topicTitle,
+ *     track: { id, title, artist, duration, mime_type, file_size, has_thumb, file_name },
+ *     audio: Blob,
+ *     lyrics: Object | null,
+ *     artwork: Blob | null,
+ *     cachedAt: number,
+ *   }
+ *
+ * No other stores. On DB_VERSION upgrade we delete every pre-existing
+ * object store before creating the new `tracks` store — the previous
+ * multi-store schema is wiped entirely on first boot after deploy.
  */
 
 const DB_NAME = 'music_cache';
-const DB_VERSION = 5; // bumped to add warmup_state store
-const STORES = ['audio', 'artwork', 'lyrics', 'track_lists', 'topics', 'downloaded_index', 'groups', 'warmup_state'];
+const DB_VERSION = 6; // bumped: collapse to single `tracks` store
+const STORES = ['tracks'];
 
 let _db = null;
 
@@ -15,6 +29,16 @@ function openDB() {
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = () => {
             const db = req.result;
+            // Drop every existing store — the old multi-store schema is
+            // obsolete and the data (audio blobs, track_lists, topics,
+            // etc.) can all be re-derived or re-downloaded.
+            const existing = [...db.objectStoreNames];
+            for (const name of existing) {
+                if (!STORES.includes(name)) {
+                    db.deleteObjectStore(name);
+                }
+            }
+            // Create the unified store if it doesn't already exist.
             for (const name of STORES) {
                 if (!db.objectStoreNames.contains(name)) {
                     db.createObjectStore(name);
@@ -38,10 +62,7 @@ export async function idbGet(store, key) {
     } catch { return null; }
 }
 
-// Writes a value and resolves only when the transaction actually commits.
-// Previously this returned immediately, so prefetchTrack could mark a track
-// as "cached" while the underlying IDB write was still in flight — and if
-// the tab was backgrounded or closed, writes were silently dropped.
+// Writes a value and resolves only after the transaction commits.
 export async function idbPut(store, key, value) {
     try {
         const db = await openDB();

@@ -584,19 +584,6 @@ html, body {
 
 .icon-btn:hover { color: var(--text-primary); background: var(--bg-hover); }
 
-/* ── Warmup sync status (bottom of playlists tab) ── */
-#warmup-status {
-    display: none;
-    font-size: 11px;
-    color: var(--text-dim);
-    padding: 6px 16px;
-    border-top: 1px solid var(--border);
-    text-align: center;
-    flex-shrink: 0;
-}
-#warmup-status.syncing { display: block; color: var(--accent); }
-#warmup-status.done    { display: block; color: var(--text-dim); }
-
 /* ── App version label (bottom of side panel) ── */
 #app-version {
     font-size: 10px;

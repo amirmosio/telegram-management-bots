@@ -1,40 +1,22 @@
 /**
  * Artwork fetcher — searches Discogs, Deezer, iTunes for album art.
- * Results are cached in IndexedDB for persistence across refreshes.
+ *
+ * Session-level dedupe only. Persistent caching lives in the unified
+ * `tracks` IDB store, attached to the per-track row by main.js once a
+ * lookup succeeds (see updateTrackArtwork in telegram.js).
  */
-import { idbGet, idbPut } from './idb-cache.js';
 import { corsFetch } from './cors-proxy.js';
 
 const TIMEOUT = 10000;
-const cache = {}; // `${title}|${artist}` -> url
+const cache = {}; // `${title}|${artist}` -> url (in-memory, session only)
 
 function _artworkCacheKey(title, artist = '') {
     return `${String(title || '').toLowerCase()}|${String(artist || '').toLowerCase()}`;
 }
 
-// Cache-only lookup: returns the previously-discovered artwork URL (or null)
-// without making any network calls. Used by the sidebar track rows so they
-// can show artwork for tracks the user has played before.
-export async function getCachedArtwork(title, artist = '') {
-    const key = _artworkCacheKey(title, artist);
-    if (key in cache) return cache[key];
-    try {
-        const stored = await idbGet('artwork', key);
-        if (stored !== null && stored !== undefined) {
-            cache[key] = stored;
-            return stored;
-        }
-    } catch {}
-    return null;
-}
-
 export async function searchArtwork(title, artist = '') {
     const key = _artworkCacheKey(title, artist);
     if (key in cache) return cache[key];
-
-    // Check IndexedDB
-    const cached = await idbGet('artwork', key);
-    if (cached !== null) { cache[key] = cached; return cached; }
 
     // iTunes works without CORS proxy, try it first
     let url = await tryItunes(title, artist);
@@ -42,7 +24,6 @@ export async function searchArtwork(title, artist = '') {
     if (!url) url = await tryDiscogs(title, artist);
 
     cache[key] = url;
-    if (url) idbPut('artwork', key, url);
     return url;
 }
 

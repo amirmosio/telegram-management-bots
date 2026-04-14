@@ -1,26 +1,21 @@
 /**
  * Lyrics fetcher — searches multiple free APIs in parallel.
  * Sources: lrclib, Musixmatch, Genius, lyrics.ovh, ChartLyrics.
- * Results are cached in IndexedDB for persistence across refreshes.
+ *
+ * Session-level dedupe only. Persistent caching lives in the unified
+ * `tracks` IDB store, attached to the per-track row by main.js once a
+ * lookup succeeds (see updateTrackLyrics in telegram.js).
  */
-import { idbGet, idbPut } from './idb-cache.js';
 import { corsFetch } from './cors-proxy.js';
 
 const TIMEOUT = 10000;
 const MXM_TOKEN_KEY = 'mxm_token';
-const cache = {}; // `${title}|${artist}` -> result
+const cache = {}; // `${title}|${artist}` -> result (in-memory, session only)
 
 export async function searchLyrics(title, artist = '', duration = 0) {
     const { title: t, artist: a } = parseTrackInfo(title, artist);
     const key = `${t.toLowerCase()}|${a.toLowerCase()}`;
     if (cache[key]) return cache[key];
-
-    // Check IndexedDB
-    const cached = await idbGet('lyrics', key);
-    if (cached !== null) {
-        cache[key] = cached;
-        return cached;
-    }
 
     // Run ALL sources in parallel, then pick the best result
     const results = await Promise.allSettled([
@@ -40,13 +35,8 @@ export async function searchLyrics(title, artist = '', duration = 0) {
         if (v.plain && !bestPlain) bestPlain = v;
     }
 
-    let winner = bestSynced || bestPlain || { synced: null, plain: null, source: null };
-
+    const winner = bestSynced || bestPlain || { synced: null, plain: null, source: null };
     cache[key] = winner;
-    // Only persist in IndexedDB if we actually found lyrics
-    if (winner.synced || winner.plain) {
-        idbPut('lyrics', key, winner);
-    }
     return winner;
 }
 
