@@ -70494,8 +70494,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       init_define_process_env();
       import_process2 = __toESM(require_process());
       DB_NAME = "music_cache";
-      DB_VERSION = 4;
-      STORES = ["audio", "artwork", "lyrics", "track_lists", "topics", "downloaded_index", "groups"];
+      DB_VERSION = 5;
+      STORES = ["audio", "artwork", "lyrics", "track_lists", "topics", "downloaded_index", "groups", "warmup_state"];
       _db = null;
     }
   });
@@ -71012,7 +71012,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     _drainGeneration++;
   }
   async function loadAllTracksForCache(groupId, topicId = null, { pauseMs = 200 } = {}) {
+    const label = `${groupId}:${topicId ?? "all"}`;
     let failures = 0;
+    let totalFetched = 0;
     while (true) {
       let page;
       try {
@@ -71020,14 +71022,22 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         failures = 0;
       } catch (e) {
         failures++;
+        console.warn(`[cache-drain] ${label} page fetch failed (#${failures}):`, e?.message || e);
         if (failures >= 4) {
-          console.warn("[cache-drain] giving up after 4 failures:", e?.message || e);
-          return;
+          console.warn(`[cache-drain] ${label} giving up after 4 failures`);
+          return totalFetched;
         }
         await new Promise((r) => setTimeout(r, 800 * failures));
         continue;
       }
-      if (page.length === 0) return;
+      if (page.length === 0) {
+        const cached2 = _tracksCache[_trackCacheKey(groupId, topicId)] || [];
+        console.log(`[cache-drain] ${label} done, total=${cached2.length}`);
+        return totalFetched;
+      }
+      totalFetched += page.length;
+      const cached = _tracksCache[_trackCacheKey(groupId, topicId)] || [];
+      console.log(`[cache-drain] ${label} +${page.length} (cache=${cached.length})`);
       if (pauseMs > 0) await new Promise((r) => setTimeout(r, pauseMs));
     }
   }
@@ -72371,6 +72381,7 @@ ${JSON.stringify(state)}`;
       init_telegram();
       init_lyrics();
       init_artwork();
+      init_idb_cache();
       var browseGroupId = null;
       var browseGroupTitle = "";
       var browseTracks = [];
@@ -72577,27 +72588,83 @@ ${JSON.stringify(state)}`;
           renderPlaylists();
         }
       }
+      var WARMUP_FRESH_MS = 6 * 60 * 60 * 1e3;
       var _warmUpInFlight = false;
+      var warmupStatusEl = $("warmup-status");
+      function _warmupKey(topicId) {
+        return `${playlistGroupId}:${topicId ?? "all"}`;
+      }
+      async function _isWarmupFresh(topicId) {
+        try {
+          const state = await idbGet("warmup_state", _warmupKey(topicId));
+          if (!state) return false;
+          const age = Date.now() - (state.completedAt || 0);
+          return age < WARMUP_FRESH_MS;
+        } catch {
+          return false;
+        }
+      }
+      async function _markWarmupComplete(topicId, totalTracks) {
+        try {
+          await idbPut("warmup_state", _warmupKey(topicId), {
+            completedAt: Date.now(),
+            totalTracks
+          });
+        } catch {
+        }
+      }
+      function _setWarmupStatus(text, state) {
+        if (!warmupStatusEl) return;
+        warmupStatusEl.textContent = text;
+        warmupStatusEl.classList.toggle("syncing", state === "syncing");
+        warmupStatusEl.classList.toggle("done", state === "done");
+        if (state === "done") {
+          setTimeout(() => {
+            if (warmupStatusEl.classList.contains("done")) {
+              warmupStatusEl.classList.remove("done");
+              warmupStatusEl.textContent = "";
+            }
+          }, 4e3);
+        }
+      }
       async function _warmUpPlaylistCaches(topics) {
         if (_warmUpInFlight) return;
         _warmUpInFlight = true;
-        console.log("[warmup] caching all pages of", topics.length, "playlists");
+        console.log("[warmup] starting: caching all pages of", topics.length + 1, "playlists");
         const warmOne = async (topicId, label) => {
           try {
+            if (await _isWarmupFresh(topicId)) {
+              console.log(`[warmup] ${label} still fresh (<6h), skipping`);
+              return;
+            }
+            console.log(`[warmup] ${label} scanning page 1\u2026`);
             await scanTracks(playlistGroupId, topicId);
+            console.log(`[warmup] ${label} draining remaining pages\u2026`);
             await loadAllTracksForCache(playlistGroupId, topicId);
+            const final = getCachedTracks(playlistGroupId, topicId).length;
+            await _markWarmupComplete(topicId, final);
+            console.log(`[warmup] ${label} DONE, ${final} tracks cached`);
           } catch (e) {
-            console.warn("[warmup] failed for", label, e?.message || e);
+            console.warn("[warmup]", label, "failed:", e?.message || e);
           }
         };
         try {
-          for (const t of topics) {
+          const allJobs = [
+            ...topics.map((t) => ({ id: t.id, label: `topic ${t.id} (${t.title})` })),
+            { id: null, label: '"All"' }
+          ];
+          let done = 0;
+          const total = allJobs.length;
+          _setWarmupStatus(`Syncing 0 / ${total} playlists\u2026`, "syncing");
+          for (const job of allJobs) {
             if (!playlistGroupId) break;
-            await warmOne(t.id, `topic ${t.id} (${t.title})`);
+            await warmOne(job.id, job.label);
+            done++;
+            _setWarmupStatus(`Syncing ${done} / ${total} playlists\u2026`, "syncing");
             await new Promise((r) => setTimeout(r, 400));
           }
-          if (playlistGroupId) await warmOne(null, '"All"');
-          console.log("[warmup] done");
+          console.log("[warmup] all playlists processed");
+          _setWarmupStatus("Offline cache up to date", "done");
         } finally {
           _warmUpInFlight = false;
         }

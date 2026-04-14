@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="Music">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=70">
+    <link rel="stylesheet" href="style.css?v=71">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -101,6 +101,7 @@
                     </button>
                 </div>
                 <div id="playlists-container"></div>
+                <div id="warmup-status" title="Caching playlists for offline use"></div>
             </div>
 
             <!-- PLAYLIST TRACKS (sub-view of Playlists) -->
@@ -304,6 +305,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=70"></script>
+    <script src="app.bundle.js?v=71"></script>
 </body>
 </html>

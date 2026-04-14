@@ -691,7 +691,9 @@ export function cancelDrain() {
 // own drain fallback without either cancelling the other. Sleeps `pauseMs`
 // between pages to be friendly to Telegram's flood-wait limits.
 export async function loadAllTracksForCache(groupId, topicId = null, { pauseMs = 200 } = {}) {
+    const label = `${groupId}:${topicId ?? 'all'}`;
     let failures = 0;
+    let totalFetched = 0;
     while (true) {
         let page;
         try {
@@ -699,14 +701,22 @@ export async function loadAllTracksForCache(groupId, topicId = null, { pauseMs =
             failures = 0;
         } catch (e) {
             failures++;
+            console.warn(`[cache-drain] ${label} page fetch failed (#${failures}):`, e?.message || e);
             if (failures >= 4) {
-                console.warn('[cache-drain] giving up after 4 failures:', e?.message || e);
-                return;
+                console.warn(`[cache-drain] ${label} giving up after 4 failures`);
+                return totalFetched;
             }
             await new Promise(r => setTimeout(r, 800 * failures));
             continue;
         }
-        if (page.length === 0) return;
+        if (page.length === 0) {
+            const cached = _tracksCache[_trackCacheKey(groupId, topicId)] || [];
+            console.log(`[cache-drain] ${label} done, total=${cached.length}`);
+            return totalFetched;
+        }
+        totalFetched += page.length;
+        const cached = _tracksCache[_trackCacheKey(groupId, topicId)] || [];
+        console.log(`[cache-drain] ${label} +${page.length} (cache=${cached.length})`);
         if (pauseMs > 0) await new Promise(r => setTimeout(r, pauseMs));
     }
 }

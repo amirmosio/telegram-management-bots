@@ -5,6 +5,7 @@
 import * as tg from './telegram.js';
 import { searchLyrics, parseTrackInfo } from './lyrics.js';
 import { searchArtwork, getCachedArtwork } from './artwork.js';
+import { idbGet, idbPut } from './idb-cache.js';
 
 // ══════════════════════════════════════
 //  STATE
@@ -255,44 +256,99 @@ async function loadPlaylists() {
     }
 }
 
-// Fire-and-forget: sequentially scan every page of every playlist so the
-// entire track metadata lands in the IDB `track_lists` store. This is what
-// lets the user browse any playlist fully offline — without this, only the
-// first 100 tracks per playlist would be cached.
+// ══════════════════════════════════════
+// Playlist warmup — cache every page of every playlist into IDB
+// ══════════════════════════════════════
 //
-// Every online boot re-runs this task so the cache stays fresh: each
-// scanTracks call re-fetches from Telegram (clearing _tracksCacheStale),
-// and each loadMoreTracks call rewrites the IDB entry with the accumulated
-// list.
+// Why this exists: without it, only the first 100 tracks per playlist
+// are in IDB, so users who try to open a playlist offline only see the
+// first page. With it, every page of every playlist is persisted to
+// track_lists after one online visit.
 //
-// Sleeps 400 ms between playlists to avoid Telegram flood-wait.
+// Progress is persisted in the `warmup_state` IDB store per (groupId,
+// topicId), so if the user closes the tab midway the next online boot
+// resumes from where it left off. An entry is considered "fresh" for 6
+// hours after it completes — after that we re-sync so new tracks
+// published to the playlist get picked up.
+const WARMUP_FRESH_MS = 6 * 60 * 60 * 1000; // 6 hours
+
 let _warmUpInFlight = false;
+const warmupStatusEl = $('warmup-status');
+
+function _warmupKey(topicId) {
+    return `${playlistGroupId}:${topicId ?? 'all'}`;
+}
+async function _isWarmupFresh(topicId) {
+    try {
+        const state = await idbGet('warmup_state', _warmupKey(topicId));
+        if (!state) return false;
+        const age = Date.now() - (state.completedAt || 0);
+        return age < WARMUP_FRESH_MS;
+    } catch { return false; }
+}
+async function _markWarmupComplete(topicId, totalTracks) {
+    try {
+        await idbPut('warmup_state', _warmupKey(topicId), {
+            completedAt: Date.now(),
+            totalTracks,
+        });
+    } catch {}
+}
+function _setWarmupStatus(text, state) {
+    if (!warmupStatusEl) return;
+    warmupStatusEl.textContent = text;
+    warmupStatusEl.classList.toggle('syncing', state === 'syncing');
+    warmupStatusEl.classList.toggle('done', state === 'done');
+    if (state === 'done') {
+        setTimeout(() => {
+            if (warmupStatusEl.classList.contains('done')) {
+                warmupStatusEl.classList.remove('done');
+                warmupStatusEl.textContent = '';
+            }
+        }, 4000);
+    }
+}
+
 async function _warmUpPlaylistCaches(topics) {
     if (_warmUpInFlight) return;
     _warmUpInFlight = true;
-    console.log('[warmup] caching all pages of', topics.length, 'playlists');
+    console.log('[warmup] starting: caching all pages of', topics.length + 1, 'playlists');
+
     const warmOne = async (topicId, label) => {
         try {
+            if (await _isWarmupFresh(topicId)) {
+                console.log(`[warmup] ${label} still fresh (<6h), skipping`);
+                return;
+            }
+            console.log(`[warmup] ${label} scanning page 1…`);
             await tg.scanTracks(playlistGroupId, topicId);
-            // Drain every remaining page so long playlists are fully cached.
-            // loadAllTracksForCache doesn't touch the shuffle-drain generation
-            // counter, so it can't be cancelled by (or cancel) shuffle.
-            // Each loadMoreTracks call inside rewrites the IDB entry, so
-            // partial progress is persisted.
+            console.log(`[warmup] ${label} draining remaining pages…`);
             await tg.loadAllTracksForCache(playlistGroupId, topicId);
+            const final = tg.getCachedTracks(playlistGroupId, topicId).length;
+            await _markWarmupComplete(topicId, final);
+            console.log(`[warmup] ${label} DONE, ${final} tracks cached`);
         } catch (e) {
-            console.warn('[warmup] failed for', label, e?.message || e);
+            console.warn('[warmup]', label, 'failed:', e?.message || e);
         }
     };
+
     try {
-        for (const t of topics) {
+        const allJobs = [
+            ...topics.map(t => ({ id: t.id, label: `topic ${t.id} (${t.title})` })),
+            { id: null, label: '"All"' },
+        ];
+        let done = 0;
+        const total = allJobs.length;
+        _setWarmupStatus(`Syncing 0 / ${total} playlists…`, 'syncing');
+        for (const job of allJobs) {
             if (!playlistGroupId) break;
-            await warmOne(t.id, `topic ${t.id} (${t.title})`);
+            await warmOne(job.id, job.label);
+            done++;
+            _setWarmupStatus(`Syncing ${done} / ${total} playlists…`, 'syncing');
             await new Promise(r => setTimeout(r, 400));
         }
-        // Also warm up the "All" view (topicId=null).
-        if (playlistGroupId) await warmOne(null, '"All"');
-        console.log('[warmup] done');
+        console.log('[warmup] all playlists processed');
+        _setWarmupStatus('Offline cache up to date', 'done');
     } finally {
         _warmUpInFlight = false;
     }

@@ -4,8 +4,8 @@
  */
 
 const DB_NAME = 'music_cache';
-const DB_VERSION = 4; // bumped to add groups store for offline fallback
-const STORES = ['audio', 'artwork', 'lyrics', 'track_lists', 'topics', 'downloaded_index', 'groups'];
+const DB_VERSION = 5; // bumped to add warmup_state store
+const STORES = ['audio', 'artwork', 'lyrics', 'track_lists', 'topics', 'downloaded_index', 'groups', 'warmup_state'];
 
 let _db = null;
 
