@@ -926,6 +926,26 @@ function _createTrackEl(track, trackList, context) {
 
 let _loadMoreInFlight = false;
 
+// Shared helper: load the next page from tg.loadMoreTracks and append the
+// resulting rows to the container. Returns the number of new rows.
+async function _loadNextPageInto(container, ctx, tl) {
+    if (_loadMoreInFlight || container._scrollPaused) return 0;
+    _loadMoreInFlight = true;
+    try {
+        const newTracks = await tg.loadMoreTracks(ctx.groupId, ctx.topicId || null);
+        if (newTracks.length > 0) {
+            const sentinel = container.querySelector('.load-more-sentinel');
+            for (const track of newTracks) {
+                const el = _createTrackEl(track, tl, ctx);
+                if (sentinel) container.insertBefore(el, sentinel);
+                else container.appendChild(el);
+            }
+        }
+        return newTracks.length;
+    } catch { return 0; }
+    finally { _loadMoreInFlight = false; }
+}
+
 function renderTracksInto(container, trackList, filter, context, { isSearchResult = false } = {}) {
     container.innerHTML = '';
     let list = trackList;
@@ -947,32 +967,65 @@ function renderTracksInto(container, trackList, filter, context, { isSearchResul
         return;
     }
 
-    // Infinite scroll — load more when near bottom
     container._scrollPaused = false;
-    if (context.groupId) {
-        container._scrollCtx = context;
-        container._trackListRef = trackList;
-        if (!container._scrollBound) {
-            container._scrollBound = true;
-            container.addEventListener('scroll', () => {
-                if (_loadMoreInFlight || container._scrollPaused) return;
-                const ctx = container._scrollCtx;
-                const tl = container._trackListRef;
-                if (!ctx || !tl) return;
-                const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 200;
-                if (nearBottom) {
-                    _loadMoreInFlight = true;
-                    tg.loadMoreTracks(ctx.groupId, ctx.topicId || null).then(newTracks => {
-                        if (newTracks.length > 0) {
-                            newTracks.forEach(track => {
-                                container.appendChild(_createTrackEl(track, tl, ctx));
-                            });
-                        }
-                    }).catch(() => {}).finally(() => { _loadMoreInFlight = false; });
-                }
-            });
-        }
+    if (!context.groupId) return;
+    container._scrollCtx = context;
+    container._trackListRef = trackList;
+
+    // ── Bottom sentinel + IntersectionObserver ──
+    // The scroll-event approach fails when the initial page fits inside
+    // the container (no scroll event ever fires). An observer on a
+    // sentinel fires reliably regardless — and it also fires on mobile
+    // Safari where scroll events can be throttled.
+    let sentinel = container.querySelector('.load-more-sentinel');
+    if (!sentinel) {
+        sentinel = document.createElement('div');
+        sentinel.className = 'load-more-sentinel';
+        sentinel.style.cssText = 'height:1px;width:100%;';
+        container.appendChild(sentinel);
+    } else {
+        container.appendChild(sentinel); // move to end after re-render
     }
+
+    if (container._intersectionObserver) {
+        container._intersectionObserver.disconnect();
+    }
+    const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+            if (!e.isIntersecting) continue;
+            const ctx = container._scrollCtx;
+            const tl = container._trackListRef;
+            if (!ctx || !tl) return;
+            _loadNextPageInto(container, ctx, tl);
+        }
+    }, { root: container, rootMargin: '300px 0px' });
+    io.observe(sentinel);
+    container._intersectionObserver = io;
+
+    // Fallback: keep the scroll event wired for devices that don't fire
+    // IntersectionObserver callbacks reliably.
+    if (!container._scrollBound) {
+        container._scrollBound = true;
+        container.addEventListener('scroll', () => {
+            const ctx = container._scrollCtx;
+            const tl = container._trackListRef;
+            if (!ctx || !tl) return;
+            const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 200;
+            if (nearBottom) _loadNextPageInto(container, ctx, tl);
+        });
+    }
+
+    // Eager fill: if the first page doesn't overflow, keep loading pages
+    // until the container is scrollable — capped so short playlists don't
+    // drain the whole thing. This fixes the "only loads first page" bug
+    // when the viewport is big enough to show 100 rows at once.
+    (async () => {
+        for (let i = 0; i < 5; i++) {
+            if (container.scrollHeight > container.clientHeight + 40) break;
+            const added = await _loadNextPageInto(container, context, trackList);
+            if (added === 0) break;
+        }
+    })();
 }
 
 function _updateAddButton() {
@@ -985,6 +1038,22 @@ function updateSidebarHighlight() {
         const id = el.dataset.trackId;
         el.classList.toggle('active', id !== undefined && Number(id) === currentTrackId);
     });
+}
+
+// Smoothly scroll the currently-active track into view inside whichever
+// side-panel track-list container is visible. No-op if the row isn't
+// mounted (paginated out).
+function scrollActiveTrackIntoView() {
+    if (currentTrackId == null) return;
+    const containers = [playlistTracksContainer, browseTracksContainer];
+    for (const c of containers) {
+        if (!c || !c.classList || !c.offsetParent) continue; // not visible
+        const row = c.querySelector(`.track-item[data-track-id="${currentTrackId}"]`);
+        if (row) {
+            try { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch {}
+            return;
+        }
+    }
 }
 
 // When a track finishes downloading, mark any visible row with the is-downloaded class.
@@ -1050,6 +1119,7 @@ async function playTrack(index) {
 
     // ── Instant UI reset ──
     updateSidebarHighlight();
+    scrollActiveTrackIntoView();
     _updateAddButton();
 
     trackTitleEl.textContent = track.title;
@@ -1322,6 +1392,51 @@ async function _streamWithSeek(track, gen, sw) {
     };
 }
 
+// ══════════════════════════════════════
+// Smart shuffle (lazy windowed pagination)
+// ══════════════════════════════════════
+const SHUFFLE_PAGE_SIZE = 100;
+let _shuffleTotal = 0;
+const _shuffleWindowsLoaded = new Set();       // window starts (globalIndex) already fetched
+const _shuffleWindowTrackIds = new Map();      // windowStart -> array of track ids in that window
+
+async function _shuffleEnsureWindow(ws) {
+    if (_shuffleWindowTrackIds.has(ws)) return _shuffleWindowTrackIds.get(ws);
+    if (_shuffleWindowsLoaded.has(ws)) return []; // in-flight, no data yet
+    _shuffleWindowsLoaded.add(ws);
+    try {
+        const { tracks } = await tg.fetchTracksWindow(playerGroupId, playerTopicId, ws, SHUFFLE_PAGE_SIZE);
+        const existingIds = new Set(playerTracks.map(t => t.id));
+        const newTracks = tracks.filter(t => !existingIds.has(t.id));
+        playerTracks.push(...newTracks);
+        const ids = tracks.map(t => t.id);
+        _shuffleWindowTrackIds.set(ws, ids);
+
+        // Append new rows to the visible sidebar if we're viewing this list.
+        const cpT = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+        if (newTracks.length > 0 && playerGroupId === playlistGroupId && playerTopicId === cpT) {
+            const ctx = { groupId: playlistGroupId, topicId: cpT, showAddBtn: false };
+            const sentinel = playlistTracksContainer.querySelector('.load-more-sentinel');
+            for (const track of newTracks) {
+                const el = _createTrackEl(track, playerTracks, ctx);
+                if (sentinel) playlistTracksContainer.insertBefore(el, sentinel);
+                else playlistTracksContainer.appendChild(el);
+            }
+        }
+        return ids;
+    } catch (e) {
+        console.warn('[shuffle] fetch window failed:', e?.message || e);
+        _shuffleWindowsLoaded.delete(ws); // allow retry
+        return [];
+    }
+}
+
+function _resetShuffleState() {
+    _shuffleTotal = 0;
+    _shuffleWindowsLoaded.clear();
+    _shuffleWindowTrackIds.clear();
+}
+
 async function nextTrack() {
     if (playerTracks.length === 0) return;
 
@@ -1336,10 +1451,8 @@ async function nextTrack() {
 
     if (shuffleOn) {
         shuffleHistory.push(currentTrackIndex);
-        let rand;
-        do { rand = Math.floor(Math.random() * playerTracks.length); }
-        while (rand === currentTrackIndex && playerTracks.length > 1);
-        playTrack(rand);
+        const idx = await _pickShuffleIndex();
+        playTrack(idx);
     } else {
         const nextIdx = currentTrackIndex + 1;
         if (nextIdx >= playerTracks.length) {
@@ -1359,21 +1472,47 @@ async function nextTrack() {
     }
 }
 
+// Lazy shuffle pick: with a known total count, pick a random global index,
+// fetch that window if we don't have it, then pick any track id from that
+// window and return its index in playerTracks. Also pre-warms adjacent
+// windows so forward / back advance is smooth.
+async function _pickShuffleIndex() {
+    if (_shuffleTotal > 0 && playerGroupId) {
+        const k = Math.floor(Math.random() * _shuffleTotal);
+        const ws = Math.floor(k / SHUFFLE_PAGE_SIZE) * SHUFFLE_PAGE_SIZE;
+        const windowIds = await _shuffleEnsureWindow(ws);
+        // Pre-warm neighbors (fire-and-forget)
+        if (ws + SHUFFLE_PAGE_SIZE < _shuffleTotal) _shuffleEnsureWindow(ws + SHUFFLE_PAGE_SIZE).catch(() => {});
+        if (ws - SHUFFLE_PAGE_SIZE >= 0) _shuffleEnsureWindow(ws - SHUFFLE_PAGE_SIZE).catch(() => {});
+
+        if (windowIds && windowIds.length > 0) {
+            const chosenId = windowIds[Math.floor(Math.random() * windowIds.length)];
+            const idx = playerTracks.findIndex(t => t.id === chosenId);
+            if (idx >= 0 && idx !== currentTrackIndex) return idx;
+        }
+    }
+    // Fallback: pure random over whatever's already loaded
+    let rand;
+    do { rand = Math.floor(Math.random() * playerTracks.length); }
+    while (rand === currentTrackIndex && playerTracks.length > 1);
+    return rand;
+}
+
 // Pre-pick + prefetch the next track into IDB so it's ready to play instantly
 // when the user (or MediaSession) fires nextTrack() — even if the screen is
 // locked and GramJS throttled. Called from onPlaying after the current track
 // actually starts decoding.
 async function _prefetchNextTrack(gen) {
     if (_playGeneration !== gen) return;
-    if (playerTracks.length < 2) return;
+    if (playerTracks.length < 2 && !shuffleOn) return;
 
     let nextIdx;
     if (shuffleOn) {
-        do { nextIdx = Math.floor(Math.random() * playerTracks.length); }
-        while (nextIdx === currentTrackIndex && playerTracks.length > 1);
+        nextIdx = await _pickShuffleIndex();
     } else {
         nextIdx = (currentTrackIndex + 1) % playerTracks.length;
     }
+    if (_playGeneration !== gen) return;
     _committedNextIndex = nextIdx;
 
     const nextT = playerTracks[nextIdx];
@@ -1414,19 +1553,39 @@ function togglePlay() {
     if (audio.paused) audio.play().catch(() => {}); else audio.pause();
 }
 
-btnShuffle.addEventListener('click', () => {
+btnShuffle.addEventListener('click', async () => {
     shuffleOn = !shuffleOn;
     btnShuffle.classList.toggle('active', shuffleOn);
     saveSession();
     _committedNextIndex = -1; // force re-pick under new mode
 
-    if (shuffleOn) {
-        // Shuffle must span the full playlist, not just the loaded pages.
-        // Drain every remaining page in the background; mutate playerTracks
-        // in place so the random pick naturally widens as pages arrive.
-        _shuffleDrainIntoPlayer();
-    } else {
+    if (!shuffleOn) {
         tg.cancelDrain();
+        btnShuffle.classList.remove('draining');
+        _resetShuffleState();
+        return;
+    }
+
+    if (!playerGroupId) return;
+    btnShuffle.classList.add('draining');
+    try {
+        const total = await tg.getAudioTotalCount(playerGroupId, playerTopicId);
+        if (total > 0) {
+            _shuffleTotal = total;
+            console.log('[shuffle] lazy mode, total =', total);
+            // Pre-warm the first window the picker will likely hit so the
+            // very first nextTrack has data ready.
+            _shuffleEnsureWindow(0).catch(() => {});
+        } else {
+            // Fallback: drain all pages when we can't query the total count
+            // (e.g. GetSearchCounters refuses topic filtering on this group).
+            console.log('[shuffle] draining all pages (no total count)');
+            _shuffleDrainIntoPlayer();
+        }
+    } catch (e) {
+        console.warn('[shuffle] init failed, falling back to drain:', e?.message || e);
+        _shuffleDrainIntoPlayer();
+    } finally {
         btnShuffle.classList.remove('draining');
     }
 });
@@ -1443,8 +1602,11 @@ async function _shuffleDrainIntoPlayer() {
             const cpT = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
             if (playerGroupId === playlistGroupId && playerTopicId === cpT) {
                 const ctx = { groupId: playlistGroupId, topicId: cpT, showAddBtn: false };
+                const sentinel = playlistTracksContainer.querySelector('.load-more-sentinel');
                 for (const track of newPage) {
-                    playlistTracksContainer.appendChild(_createTrackEl(track, playlistTracks, ctx));
+                    const el = _createTrackEl(track, playlistTracks, ctx);
+                    if (sentinel) playlistTracksContainer.insertBefore(el, sentinel);
+                    else playlistTracksContainer.appendChild(el);
                 }
             }
         });
@@ -2380,15 +2542,34 @@ function _maybeShowInstallBanner() {
 // ══════════════════════════════════════
 //  BOOT
 // ══════════════════════════════════════
+let _profilePhotoRetryScheduled = false;
+
 function setUserProfile(user) {
     const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'User';
     $('user-name').textContent = name;
-    // Load avatar asynchronously
-    tg.getMyProfilePhoto().then(url => {
-        if (url) {
-            $('user-avatar').innerHTML = `<img src="${url}" alt="">`;
+
+    // 1. Render a cached photo from IDB instantly (works offline, survives
+    //    cold boot). Fire-and-forget.
+    tg.getCachedProfilePhotoUrl().then(url => {
+        if (url) $('user-avatar').innerHTML = `<img src="${url}" alt="">`;
+    }).catch(() => {});
+
+    // 2. Try to fetch the latest photo from Telegram. If the client isn't
+    //    connected yet, retry once after 3 s (by which time the initial
+    //    connect should be done).
+    const tryFetch = () => tg.getMyProfilePhoto().then(url => {
+        if (url) $('user-avatar').innerHTML = `<img src="${url}" alt="">`;
+        else if (!_profilePhotoRetryScheduled) {
+            _profilePhotoRetryScheduled = true;
+            setTimeout(() => {
+                _profilePhotoRetryScheduled = false;
+                tg.getMyProfilePhoto().then(u => {
+                    if (u) $('user-avatar').innerHTML = `<img src="${u}" alt="">`;
+                }).catch(() => {});
+            }, 3000);
         }
     }).catch(() => {});
+    tryFetch();
 }
 
 (async function boot() {

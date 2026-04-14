@@ -70570,7 +70570,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       return { logged_in: false, offline: true };
     }
     try {
-      const me = await _withTimeout(client.getMe(), 4e3, new Error("getMe-timeout"));
+      const me = await client.getMe();
       if (me) {
         const user = {
           id: me.id?.value || me.id,
@@ -70593,13 +70593,26 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return { logged_in: false };
   }
+  async function getCachedProfilePhotoUrl() {
+    try {
+      const blob = await idbGet("artwork", PROFILE_PHOTO_KEY);
+      if (blob) return URL.createObjectURL(blob);
+    } catch {
+    }
+    return null;
+  }
   async function getMyProfilePhoto() {
     await _ensureConnected();
+    if (!client?.connected) return null;
     try {
       const me = await client.getMe();
       const photo = await client.downloadProfilePhoto(me);
       if (photo && photo.length > 0) {
         const blob = new Blob([photo], { type: "image/jpeg" });
+        try {
+          await idbPut("artwork", PROFILE_PHOTO_KEY, blob);
+        } catch {
+        }
         return URL.createObjectURL(blob);
       }
     } catch (e) {
@@ -70898,7 +70911,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
     const cacheKey = _trackCacheKey(groupId, topicId);
-    if (_tracksCache[cacheKey]) return _tracksCache[cacheKey];
+    if (_tracksCache[cacheKey] && !_tracksCacheStale.has(cacheKey)) {
+      return _tracksCache[cacheKey];
+    }
     try {
       const entity = await _getEntity(groupId);
       const tracks = [];
@@ -70912,12 +70927,14 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }
       }
       _tracksCache[cacheKey] = tracks;
+      _tracksCacheStale.delete(cacheKey);
       if (tracks.length > 0) idbPut("track_lists", cacheKey, { tracks, cachedAt: Date.now() });
       return tracks;
     } catch (e) {
       const stored = await idbGet("track_lists", cacheKey);
       if (stored?.tracks) {
         _tracksCache[cacheKey] = stored.tracks;
+        _tracksCacheStale.add(cacheKey);
         return stored.tracks;
       }
       throw e;
@@ -70985,6 +71002,69 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   function cancelDrain() {
     _drainGeneration++;
+  }
+  async function getAudioTotalCount(groupId, topicId = null) {
+    const cacheKey = _trackCacheKey(groupId, topicId);
+    if (_totalCountCache.has(cacheKey)) return _totalCountCache.get(cacheKey);
+    await _ensureConnected();
+    if (!client?.connected) return 0;
+    try {
+      const entity = await _getEntity(groupId);
+      const peer = await client.getInputEntity(groupId);
+      const params = {
+        peer,
+        q: "",
+        filter: new import_tl.Api.InputMessagesFilterMusic(),
+        minDate: 0,
+        maxDate: 0,
+        offsetId: 0,
+        addOffset: 0,
+        limit: 1,
+        maxId: 0,
+        minId: 0,
+        hash: (0, import_big_integer.default)(0)
+      };
+      if (topicId !== null) params.topMsgId = topicId;
+      const result = await client.invoke(new import_tl.Api.messages.Search(params));
+      const count = Number(result?.count ?? result?.messages?.length ?? 0);
+      _totalCountCache.set(cacheKey, count);
+      return count;
+    } catch (e) {
+      console.warn("[totalCount] failed:", e?.message || e);
+      return 0;
+    }
+  }
+  async function fetchTracksWindow(groupId, topicId = null, offsetIndex = 0, limit = PAGE_SIZE) {
+    await _ensureConnected();
+    if (!client?.connected) throw new Error("not-connected");
+    const entity = await _getEntity(groupId);
+    const peer = await client.getInputEntity(groupId);
+    const params = {
+      peer,
+      q: "",
+      filter: new import_tl.Api.InputMessagesFilterMusic(),
+      minDate: 0,
+      maxDate: 0,
+      offsetId: 0,
+      addOffset: offsetIndex,
+      limit,
+      maxId: 0,
+      minId: 0,
+      hash: (0, import_big_integer.default)(0)
+    };
+    if (topicId !== null) params.topMsgId = topicId;
+    const result = await client.invoke(new import_tl.Api.messages.Search(params));
+    const tracks = [];
+    for (const msg of result?.messages || []) {
+      const meta = _extractAudioMeta(msg);
+      if (meta) {
+        tracks.push(meta);
+        _msgCache[`${groupId}:${msg.id}`] = msg;
+      }
+    }
+    const totalCount = Number(result?.count ?? tracks.length);
+    _totalCountCache.set(_trackCacheKey(groupId, topicId), totalCount);
+    return { tracks, totalCount, offsetIndex };
   }
   async function _refreshTrackMsg(groupId, trackId) {
     try {
@@ -71756,7 +71836,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _initPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _downloadedIds, _drainGeneration, _initPromise, CACHED_USER_KEY, PROFILE_PHOTO_KEY, _phoneCodeHash, PAGE_SIZE, _tracksCacheStale, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -71818,8 +71898,11 @@ ${JSON.stringify(state)}`;
       })();
       _initPromise = null;
       CACHED_USER_KEY = "cached_user";
+      PROFILE_PHOTO_KEY = "__me_profile_photo__";
       _phoneCodeHash = null;
       PAGE_SIZE = 100;
+      _tracksCacheStale = /* @__PURE__ */ new Set();
+      _totalCountCache = /* @__PURE__ */ new Map();
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
       SHARE_CHANNEL_TITLE = "TG Music Player Shared";
       _dlCache = {};
@@ -73043,6 +73126,26 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         return el;
       }
       var _loadMoreInFlight = false;
+      async function _loadNextPageInto(container, ctx, tl) {
+        if (_loadMoreInFlight || container._scrollPaused) return 0;
+        _loadMoreInFlight = true;
+        try {
+          const newTracks = await loadMoreTracks(ctx.groupId, ctx.topicId || null);
+          if (newTracks.length > 0) {
+            const sentinel = container.querySelector(".load-more-sentinel");
+            for (const track of newTracks) {
+              const el = _createTrackEl(track, tl, ctx);
+              if (sentinel) container.insertBefore(el, sentinel);
+              else container.appendChild(el);
+            }
+          }
+          return newTracks.length;
+        } catch {
+          return 0;
+        } finally {
+          _loadMoreInFlight = false;
+        }
+      }
       function renderTracksInto(container, trackList, filter, context, { isSearchResult = false } = {}) {
         container.innerHTML = "";
         let list = trackList;
@@ -73062,33 +73165,49 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           return;
         }
         container._scrollPaused = false;
-        if (context.groupId) {
-          container._scrollCtx = context;
-          container._trackListRef = trackList;
-          if (!container._scrollBound) {
-            container._scrollBound = true;
-            container.addEventListener("scroll", () => {
-              if (_loadMoreInFlight || container._scrollPaused) return;
-              const ctx = container._scrollCtx;
-              const tl = container._trackListRef;
-              if (!ctx || !tl) return;
-              const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 200;
-              if (nearBottom) {
-                _loadMoreInFlight = true;
-                loadMoreTracks(ctx.groupId, ctx.topicId || null).then((newTracks) => {
-                  if (newTracks.length > 0) {
-                    newTracks.forEach((track) => {
-                      container.appendChild(_createTrackEl(track, tl, ctx));
-                    });
-                  }
-                }).catch(() => {
-                }).finally(() => {
-                  _loadMoreInFlight = false;
-                });
-              }
-            });
-          }
+        if (!context.groupId) return;
+        container._scrollCtx = context;
+        container._trackListRef = trackList;
+        let sentinel = container.querySelector(".load-more-sentinel");
+        if (!sentinel) {
+          sentinel = document.createElement("div");
+          sentinel.className = "load-more-sentinel";
+          sentinel.style.cssText = "height:1px;width:100%;";
+          container.appendChild(sentinel);
+        } else {
+          container.appendChild(sentinel);
         }
+        if (container._intersectionObserver) {
+          container._intersectionObserver.disconnect();
+        }
+        const io = new IntersectionObserver((entries) => {
+          for (const e of entries) {
+            if (!e.isIntersecting) continue;
+            const ctx = container._scrollCtx;
+            const tl = container._trackListRef;
+            if (!ctx || !tl) return;
+            _loadNextPageInto(container, ctx, tl);
+          }
+        }, { root: container, rootMargin: "300px 0px" });
+        io.observe(sentinel);
+        container._intersectionObserver = io;
+        if (!container._scrollBound) {
+          container._scrollBound = true;
+          container.addEventListener("scroll", () => {
+            const ctx = container._scrollCtx;
+            const tl = container._trackListRef;
+            if (!ctx || !tl) return;
+            const nearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 200;
+            if (nearBottom) _loadNextPageInto(container, ctx, tl);
+          });
+        }
+        (async () => {
+          for (let i = 0; i < 5; i++) {
+            if (container.scrollHeight > container.clientHeight + 40) break;
+            const added = await _loadNextPageInto(container, context, trackList);
+            if (added === 0) break;
+          }
+        })();
       }
       function _updateAddButton() {
         $("btn-add-playing").style.display = "flex";
@@ -73099,6 +73218,21 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           const id = el.dataset.trackId;
           el.classList.toggle("active", id !== void 0 && Number(id) === currentTrackId);
         });
+      }
+      function scrollActiveTrackIntoView() {
+        if (currentTrackId == null) return;
+        const containers = [playlistTracksContainer, browseTracksContainer];
+        for (const c of containers) {
+          if (!c || !c.classList || !c.offsetParent) continue;
+          const row = c.querySelector(`.track-item[data-track-id="${currentTrackId}"]`);
+          if (row) {
+            try {
+              row.scrollIntoView({ block: "center", behavior: "smooth" });
+            } catch {
+            }
+            return;
+          }
+        }
       }
       window.addEventListener("track-downloaded", (e) => {
         const { trackId } = e.detail || {};
@@ -73153,6 +73287,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         currentTrackId = track.id;
         audio.pause();
         updateSidebarHighlight();
+        scrollActiveTrackIntoView();
         _updateAddButton();
         trackTitleEl.textContent = track.title;
         trackArtistEl.textContent = track.artist || "Unknown";
@@ -73386,6 +73521,43 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
         };
       }
+      var SHUFFLE_PAGE_SIZE = 100;
+      var _shuffleTotal = 0;
+      var _shuffleWindowsLoaded = /* @__PURE__ */ new Set();
+      var _shuffleWindowTrackIds = /* @__PURE__ */ new Map();
+      async function _shuffleEnsureWindow(ws) {
+        if (_shuffleWindowTrackIds.has(ws)) return _shuffleWindowTrackIds.get(ws);
+        if (_shuffleWindowsLoaded.has(ws)) return [];
+        _shuffleWindowsLoaded.add(ws);
+        try {
+          const { tracks } = await fetchTracksWindow(playerGroupId, playerTopicId, ws, SHUFFLE_PAGE_SIZE);
+          const existingIds = new Set(playerTracks.map((t) => t.id));
+          const newTracks = tracks.filter((t) => !existingIds.has(t.id));
+          playerTracks.push(...newTracks);
+          const ids = tracks.map((t) => t.id);
+          _shuffleWindowTrackIds.set(ws, ids);
+          const cpT = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
+          if (newTracks.length > 0 && playerGroupId === playlistGroupId && playerTopicId === cpT) {
+            const ctx = { groupId: playlistGroupId, topicId: cpT, showAddBtn: false };
+            const sentinel = playlistTracksContainer.querySelector(".load-more-sentinel");
+            for (const track of newTracks) {
+              const el = _createTrackEl(track, playerTracks, ctx);
+              if (sentinel) playlistTracksContainer.insertBefore(el, sentinel);
+              else playlistTracksContainer.appendChild(el);
+            }
+          }
+          return ids;
+        } catch (e) {
+          console.warn("[shuffle] fetch window failed:", e?.message || e);
+          _shuffleWindowsLoaded.delete(ws);
+          return [];
+        }
+      }
+      function _resetShuffleState() {
+        _shuffleTotal = 0;
+        _shuffleWindowsLoaded.clear();
+        _shuffleWindowTrackIds.clear();
+      }
       async function nextTrack() {
         if (playerTracks.length === 0) return;
         if (_committedNextIndex >= 0 && _committedNextIndex < playerTracks.length) {
@@ -73397,11 +73569,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         if (shuffleOn) {
           shuffleHistory.push(currentTrackIndex);
-          let rand;
-          do {
-            rand = Math.floor(Math.random() * playerTracks.length);
-          } while (rand === currentTrackIndex && playerTracks.length > 1);
-          playTrack(rand);
+          const idx = await _pickShuffleIndex();
+          playTrack(idx);
         } else {
           const nextIdx = currentTrackIndex + 1;
           if (nextIdx >= playerTracks.length) {
@@ -73420,17 +73589,37 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
         }
       }
+      async function _pickShuffleIndex() {
+        if (_shuffleTotal > 0 && playerGroupId) {
+          const k = Math.floor(Math.random() * _shuffleTotal);
+          const ws = Math.floor(k / SHUFFLE_PAGE_SIZE) * SHUFFLE_PAGE_SIZE;
+          const windowIds = await _shuffleEnsureWindow(ws);
+          if (ws + SHUFFLE_PAGE_SIZE < _shuffleTotal) _shuffleEnsureWindow(ws + SHUFFLE_PAGE_SIZE).catch(() => {
+          });
+          if (ws - SHUFFLE_PAGE_SIZE >= 0) _shuffleEnsureWindow(ws - SHUFFLE_PAGE_SIZE).catch(() => {
+          });
+          if (windowIds && windowIds.length > 0) {
+            const chosenId = windowIds[Math.floor(Math.random() * windowIds.length)];
+            const idx = playerTracks.findIndex((t) => t.id === chosenId);
+            if (idx >= 0 && idx !== currentTrackIndex) return idx;
+          }
+        }
+        let rand;
+        do {
+          rand = Math.floor(Math.random() * playerTracks.length);
+        } while (rand === currentTrackIndex && playerTracks.length > 1);
+        return rand;
+      }
       async function _prefetchNextTrack(gen) {
         if (_playGeneration !== gen) return;
-        if (playerTracks.length < 2) return;
+        if (playerTracks.length < 2 && !shuffleOn) return;
         let nextIdx;
         if (shuffleOn) {
-          do {
-            nextIdx = Math.floor(Math.random() * playerTracks.length);
-          } while (nextIdx === currentTrackIndex && playerTracks.length > 1);
+          nextIdx = await _pickShuffleIndex();
         } else {
           nextIdx = (currentTrackIndex + 1) % playerTracks.length;
         }
+        if (_playGeneration !== gen) return;
         _committedNextIndex = nextIdx;
         const nextT = playerTracks[nextIdx];
         if (!nextT) return;
@@ -73474,15 +73663,34 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         });
         else audio.pause();
       }
-      btnShuffle.addEventListener("click", () => {
+      btnShuffle.addEventListener("click", async () => {
         shuffleOn = !shuffleOn;
         btnShuffle.classList.toggle("active", shuffleOn);
         saveSession();
         _committedNextIndex = -1;
-        if (shuffleOn) {
-          _shuffleDrainIntoPlayer();
-        } else {
+        if (!shuffleOn) {
           cancelDrain();
+          btnShuffle.classList.remove("draining");
+          _resetShuffleState();
+          return;
+        }
+        if (!playerGroupId) return;
+        btnShuffle.classList.add("draining");
+        try {
+          const total = await getAudioTotalCount(playerGroupId, playerTopicId);
+          if (total > 0) {
+            _shuffleTotal = total;
+            console.log("[shuffle] lazy mode, total =", total);
+            _shuffleEnsureWindow(0).catch(() => {
+            });
+          } else {
+            console.log("[shuffle] draining all pages (no total count)");
+            _shuffleDrainIntoPlayer();
+          }
+        } catch (e) {
+          console.warn("[shuffle] init failed, falling back to drain:", e?.message || e);
+          _shuffleDrainIntoPlayer();
+        } finally {
           btnShuffle.classList.remove("draining");
         }
       });
@@ -73496,8 +73704,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             const cpT = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
             if (playerGroupId === playlistGroupId && playerTopicId === cpT) {
               const ctx = { groupId: playlistGroupId, topicId: cpT, showAddBtn: false };
+              const sentinel = playlistTracksContainer.querySelector(".load-more-sentinel");
               for (const track of newPage) {
-                playlistTracksContainer.appendChild(_createTrackEl(track, playlistTracks, ctx));
+                const el = _createTrackEl(track, playlistTracks, ctx);
+                if (sentinel) playlistTracksContainer.insertBefore(el, sentinel);
+                else playlistTracksContainer.appendChild(el);
               }
             }
           });
@@ -74394,15 +74605,29 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           installBanner.style.display = "flex";
         }
       }
+      var _profilePhotoRetryScheduled = false;
       function setUserProfile(user) {
         const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "User";
         $("user-name").textContent = name;
-        getMyProfilePhoto().then((url) => {
-          if (url) {
-            $("user-avatar").innerHTML = `<img src="${url}" alt="">`;
+        getCachedProfilePhotoUrl().then((url) => {
+          if (url) $("user-avatar").innerHTML = `<img src="${url}" alt="">`;
+        }).catch(() => {
+        });
+        const tryFetch = () => getMyProfilePhoto().then((url) => {
+          if (url) $("user-avatar").innerHTML = `<img src="${url}" alt="">`;
+          else if (!_profilePhotoRetryScheduled) {
+            _profilePhotoRetryScheduled = true;
+            setTimeout(() => {
+              _profilePhotoRetryScheduled = false;
+              getMyProfilePhoto().then((u) => {
+                if (u) $("user-avatar").innerHTML = `<img src="${u}" alt="">`;
+              }).catch(() => {
+              });
+            }, 3e3);
           }
         }).catch(() => {
         });
+        tryFetch();
       }
       (async function boot() {
         if (hasSavedSession()) {

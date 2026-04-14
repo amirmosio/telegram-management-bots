@@ -164,8 +164,11 @@ export async function checkAuth() {
     }
 
     try {
-        // Hard 4s cap on getMe — a half-alive connection must never stall boot.
-        const me = await _withTimeout(client.getMe(), 4000, new Error('getMe-timeout'));
+        // No timeout on getMe — the surrounding !client.connected guard
+        // already catches dead connections, and slow mobile handshakes
+        // legitimately take > 4 s on first boot. Forcing a 4 s cap here
+        // caused the profile to stay on the "You" placeholder forever.
+        const me = await client.getMe();
         if (me) {
             const user = {
                 id: me.id?.value || me.id,
@@ -188,13 +191,28 @@ export async function checkAuth() {
     return { logged_in: false };
 }
 
+// Profile photo lives under the existing 'artwork' IDB store with a
+// reserved key so it survives across sessions and is available offline.
+const PROFILE_PHOTO_KEY = '__me_profile_photo__';
+
+export async function getCachedProfilePhotoUrl() {
+    try {
+        const blob = await idbGet('artwork', PROFILE_PHOTO_KEY);
+        if (blob) return URL.createObjectURL(blob);
+    } catch {}
+    return null;
+}
+
 export async function getMyProfilePhoto() {
     await _ensureConnected();
+    if (!client?.connected) return null;
     try {
         const me = await client.getMe();
         const photo = await client.downloadProfilePhoto(me);
         if (photo && photo.length > 0) {
             const blob = new Blob([photo], { type: 'image/jpeg' });
+            // Persist for offline / instant boot
+            try { await idbPut('artwork', PROFILE_PHOTO_KEY, blob); } catch {}
             return URL.createObjectURL(blob);
         }
     } catch (e) { /* no photo */ }
@@ -274,9 +292,12 @@ export async function logout() {
     } catch (e) { /* ignore */ }
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(CACHED_USER_KEY);
+    try { await idbDelete('artwork', PROFILE_PHOTO_KEY); } catch {}
     _groupsCache = {};
     _topicsCache = {};
     _tracksCache = {};
+    _tracksCacheStale.clear();
+    _totalCountCache.clear();
     _msgCache = {};
     _blobCache = {};
     _thumbBlobCache = {};
@@ -538,9 +559,16 @@ function _extractAudioMeta(msg) {
 
 const PAGE_SIZE = 100;
 
+// Cache keys that came from the offline IDB fallback and therefore have
+// NO matching entries in _msgCache. On the next online scanTracks call we
+// must re-fetch from Telegram so iterTrackDownload can find its message.
+const _tracksCacheStale = new Set();
+
 export async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
     const cacheKey = _trackCacheKey(groupId, topicId);
-    if (_tracksCache[cacheKey]) return _tracksCache[cacheKey];
+    if (_tracksCache[cacheKey] && !_tracksCacheStale.has(cacheKey)) {
+        return _tracksCache[cacheKey];
+    }
 
     try {
         const entity = await _getEntity(groupId);
@@ -557,15 +585,18 @@ export async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
         }
 
         _tracksCache[cacheKey] = tracks;
+        _tracksCacheStale.delete(cacheKey); // fresh, msg cache populated
         if (tracks.length > 0) idbPut('track_lists', cacheKey, { tracks, cachedAt: Date.now() });
         return tracks;
     } catch (e) {
         // Offline fallback — return last-known metadata from IDB so downloaded
-        // tracks remain playable without a connection. Note: _msgCache is empty,
-        // so only cached-blob tracks will actually play.
+        // tracks remain playable without a connection. We mark the cache
+        // entry stale so the next online scanTracks call re-fetches and
+        // populates _msgCache properly.
         const stored = await idbGet('track_lists', cacheKey);
         if (stored?.tracks) {
             _tracksCache[cacheKey] = stored.tracks;
+            _tracksCacheStale.add(cacheKey);
             return stored.tracks;
         }
         throw e;
@@ -648,6 +679,80 @@ export async function loadAllTracks(groupId, topicId = null, onPage = null) {
 
 export function cancelDrain() {
     _drainGeneration++;
+}
+
+// Total number of audio messages in a group or topic. Uses messages.Search
+// with InputMessagesFilterMusic + limit=1 — the response exposes a .count
+// field on all MessagesSlice-shaped results. Cached per (groupId, topicId).
+const _totalCountCache = new Map(); // cacheKey -> number
+export async function getAudioTotalCount(groupId, topicId = null) {
+    const cacheKey = _trackCacheKey(groupId, topicId);
+    if (_totalCountCache.has(cacheKey)) return _totalCountCache.get(cacheKey);
+    await _ensureConnected();
+    if (!client?.connected) return 0;
+    try {
+        const entity = await _getEntity(groupId);
+        const peer = await client.getInputEntity(groupId);
+        const params = {
+            peer,
+            q: '',
+            filter: new Api.InputMessagesFilterMusic(),
+            minDate: 0,
+            maxDate: 0,
+            offsetId: 0,
+            addOffset: 0,
+            limit: 1,
+            maxId: 0,
+            minId: 0,
+            hash: bigInt(0),
+        };
+        if (topicId !== null) params.topMsgId = topicId;
+        const result = await client.invoke(new Api.messages.Search(params));
+        const count = Number(result?.count ?? result?.messages?.length ?? 0);
+        _totalCountCache.set(cacheKey, count);
+        return count;
+    } catch (e) {
+        console.warn('[totalCount] failed:', e?.message || e);
+        return 0;
+    }
+}
+
+// Fetch a window of audio messages starting at a global offset in the
+// music-filtered list. addOffset=k, limit=N returns messages at positions
+// [k, k+N). Used by the smart-shuffle path to jump into arbitrary pages
+// without walking offsetIds. Populates _msgCache so iterTrackDownload
+// can stream the tracks immediately.
+export async function fetchTracksWindow(groupId, topicId = null, offsetIndex = 0, limit = PAGE_SIZE) {
+    await _ensureConnected();
+    if (!client?.connected) throw new Error('not-connected');
+    const entity = await _getEntity(groupId);
+    const peer = await client.getInputEntity(groupId);
+    const params = {
+        peer,
+        q: '',
+        filter: new Api.InputMessagesFilterMusic(),
+        minDate: 0,
+        maxDate: 0,
+        offsetId: 0,
+        addOffset: offsetIndex,
+        limit,
+        maxId: 0,
+        minId: 0,
+        hash: bigInt(0),
+    };
+    if (topicId !== null) params.topMsgId = topicId;
+    const result = await client.invoke(new Api.messages.Search(params));
+    const tracks = [];
+    for (const msg of (result?.messages || [])) {
+        const meta = _extractAudioMeta(msg);
+        if (meta) {
+            tracks.push(meta);
+            _msgCache[`${groupId}:${msg.id}`] = msg;
+        }
+    }
+    const totalCount = Number(result?.count ?? tracks.length);
+    _totalCountCache.set(_trackCacheKey(groupId, topicId), totalCount);
+    return { tracks, totalCount, offsetIndex };
 }
 
 // Refetch a single message from Telegram so its fileReference is fresh.
