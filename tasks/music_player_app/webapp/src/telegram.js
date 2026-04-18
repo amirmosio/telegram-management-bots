@@ -1031,15 +1031,21 @@ export async function getCachedTrackUrl(groupId, trackId) {
 
 // Async generator: yields Uint8Array chunks for a track via iterDownload.
 // `offset` is in bytes and must be 512 KiB-aligned (caller's responsibility).
-// Default 0 — backwards compatible with existing callers.
-export async function* iterTrackDownload(groupId, trackId, offset = 0) {
+// Pass an AbortSignal to stop mid-download — critical when the caller is
+// about to start ANOTHER iterTrackDownload (seek, track change). Without
+// this, abandoned iterators pile up getFile requests on the exported
+// MTProto sender; combined with GramJS's autoReconnect that's how we
+// hit Chrome's ERR_INSUFFICIENT_RESOURCES on the WebSocket.
+export async function* iterTrackDownload(groupId, trackId, offset = 0, signal = null) {
     const msg = _msgCache[`${groupId}:${trackId}`];
     if (!msg) throw new Error('Track not in cache');
 
     const doc = msg.media?.document;
     if (!doc) throw new Error('No document in message');
 
+    if (signal?.aborted) return;
     await _ensureConnected();
+    if (signal?.aborted) return;
 
     const inputLocation = new Api.InputDocumentFileLocation({
         id: doc.id,
@@ -1058,6 +1064,7 @@ export async function* iterTrackDownload(groupId, trackId, offset = 0) {
     const iter = client.iterDownload(iterOpts);
 
     for await (const chunk of iter) {
+        if (signal?.aborted) return;
         // Buffer.buffer may reference a larger shared ArrayBuffer;
         // slice to get a clean copy with its own backing store
         if (chunk.byteOffset !== undefined && chunk.byteLength !== undefined) {

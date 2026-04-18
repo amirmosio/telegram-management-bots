@@ -1,4 +1,4 @@
-const CACHE_NAME = 'music-player-v7';
+const CACHE_NAME = 'music-player-v8';
 const STATIC_ASSETS = [
     '/',
     '/style.css',
@@ -144,8 +144,32 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.startsWith('/api/') || url.protocol === 'blob:') return;
     if (event.request.method !== 'GET') return;
 
-    // Stale-while-revalidate for static assets — serve from cache instantly
-    // when available (so offline boot is fast), refresh in the background.
+    // Navigations / HTML documents: network-first. Stale-while-revalidate was
+    // causing deploys to take two reloads to appear (first served stale, then
+    // refreshed the cache) because the cached index.html still referenced the
+    // previous ?v=N bundle. Going network-first means a fresh deploy shows up
+    // on the very next load, with the cached shell as an offline fallback.
+    const isNavigation = event.request.mode === 'navigate' ||
+                         event.request.destination === 'document';
+    if (isNavigation) {
+        event.respondWith((async () => {
+            const cache = await caches.open(CACHE_NAME);
+            try {
+                const net = await fetch(event.request);
+                if (net && net.ok) cache.put(event.request, net.clone()).catch(() => {});
+                return net;
+            } catch {
+                return (await cache.match(event.request)) ||
+                       (await cache.match('/')) ||
+                       new Response('Offline', { status: 503, statusText: 'Offline' });
+            }
+        })());
+        return;
+    }
+
+    // Versioned static assets (js/css/json/svg) — stale-while-revalidate is
+    // still fine here because the HTML bumps ?v=N on every deploy, so a new
+    // version URL always misses the cache and goes straight to the network.
     event.respondWith((async () => {
         const cache = await caches.open(CACHE_NAME);
         const cached = await cache.match(event.request);
@@ -155,17 +179,11 @@ self.addEventListener('fetch', (event) => {
         }).catch(() => null);
 
         if (cached) {
-            // Return cached immediately; refresh in background.
             networkFetch.catch(() => {});
             return cached;
         }
         const net = await networkFetch;
         if (net) return net;
-        // No cache + no network → fall back to index.html for navigations
-        if (event.request.mode === 'navigate') {
-            const shell = await cache.match('/');
-            if (shell) return shell;
-        }
         return new Response('Offline', { status: 503, statusText: 'Offline' });
     })());
 });

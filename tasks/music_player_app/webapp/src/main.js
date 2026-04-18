@@ -34,7 +34,8 @@ let repeatOn = false;
 let shuffleHistory = []; // stack of previously played indices for shuffle-back
 let _committedNextIndex = -1; // index of the track to play next (pre-picked for prefetch)
 let _wakeLock = null; // Screen Wake Lock to keep playback alive in background
-let _pendingSeekTime = 0; // seek to this position when audio starts playing (from sync/share)
+let _pendingSeekTime = 0; // seek to this position when audio starts playing (from sync/share/restore)
+let _pendingSeekTrackId = null; // the track id the pending seek belongs to — applied only if the played track matches
 
 let activeTab = 'playlists';
 
@@ -1159,9 +1160,13 @@ async function playTrack(index) {
     iconPlay.style.display = 'none';
     iconPause.style.display = 'none';
 
-    // Clear spinner as soon as audio actually starts playing
-    const seekTime = _pendingSeekTime;
+    // Clear spinner as soon as audio actually starts playing.
+    // Only honor the pending seek if it was recorded for THIS track — otherwise
+    // a restored session's position (e.g. 44s) would leak onto the next track
+    // the user taps before pressing play on the restored one.
+    const seekTime = (_pendingSeekTrackId === track.id) ? _pendingSeekTime : 0;
     _pendingSeekTime = 0;
+    _pendingSeekTrackId = null;
     const onPlaying = () => {
         if (_playGeneration !== gen) return;
         btnPlay.classList.remove('loading-audio');
@@ -1172,8 +1177,11 @@ async function playTrack(index) {
             audio.currentTime = seekTime;
         }
         // Pre-pick and prefetch the next track so nextTrack() can play it
-        // instantly — even with the screen locked.
-        _prefetchNextTrack(gen);
+        // instantly — even with the screen locked. Skip if we're still
+        // streaming the current track; _streamWithSeek will kick off the
+        // prefetch itself once the full file is cached. Two concurrent
+        // iterTrackDownload calls saturate the per-host WebSocket budget.
+        if (!_streamDownloadActive) _prefetchNextTrack(gen);
     };
     audio.addEventListener('playing', onPlaying, { once: true });
 
@@ -1270,6 +1278,10 @@ function _totalFilled(filled) {
 }
 
 let _currentStreamCleanup = null;
+// True while _streamWithSeek has an in-flight sequential download.
+// Gates _prefetchNextTrack so we don't run two iterTrackDownload calls at
+// once (see fix for ERR_INSUFFICIENT_RESOURCES cascade).
+let _streamDownloadActive = false;
 
 // Download track and start playback.
 //  • If a Service Worker is available, stream via the range-aware SW protocol
@@ -1324,16 +1336,26 @@ async function _streamWithSeek(track, gen, sw) {
     let dlGen = 0;
     let currentDlPos = 0;
     let teardown = false;
+    let currentAbort = null; // AbortController for the in-flight download
+
+    _streamDownloadActive = true;
 
     const startDownload = async (rawOffset) => {
+        // Cancel the previous download first. Without this, each seek stacks
+        // another iterTrackDownload on top of the old one — GramJS keeps
+        // issuing getFile requests for the abandoned iterator until Chrome's
+        // per-host WebSocket budget runs out (ERR_INSUFFICIENT_RESOURCES).
+        if (currentAbort) { try { currentAbort.abort(); } catch {} }
+        const myCtrl = new AbortController();
+        currentAbort = myCtrl;
         const aligned = Math.max(0, Math.floor(rawOffset / SEEK_ALIGN) * SEEK_ALIGN);
         const myDlGen = ++dlGen;
         currentDlPos = aligned;
         console.log('[stream] download from', aligned);
         let pos = aligned;
         try {
-            for await (const chunk of tg.iterTrackDownload(gId, track.id, aligned)) {
-                if (teardown || dlGen !== myDlGen || _playGeneration !== gen) return;
+            for await (const chunk of tg.iterTrackDownload(gId, track.id, aligned, myCtrl.signal)) {
+                if (teardown || myCtrl.signal.aborted || dlGen !== myDlGen || _playGeneration !== gen) return;
                 const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
                 if (pos + u8.byteLength > fileSize) {
                     // Trim the tail so we don't overflow the buffer.
@@ -1363,6 +1385,7 @@ async function _streamWithSeek(track, gen, sw) {
                 // Once every byte is in, persist to IDB so future plays are instant.
                 if (!cachedToIdb && _totalFilled(localFilled) >= fileSize) {
                     cachedToIdb = true;
+                    _streamDownloadActive = false;
                     const blob = new Blob([localBuffer], { type: mime });
                     const topicIdForCache = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
                     tg.cacheTrack(gId, track.id, {
@@ -1372,10 +1395,15 @@ async function _streamWithSeek(track, gen, sw) {
                     })
                         .then(() => console.log('[stream] cached complete track to IDB'))
                         .catch(e => console.warn('[stream] cache failed:', e?.message || e));
+                    // Safe to prefetch next track now — no more concurrent
+                    // iterTrackDownload calls will fight over the sender.
+                    _prefetchNextTrack(gen);
                 }
             }
         } catch (e) {
             console.warn('[stream] download error:', e?.message || e);
+        } finally {
+            if (currentAbort === myCtrl) currentAbort = null;
         }
     };
 
@@ -1405,6 +1433,8 @@ async function _streamWithSeek(track, gen, sw) {
     // Register a teardown hook so the next playTrack call can shut us down.
     _currentStreamCleanup = () => {
         teardown = true;
+        _streamDownloadActive = false;
+        if (currentAbort) { try { currentAbort.abort(); } catch {} }
         clearTimeout(seekDebounce);
         try { sw.postMessage({ type: 'stream-end', key: blobKey }); } catch {}
         try { channel.port1.close(); } catch {}
@@ -2340,6 +2370,7 @@ async function restoreSession() {
         // Set pending seek so playback resumes at the saved position
         if (s.currentTime > 0) {
             _pendingSeekTime = s.currentTime;
+            _pendingSeekTrackId = s.currentTrackId;
             timeCurrent.textContent = formatTime(s.currentTime);
             if (track.duration > 0) {
                 const pct = (s.currentTime / track.duration) * 100;
@@ -2512,7 +2543,10 @@ async function initAfterLogin() {
         try {
             showToast('Loading shared track...');
             const { track, groupId } = await tg.resolveShareLink(sharedMsgId);
-            if (sharedTime > 0) _pendingSeekTime = sharedTime;
+            if (sharedTime > 0) {
+                _pendingSeekTime = sharedTime;
+                _pendingSeekTrackId = track.id;
+            }
             startPlayback([track], groupId, null, 0, false);
             // Mute and archive the share channel so it doesn't clutter the chat list
             tg.muteChat(groupId);

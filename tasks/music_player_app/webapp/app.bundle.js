@@ -71263,12 +71263,14 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
-  async function* iterTrackDownload(groupId, trackId, offset = 0) {
+  async function* iterTrackDownload(groupId, trackId, offset = 0, signal = null) {
     const msg = _msgCache[`${groupId}:${trackId}`];
     if (!msg) throw new Error("Track not in cache");
     const doc = msg.media?.document;
     if (!doc) throw new Error("No document in message");
+    if (signal?.aborted) return;
     await _ensureConnected();
+    if (signal?.aborted) return;
     const inputLocation = new import_tl.Api.InputDocumentFileLocation({
       id: doc.id,
       accessHash: doc.accessHash,
@@ -71285,6 +71287,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     if (offset > 0) iterOpts.offset = (0, import_big_integer.default)(offset);
     const iter = client.iterDownload(iterOpts);
     for await (const chunk of iter) {
+      if (signal?.aborted) return;
       if (chunk.byteOffset !== void 0 && chunk.byteLength !== void 0) {
         yield new Uint8Array(chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength));
       } else {
@@ -72410,6 +72413,7 @@ ${JSON.stringify(state)}`;
       var _committedNextIndex = -1;
       var _wakeLock = null;
       var _pendingSeekTime = 0;
+      var _pendingSeekTrackId = null;
       var activeTab = "playlists";
       var searchTracks = [];
       var _searchAbort = null;
@@ -73375,8 +73379,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         btnPlay.classList.add("loading-audio");
         iconPlay.style.display = "none";
         iconPause.style.display = "none";
-        const seekTime = _pendingSeekTime;
+        const seekTime = _pendingSeekTrackId === track.id ? _pendingSeekTime : 0;
         _pendingSeekTime = 0;
+        _pendingSeekTrackId = null;
         const onPlaying = () => {
           if (_playGeneration !== gen) return;
           btnPlay.classList.remove("loading-audio");
@@ -73385,7 +73390,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           if (seekTime > 0 && audio.duration && seekTime < audio.duration) {
             audio.currentTime = seekTime;
           }
-          _prefetchNextTrack(gen);
+          if (!_streamDownloadActive) _prefetchNextTrack(gen);
         };
         audio.addEventListener("playing", onPlaying, { once: true });
         updateMediaSession();
@@ -73478,6 +73483,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         return t;
       }
       var _currentStreamCleanup = null;
+      var _streamDownloadActive = false;
       async function _downloadAndPlay(track, gen) {
         const gId = playerGroupId;
         const fileSize = track.file_size || 0;
@@ -73517,15 +73523,25 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         let dlGen = 0;
         let currentDlPos = 0;
         let teardown = false;
+        let currentAbort = null;
+        _streamDownloadActive = true;
         const startDownload = async (rawOffset) => {
+          if (currentAbort) {
+            try {
+              currentAbort.abort();
+            } catch {
+            }
+          }
+          const myCtrl = new AbortController();
+          currentAbort = myCtrl;
           const aligned = Math.max(0, Math.floor(rawOffset / SEEK_ALIGN) * SEEK_ALIGN);
           const myDlGen = ++dlGen;
           currentDlPos = aligned;
           console.log("[stream] download from", aligned);
           let pos = aligned;
           try {
-            for await (const chunk of iterTrackDownload(gId, track.id, aligned)) {
-              if (teardown || dlGen !== myDlGen || _playGeneration !== gen) return;
+            for await (const chunk of iterTrackDownload(gId, track.id, aligned, myCtrl.signal)) {
+              if (teardown || myCtrl.signal.aborted || dlGen !== myDlGen || _playGeneration !== gen) return;
               const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
               if (pos + u8.byteLength > fileSize) {
                 const trim = u8.subarray(0, fileSize - pos);
@@ -73552,6 +73568,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               currentDlPos = pos;
               if (!cachedToIdb && _totalFilled(localFilled) >= fileSize) {
                 cachedToIdb = true;
+                _streamDownloadActive = false;
                 const blob = new Blob([localBuffer], { type: mime });
                 const topicIdForCache = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
                 cacheTrack(gId, track.id, {
@@ -73560,10 +73577,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
                   topicId: topicIdForCache,
                   topicTitle: panelTitle?.textContent || null
                 }).then(() => console.log("[stream] cached complete track to IDB")).catch((e) => console.warn("[stream] cache failed:", e?.message || e));
+                _prefetchNextTrack(gen);
               }
             }
           } catch (e) {
             console.warn("[stream] download error:", e?.message || e);
+          } finally {
+            if (currentAbort === myCtrl) currentAbort = null;
           }
         };
         let seekDebounce = null;
@@ -73583,6 +73603,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         startDownload(0);
         _currentStreamCleanup = () => {
           teardown = true;
+          _streamDownloadActive = false;
+          if (currentAbort) {
+            try {
+              currentAbort.abort();
+            } catch {
+            }
+          }
           clearTimeout(seekDebounce);
           try {
             sw.postMessage({ type: "stream-end", key: blobKey });
@@ -74469,6 +74496,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           timeTotal.textContent = formatTime(track.duration);
           if (s.currentTime > 0) {
             _pendingSeekTime = s.currentTime;
+            _pendingSeekTrackId = s.currentTrackId;
             timeCurrent.textContent = formatTime(s.currentTime);
             if (track.duration > 0) {
               const pct = s.currentTime / track.duration * 100;
@@ -74641,7 +74669,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           try {
             showToast("Loading shared track...");
             const { track, groupId } = await resolveShareLink(sharedMsgId);
-            if (sharedTime > 0) _pendingSeekTime = sharedTime;
+            if (sharedTime > 0) {
+              _pendingSeekTime = sharedTime;
+              _pendingSeekTrackId = track.id;
+            }
             startPlayback([track], groupId, null, 0, false);
             muteChat(groupId);
             archiveChat(groupId);

@@ -1,176 +1,77 @@
 # Telegram Music Player
 
-A web-based music player that connects to your Telegram account, letting you browse and play music from your channels and groups — with album art, synced lyrics, and playlist management.
+A web-based music player that turns your Telegram account into a personal music library. Browse audio in any channel or group you belong to, organize tracks into playlists, and play them back with synced lyrics and album art — online or offline.
 
 ## Features
 
-- **Browse & Play** — Browse all your Telegram channels and groups, play any audio file directly in the browser
-- **Synced Lyrics** — Automatically fetches time-synced lyrics from multiple sources (lrclib.net, lyrics.ovh, ChartLyrics). Click any lyric line to jump to that moment
-- **Album Art** — Fetches cover art from Deezer and iTunes APIs
-- **Playlists** — Create playlists as forum topics in a dedicated Telegram supergroup ("Playlists Cache"). Add tracks from any channel with one click
-- **Save to Telegram** — Save fetched album art as the audio thumbnail directly on Telegram (deletes and re-sends with the artwork baked in)
-- **Smart Metadata Parsing** — Handles messy Telegram audio metadata (e.g., `"Artist ~ Song (Lyrics)"` from bot channels)
-- **Session Persistence** — Remembers your playback position, current track, and active tab across page refreshes
-- **Telegram Login** — Sign in with your phone number directly in the web app. No pre-configured session needed
-- **macOS Menu Bar App** — Runs as a background process with a menu bar icon. Click to open the player in your browser
+### Playback
+- **Play anything in your Telegram** — Any audio message in any channel, group, or supergroup you can access becomes a playable track
+- **Synced lyrics** — Time-synced lyrics scroll with the song; click any line to jump to that moment. Plain lyrics are auto-distributed across the track duration as a fallback
+- **Album art** — Cover art is fetched automatically and shown behind the player
+- **Shuffle & repeat** — Classic playback modes, with a shuffle-back history so *Previous* still does what you expect
+- **Sleep timer** — Stop playback after 15/30/45/60/90/120 minutes or at the end of the current track
+- **Keyboard shortcuts** — Space / arrows / P / N for play, seek, and next/previous
+- **Background playback & lock-screen controls** — Integrates with the OS media session (play/pause/next/previous on the lock screen or Bluetooth remotes) and keeps a screen wake lock so playback doesn't pause when the tab loses focus
+- **Session persistence** — Remembers your last track, playback position, and active tab across refreshes
 
-## How It Works
+### Browse & discover
+- **Channels & groups list** — Paginated sidebar of everything you're subscribed to, with in-Telegram search for finding specific groups
+- **Global music search** — Search audio across your Telegram dialogs from a dedicated overlay
+- **Song recognition** — Tap the mic button to identify whatever's playing around you (Shazam-style), then jump straight to that track in your library if it exists
+- **Smart metadata parsing** — Cleans up messy Telegram audio titles (e.g. `"Artist ~ Song (Lyrics)"` from bot channels) into proper artist/title pairs
 
-The app runs a local web server that connects to Telegram using your account credentials (via Telethon). The web UI communicates with this server to:
+### Playlists
+- **Telegram-native playlists** — Playlists live as forum topics inside a dedicated *Playlists Cache* supergroup that the app creates and manages for you. Nothing lives only in the browser — your playlists travel with your account
+- **One-click add** — While browsing any channel, tap **+** on a track to forward it into a playlist
+- **Download-all** — Cache an entire playlist for offline playback with one button, with live progress
 
-1. List your Telegram dialogs (channels, groups, supergroups)
-2. Scan groups for audio messages and extract metadata
-3. Stream audio files on demand (downloaded from Telegram, cached locally)
-4. Fetch lyrics and album art from free APIs
-5. Manage playlists as forum topics in a dedicated supergroup
+### Offline & installable
+- **Offline playback** — Tracks, lyrics, and artwork are cached in the browser (IndexedDB). Previously-downloaded tracks keep playing with no network, and your playlists still render
+- **Persistent storage** — The app requests persistent-storage permission so cached tracks aren't silently evicted by the browser
+- **Installable PWA** — Install to your home screen / dock for a standalone, app-like experience with its own icon and splash screen
+- **macOS menu-bar app** — Can also run as a native menu-bar app that hosts the player locally
 
-```
-Browser (localhost:51841)  <-->  Python Server (aiohttp)  <-->  Telegram (Telethon)
-     |                              |
-     |--- Player UI (HTML/CSS/JS)   |--- Music streaming
-     |--- Lyrics display            |--- Lyrics APIs (lrclib, lyrics.ovh)
-     |--- Playlist management       |--- Album art APIs (Deezer, iTunes)
-```
+### Telegram integration
+- **Sign in with your phone** — Standard Telegram login flow (phone + code + optional 2FA), right inside the web app
+- **Save album art back to Telegram** — When the player fetches cover art, one click re-sends the audio message with the artwork baked in as the thumbnail, so every client sees it. Playback continues uninterrupted during the save
+- **Shareable track links** — Every track has a compact share URL that opens the player and jumps to that song
 
 ## Requirements
 
-- Python 3.12+
-- Telegram API credentials (`API_ID` and `API_HASH` from https://my.telegram.org/apps)
+- Python 3.12+ (only if you're running the desktop / main.py variant)
+- A Telegram account
 
 ## Quick Start
+
+### macOS app (.dmg)
+
+1. Open the DMG and drag *Telegram Music Player* to Applications
+2. Launch it — a music-note icon appears in the menu bar
+3. Click the icon and choose **Open Player**
+4. Sign in with your Telegram phone number
+5. Browse your channels and start playing
 
 ### From source
 
 ```bash
-# Clone and install
 git clone <repo-url>
 cd telegram-management-bots
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Configure
-cp .env.example .env
-# Edit .env with your API_ID and API_HASH
-
-# Run
-python main.py
-# Select "Music Player" from the menu
-# Open http://localhost:8080 in your browser
+cp .env.example .env     # fill in your Telegram API credentials
+python main.py           # select "Music Player" from the menu
 ```
 
-### Standalone (no setup)
+Then open the URL the server prints (e.g. `http://localhost:8080`) in your browser.
 
-```bash
-# Run directly without main.py
-python -c "
-import asyncio, os
-os.environ['API_ID'] = 'your_api_id'
-os.environ['API_HASH'] = 'your_api_hash'
-from tasks.music_player_app.launcher import main
-main()
-"
-```
-
-### macOS App (.dmg)
-
-1. Open the DMG, drag to Applications
-2. Launch "Telegram Music Player"
-3. A music note icon appears in the menu bar
-4. Click it, select "Open Player"
-5. Sign in with your Telegram phone number
-6. Browse your channels and play music
-
-## Usage
-
-### Browse & Play
-
-1. Open the **Browse** tab in the sidebar
-2. Your Telegram channels and groups load automatically (paginated, scroll for more)
-3. Use the search bar to find specific groups (uses Telegram's search API)
-4. Click a group to see its audio files (newest first)
-5. Click a track to play it
-
-### Playlists
-
-1. Open the **Playlists** tab
-2. The app automatically finds or creates a "Playlists Cache" supergroup with forum mode enabled
-3. Click **New Playlist** to create a topic in that group
-4. While browsing tracks, click the **+** button on any track to add it to a playlist
-5. Tracks are forwarded to the playlist's topic in Telegram
-
-### Save Album Art
-
-When the player fetches album art from the internet, a **Save to Telegram** button appears. Clicking it:
-
-1. Downloads the audio file
-2. Downloads the album art
-3. Re-sends the audio message to the same location with the artwork as thumbnail
-4. Deletes the original message
-5. Music keeps playing uninterrupted during the save
-
-### Keyboard Shortcuts
-
-| Key | Action |
-|-----|--------|
-| Space | Play / Pause |
-| Left Arrow | Seek back 5 seconds |
-| Right Arrow | Seek forward 5 seconds |
-| Up Arrow / P | Previous track |
-| Down Arrow / N | Next track |
-
-## Architecture
-
-```
-tasks/music_player_app/
-    __init__.py
-    auth.py           # Telegram login (phone + code + 2FA)
-    music_source.py   # Scans groups, downloads audio, manages playlists
-    lyrics.py         # Multi-source lyrics fetcher with auto-sync
-    artwork.py        # Album art from Deezer/iTunes
-    server.py         # aiohttp web server + REST API
-    bot.py            # Telegram bot for Mini App (optional)
-    task.py           # Task integration with main.py
-    launcher.py       # Standalone/packaged app entry point
-    webapp/
-        index.html    # Player UI
-        style.css     # Dark theme, responsive
-        app.js        # Player logic, lyrics sync, playlist management
-```
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/auth/status` | Check login status |
-| POST | `/api/auth/send-code` | Send verification code |
-| POST | `/api/auth/verify` | Verify code |
-| POST | `/api/auth/verify-2fa` | Verify 2FA password |
-| GET | `/api/groups` | List groups (paginated) |
-| GET | `/api/groups/search?q=` | Search groups via Telegram API |
-| GET | `/api/playlist-group` | Find/create playlist supergroup |
-| GET | `/api/groups/{id}/topics` | List playlist topics |
-| POST | `/api/groups/{id}/topics` | Create new playlist |
-| GET | `/api/groups/{id}/tracks` | List audio tracks |
-| GET | `/api/groups/{id}/tracks/{id}/stream` | Stream audio file |
-| GET | `/api/groups/{id}/tracks/{id}/lyrics` | Fetch lyrics |
-| GET | `/api/groups/{id}/tracks/{id}/artwork` | Fetch album art URL |
-| POST | `/api/groups/{id}/tracks/{id}/save` | Save artwork to Telegram |
-
-## Lyrics Sources (fallback chain)
-
-1. **lrclib.net** — Synced (timestamped) + plain lyrics. Free, no API key
-2. **lyrics.ovh** — Plain lyrics from multiple sources (Genius, AZLyrics, etc.). Free, no API key
-3. **ChartLyrics** — Plain lyrics via XML API. Free, no API key
-4. **Auto-sync** — If only plain lyrics are found, distributes lines evenly across the track duration
-
-## Building the macOS App
+### Building the macOS app
 
 ```bash
 pip install pyinstaller rumps
 python -m PyInstaller music_player.spec --noconfirm
 
-# Create DMG
 mkdir -p /tmp/dmg_stage
 cp -R "dist/Telegram Music Player.app" /tmp/dmg_stage/
 ln -sf /Applications /tmp/dmg_stage/Applications
@@ -178,6 +79,40 @@ hdiutil create -volname "Telegram Music Player" \
     -srcfolder /tmp/dmg_stage -ov -format UDZO \
     dist/TelegramMusicPlayer.dmg
 ```
+
+## Usage
+
+### Browse & play
+1. Open the **Browse** tab. Your channels and groups load automatically (scroll to paginate, or type to search)
+2. Click a group to see its audio files (newest first)
+3. Click a track to play it
+
+### Playlists
+1. Open the **Playlists** tab — the app finds or creates the *Playlists Cache* supergroup on first use
+2. Click **New Playlist** to create one (backed by a forum topic)
+3. While browsing, tap **+** on any track to add it to a playlist
+4. Open a playlist and tap the download icon to cache every track for offline playback
+
+### Identify a song
+1. Tap the microphone icon in the top bar
+2. Tap the big record button — the app listens for a few seconds
+3. If a match is found, you can open it on external services or, if the track exists in your library, jump straight to it
+
+### Save album art to Telegram
+When the player fetches art from the internet, a **Save to Telegram** button appears. Tapping it downloads the audio, re-uploads it with the artwork as the thumbnail, and deletes the original message — all while the song keeps playing.
+
+### Keyboard shortcuts
+
+| Key            | Action                 |
+| -------------- | ---------------------- |
+| Space          | Play / pause           |
+| ← / →          | Seek back / forward 5s |
+| ↑ / P          | Previous track         |
+| ↓ / N          | Next track             |
+
+## Further reading
+
+- See [`doc.md`](./doc.md) for details on external services the player integrates with (lyrics providers, album-art providers, recognition, Telegram API) and the internal HTTP endpoints.
 
 ## Credits
 
