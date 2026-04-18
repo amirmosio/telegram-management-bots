@@ -144,24 +144,34 @@ self.addEventListener('fetch', (event) => {
     if (url.pathname.startsWith('/api/') || url.protocol === 'blob:') return;
     if (event.request.method !== 'GET') return;
 
-    // Navigations / HTML documents: network-first. Stale-while-revalidate was
-    // causing deploys to take two reloads to appear (first served stale, then
-    // refreshed the cache) because the cached index.html still referenced the
-    // previous ?v=N bundle. Going network-first means a fresh deploy shows up
-    // on the very next load, with the cached shell as an offline fallback.
+    // Navigations / HTML documents: network-first with a short timeout and
+    // cache fallback. Stale-while-revalidate was causing deploys to take two
+    // reloads to appear (first served stale, then refreshed the cache)
+    // because the cached index.html still referenced the previous ?v=N
+    // bundle. Going network-first means a fresh deploy shows up on the very
+    // next load. The timeout keeps flaky/offline connections from leaving
+    // the user on a blank screen — after 3 s we serve the cached shell and
+    // let the fetch finish updating the cache in the background.
     const isNavigation = event.request.mode === 'navigate' ||
                          event.request.destination === 'document';
     if (isNavigation) {
         event.respondWith((async () => {
             const cache = await caches.open(CACHE_NAME);
+            const netPromise = fetch(event.request).then(response => {
+                if (response && response.ok) cache.put(event.request, response.clone()).catch(() => {});
+                return response;
+            });
+            const timeoutPromise = new Promise((_, rej) =>
+                setTimeout(() => rej(new Error('nav-timeout')), 3000)
+            );
             try {
-                const net = await fetch(event.request);
-                if (net && net.ok) cache.put(event.request, net.clone()).catch(() => {});
-                return net;
+                return await Promise.race([netPromise, timeoutPromise]);
             } catch {
-                return (await cache.match(event.request)) ||
-                       (await cache.match('/')) ||
-                       new Response('Offline', { status: 503, statusText: 'Offline' });
+                const cached = (await cache.match(event.request)) || (await cache.match('/'));
+                if (cached) return cached;
+                // No cache either — wait out the in-flight fetch as a last resort.
+                try { return await netPromise; }
+                catch { return new Response('Offline', { status: 503, statusText: 'Offline' }); }
             }
         })());
         return;
