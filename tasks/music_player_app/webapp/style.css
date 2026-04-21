@@ -653,6 +653,7 @@ html, body {
     padding: 10px 12px; cursor: pointer;
     border-radius: var(--radius-sm);
     transition: background 0.15s; font-size: 14px;
+    display: flex; align-items: center; gap: 12px;
 }
 
 .modal-playlist-item:hover { background: var(--bg-hover); }
