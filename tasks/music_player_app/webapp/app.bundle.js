@@ -73496,6 +73496,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         artworkIcon.style.display = "flex";
         artworkImg.style.display = "none";
         artworkImg.src = "";
+        _resetHalo();
         btnPlay.classList.add("loading-audio");
         iconPlay.style.display = "none";
         iconPause.style.display = "none";
@@ -74180,12 +74181,81 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           artworkIcon.style.display = "none";
           artworkImg.style.display = "block";
           updateMediaSession();
+          _updateHaloFromArtwork(src, gen);
         };
         artworkImg.onerror = () => {
           if (_playGeneration !== gen) return;
           artworkIcon.style.display = "flex";
           artworkImg.style.display = "none";
+          _resetHalo();
         };
+      }
+      function _updateHaloFromArtwork(src, gen) {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          if (_playGeneration !== gen) return;
+          try {
+            const palette = _extractPalette(img);
+            if (palette.length) _applyHalo(palette);
+          } catch {
+          }
+        };
+        img.onerror = () => {
+        };
+        img.src = src;
+      }
+      function _extractPalette(img) {
+        const SIZE = 32;
+        const canvas = document.createElement("canvas");
+        canvas.width = SIZE;
+        canvas.height = SIZE;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, SIZE, SIZE);
+        const data = ctx.getImageData(0, 0, SIZE, SIZE).data;
+        const bins = /* @__PURE__ */ new Map();
+        for (let i = 0; i < data.length; i += 4) {
+          const a = data[i + 3];
+          if (a < 200) continue;
+          const r = data[i], g = data[i + 1], b = data[i + 2];
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          if (max < 28 || min > 235) continue;
+          if (max - min < 16) continue;
+          const key = r >> 3 << 10 | g >> 3 << 5 | b >> 3;
+          const entry = bins.get(key);
+          if (entry) {
+            entry.count++;
+            entry.r += r;
+            entry.g += g;
+            entry.b += b;
+          } else bins.set(key, { count: 1, r, g, b });
+        }
+        const sorted = [...bins.values()].sort((a, b) => b.count - a.count);
+        const picks = [];
+        for (const e of sorted) {
+          const r = Math.round(e.r / e.count);
+          const g = Math.round(e.g / e.count);
+          const b = Math.round(e.b / e.count);
+          if (picks.every((p) => Math.abs(p[0] - r) + Math.abs(p[1] - g) + Math.abs(p[2] - b) > 60)) {
+            picks.push([r, g, b]);
+            if (picks.length === 3) break;
+          }
+        }
+        return picks.map(([r, g, b]) => `rgba(${r}, ${g}, ${b}, 0.55)`);
+      }
+      function _applyHalo(colors) {
+        const player = $("player");
+        if (!player) return;
+        player.style.setProperty("--halo-1", colors[0] || "transparent");
+        player.style.setProperty("--halo-2", colors[1] || colors[0] || "transparent");
+        player.style.setProperty("--halo-3", colors[2] || colors[0] || "transparent");
+      }
+      function _resetHalo() {
+        const player = $("player");
+        if (!player) return;
+        player.style.removeProperty("--halo-1");
+        player.style.removeProperty("--halo-2");
+        player.style.removeProperty("--halo-3");
       }
       async function fetchArtworkForTrack(track, gen) {
         if (track.has_thumb) {

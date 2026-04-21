@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="Music">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=84">
+    <link rel="stylesheet" href="style.css?v=85">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -131,6 +131,7 @@
 
         <!-- Main Player -->
         <div id="player">
+            <div id="player-halo" aria-hidden="true"></div>
             <div id="top-bar">
                 <button id="btn-show-panel" class="icon-btn" title="Browse">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -314,6 +315,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=84"></script>
+    <script src="app.bundle.js?v=85"></script>
 </body>
 </html>

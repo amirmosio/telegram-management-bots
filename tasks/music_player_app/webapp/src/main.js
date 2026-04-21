@@ -1179,6 +1179,7 @@ async function playTrack(index) {
     artworkIcon.style.display = 'flex';
     artworkImg.style.display = 'none';
     artworkImg.src = '';
+    _resetHalo();
     // ── Show loading spinner on play button ──
     btnPlay.classList.add('loading-audio');
     iconPlay.style.display = 'none';
@@ -1949,12 +1950,92 @@ function _showArtwork(src, gen) {
         artworkIcon.style.display = 'none';
         artworkImg.style.display = 'block';
         updateMediaSession();
+        _updateHaloFromArtwork(src, gen);
     };
     artworkImg.onerror = () => {
         if (_playGeneration !== gen) return;
         artworkIcon.style.display = 'flex';
         artworkImg.style.display = 'none';
+        _resetHalo();
     };
+}
+
+// ── Halo background derived from artwork colors ──
+// Sampled via an offscreen canvas; downscaled to 32×32 so getImageData is
+// cheap. Cross-origin images (iTunes/Deezer) need CORS headers to sample;
+// blob: URLs (Telegram thumbs) are same-origin. If sampling fails we keep
+// the previous halo — no error, no flicker.
+function _updateHaloFromArtwork(src, gen) {
+    const img = new Image();
+    // Same-origin blob URLs don't need this, but setting it is harmless.
+    // Cross-origin CDNs (iTunes mzstatic, Deezer) serve CORS headers.
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+        if (_playGeneration !== gen) return;
+        try {
+            const palette = _extractPalette(img);
+            if (palette.length) _applyHalo(palette);
+        } catch { /* tainted canvas — skip, keep previous halo */ }
+    };
+    img.onerror = () => { /* CORS or decode failure — keep previous halo */ };
+    img.src = src;
+}
+
+function _extractPalette(img) {
+    const SIZE = 32;
+    const canvas = document.createElement('canvas');
+    canvas.width = SIZE; canvas.height = SIZE;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, SIZE, SIZE);
+    const data = ctx.getImageData(0, 0, SIZE, SIZE).data;
+
+    // Bucket into coarse bins so similar colors aggregate. 5-bit per channel
+    // (32 steps) gives ~32k buckets — plenty for a 1024-pixel sample.
+    const bins = new Map();
+    for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a < 200) continue;
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        // Drop near-black and near-white — they wash out as gradient blobs.
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        if (max < 28 || min > 235) continue;
+        // Also drop near-gray — no hue to contribute.
+        if (max - min < 16) continue;
+        const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+        const entry = bins.get(key);
+        if (entry) { entry.count++; entry.r += r; entry.g += g; entry.b += b; }
+        else bins.set(key, { count: 1, r, g, b });
+    }
+
+    const sorted = [...bins.values()].sort((a, b) => b.count - a.count);
+    // Pick the top 3 most-common buckets that are reasonably distinct.
+    const picks = [];
+    for (const e of sorted) {
+        const r = Math.round(e.r / e.count);
+        const g = Math.round(e.g / e.count);
+        const b = Math.round(e.b / e.count);
+        if (picks.every(p => Math.abs(p[0] - r) + Math.abs(p[1] - g) + Math.abs(p[2] - b) > 60)) {
+            picks.push([r, g, b]);
+            if (picks.length === 3) break;
+        }
+    }
+    return picks.map(([r, g, b]) => `rgba(${r}, ${g}, ${b}, 0.55)`);
+}
+
+function _applyHalo(colors) {
+    const player = $('player');
+    if (!player) return;
+    player.style.setProperty('--halo-1', colors[0] || 'transparent');
+    player.style.setProperty('--halo-2', colors[1] || colors[0] || 'transparent');
+    player.style.setProperty('--halo-3', colors[2] || colors[0] || 'transparent');
+}
+
+function _resetHalo() {
+    const player = $('player');
+    if (!player) return;
+    player.style.removeProperty('--halo-1');
+    player.style.removeProperty('--halo-2');
+    player.style.removeProperty('--halo-3');
 }
 
 async function fetchArtworkForTrack(track, gen) {
