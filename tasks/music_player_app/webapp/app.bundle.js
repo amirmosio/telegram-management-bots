@@ -70804,6 +70804,32 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       return { logged_in: false, error: e.message };
     }
   }
+  async function logout() {
+    try {
+      await client.invoke(new import_tl.Api.auth.LogOut());
+    } catch (e) {
+    }
+    try {
+      const keys = await idbGetAllKeys(TRACKS_STORE);
+      for (const k of keys) {
+        try {
+          await idbDelete(TRACKS_STORE, k);
+        } catch {
+        }
+      }
+    } catch {
+    }
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(CACHED_USER_KEY);
+    _groupsCache = {};
+    _topicsCache = {};
+    _tracksCache = {};
+    _totalCountCache.clear();
+    _msgCache = {};
+    _blobCache = {};
+    _thumbBlobCache = {};
+    _downloadedRecords = /* @__PURE__ */ new Map();
+  }
   function _entityId(entity) {
     const raw = entity.id?.value ?? entity.id;
     const num = typeof raw === "bigint" ? Number(raw) : Number(raw);
@@ -74776,6 +74802,21 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         loginScreen.style.display = "none";
         $("app").style.display = "flex";
       }
+      $("btn-logout").addEventListener("click", async () => {
+        if (!confirm("Log out of Telegram? Downloaded tracks on this device will be cleared.")) return;
+        const btn = $("btn-logout");
+        btn.disabled = true;
+        try {
+          await logout();
+        } catch {
+        }
+        showLogin();
+        $("login-step-phone").style.display = "block";
+        $("login-step-code").style.display = "none";
+        $("login-step-2fa").style.display = "none";
+        showLoginError("");
+        btn.disabled = false;
+      });
       function showLoginError(msg) {
         loginError.textContent = msg;
       }

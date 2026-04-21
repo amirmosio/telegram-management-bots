@@ -121,6 +121,9 @@ html, body {
     border-bottom: 1px solid var(--border);
 }
 
+#user-profile #user-name { flex: 1; min-width: 0; }
+#btn-logout { flex-shrink: 0; padding: 6px; }
+
 #user-avatar {
     width: 32px; height: 32px;
     border-radius: 50%;

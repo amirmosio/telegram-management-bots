@@ -2609,6 +2609,19 @@ let loginPhone = '';
 
 function showLogin() { loginScreen.style.display = 'flex'; $('app').style.display = 'none'; }
 function showApp() { loginScreen.style.display = 'none'; $('app').style.display = 'flex'; }
+
+$('btn-logout').addEventListener('click', async () => {
+    if (!confirm('Log out of Telegram? Downloaded tracks on this device will be cleared.')) return;
+    const btn = $('btn-logout');
+    btn.disabled = true;
+    try { await tg.logout(); } catch {}
+    showLogin();
+    $('login-step-phone').style.display = 'block';
+    $('login-step-code').style.display = 'none';
+    $('login-step-2fa').style.display = 'none';
+    showLoginError('');
+    btn.disabled = false;
+});
 function showLoginError(msg) { loginError.textContent = msg; }
 function setLoginBusy(busy) {
     loginLoading.style.display = busy ? 'block' : 'none';
