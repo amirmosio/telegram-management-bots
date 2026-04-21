@@ -1061,7 +1061,11 @@ export async function* iterTrackDownload(groupId, trackId, offset = 0, signal = 
     const iterOpts = {
         file: inputLocation,
         requestSize: 512 * 1024,  // 512 KiB chunks (max allowed; aligns with seek alignment)
-        fileSize: doc.size,
+        // GramJS's iterDownload expects a big-integer-library instance here,
+        // not a native BigInt — it calls .compare()/.subtract() on the value
+        // internally. Recent GramJS emits native BigInt for doc.size, which
+        // silently hangs the iterator. String() goes through every version.
+        fileSize: bigInt(String(doc.size)),
         dcId: doc.dcId,
     };
     if (offset > 0) iterOpts.offset = bigInt(offset);
