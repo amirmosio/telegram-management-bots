@@ -73998,6 +73998,17 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           showToast("Sleep timer \u2014 playback stopped");
           return;
         }
+        const dur = audio.duration;
+        const pos = audio.currentTime;
+        const realFinish = Number.isFinite(dur) && dur > 0 && pos >= dur - 1;
+        if (!realFinish) {
+          console.warn("[player] phantom ended (duration=" + dur + ", currentTime=" + pos + "); not auto-advancing");
+          btnPlay.classList.remove("loading-audio");
+          _isLoadingAudio = false;
+          iconPlay.style.display = "block";
+          iconPause.style.display = "none";
+          return;
+        }
         if (repeatOn) {
           audio.currentTime = 0;
           audio.play().catch(() => {

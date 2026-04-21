@@ -1715,6 +1715,26 @@ function onTrackEnded() {
         showToast('Sleep timer — playback stopped');
         return;
     }
+    // Guard against phantom `ended` events from a failed stream. The SW
+    // posts `stream-end` as soon as it gives up (e.g. when GramJS is
+    // hammering ERR_INSUFFICIENT_RESOURCES and can't fetch bytes), which
+    // makes the <audio> element fire `ended` after barely any real
+    // playback. Auto-advancing from that point — especially when
+    // playerTracks has a single entry (e.g. a search-result click) — just
+    // wraps back to the same broken track and burns another round of
+    // WebSocket connects. Require that the track actually played close
+    // to its duration before we'll treat this as a real finish.
+    const dur = audio.duration;
+    const pos = audio.currentTime;
+    const realFinish = Number.isFinite(dur) && dur > 0 && pos >= dur - 1;
+    if (!realFinish) {
+        console.warn('[player] phantom ended (duration=' + dur + ', currentTime=' + pos + '); not auto-advancing');
+        btnPlay.classList.remove('loading-audio');
+        _isLoadingAudio = false;
+        iconPlay.style.display = 'block';
+        iconPause.style.display = 'none';
+        return;
+    }
     if (repeatOn) { audio.currentTime = 0; audio.play().catch(() => {}); }
     else nextTrack();
 }
