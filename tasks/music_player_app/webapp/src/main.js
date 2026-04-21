@@ -1242,6 +1242,10 @@ async function playTrack(index) {
 
 // Retry audio.play() — on mobile background, the first attempt may be rejected
 // because the browser hasn't fully committed the new source yet.
+// If all retries fail (typically NotAllowedError when we hit autoplay policy
+// without a user gesture — share-link / deep-link entry points), reset the
+// loading UI so the play button becomes tappable. Otherwise the spinner stays
+// on and `togglePlay` early-returns on _isLoadingAudio forever.
 async function _playWithRetry(gen) {
     for (let i = 0; i < 3; i++) {
         if (_playGeneration !== gen) return;
@@ -1249,6 +1253,11 @@ async function _playWithRetry(gen) {
             if (i < 2) await new Promise(r => setTimeout(r, 200));
         }
     }
+    if (_playGeneration !== gen) return;
+    btnPlay.classList.remove('loading-audio');
+    _isLoadingAudio = false;
+    iconPlay.style.display = 'block';
+    iconPause.style.display = 'none';
 }
 
 // Get SW controller, waiting for it if it's activating

@@ -73522,6 +73522,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             if (i < 2) await new Promise((r) => setTimeout(r, 200));
           }
         }
+        if (_playGeneration !== gen) return;
+        btnPlay.classList.remove("loading-audio");
+        _isLoadingAudio = false;
+        iconPlay.style.display = "block";
+        iconPause.style.display = "none";
       }
       async function _getSWController() {
         if (!navigator.serviceWorker) return null;
