@@ -1222,6 +1222,63 @@ export async function addTracksToPlaylist(destGroupId, topicId, sourceGroupId, t
     return { added, failed };
 }
 
+// Move = forward to destination, then delete from source. If the delete
+// fails we still report `forwarded` so the caller can tell the user that
+// the copy happened but the original is still there (e.g. no permission
+// to delete in the source chat).
+export async function moveTracksToPlaylist(destGroupId, topicId, sourceGroupId, trackIds) {
+    const destEntity = await _getEntity(destGroupId);
+    const sourceEntity = await _getEntity(sourceGroupId);
+    let moved = 0, forwarded = 0, failed = 0;
+
+    for (const tid of trackIds) {
+        let didForward = false;
+        try {
+            const msgs = await client.getMessages(sourceEntity, { ids: [tid] });
+            const msg = msgs[0];
+            if (!msg || !msg.media) { failed++; continue; }
+
+            await client.invoke(new Api.messages.ForwardMessages({
+                fromPeer: sourceEntity,
+                toPeer: destEntity,
+                id: [tid],
+                randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))],
+                topMsgId: topicId,
+            }));
+            didForward = true;
+            forwarded++;
+
+            await client.deleteMessages(sourceEntity, [tid], { revoke: true });
+            moved++;
+            // Drop the track from any source-side caches so it doesn't
+            // come back on the next render.
+            _removeTrackFromSourceCaches(sourceGroupId, tid);
+        } catch (e) {
+            console.error(`Failed to move track ${tid}:`, e);
+            if (!didForward) failed++;
+        }
+    }
+
+    invalidateCache(destGroupId, topicId);
+    invalidateCache(sourceGroupId, null);
+    return { moved, forwarded, failed };
+}
+
+function _removeTrackFromSourceCaches(groupId, trackId) {
+    try {
+        for (const k of Object.keys(_tracksCache)) {
+            if (!k.startsWith(`${groupId}:`)) continue;
+            const list = _tracksCache[k];
+            if (Array.isArray(list)) {
+                const idx = list.findIndex(t => t && t.id === trackId);
+                if (idx >= 0) list.splice(idx, 1);
+            }
+        }
+    } catch { /* non-fatal */ }
+    // Best-effort: drop the IDB row too so offline reads don't resurrect it.
+    try { idbDelete(TRACKS_STORE, `${groupId}:${trackId}`); } catch {}
+}
+
 // ════════════════════════════════════
 //  PLAYLIST GROUP MANAGEMENT
 // ════════════════════════════════════

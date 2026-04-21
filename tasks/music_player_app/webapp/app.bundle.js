@@ -70481,6 +70481,19 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       return 0;
     }
   }
+  async function idbDelete(store, key) {
+    try {
+      const db = await openDB();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(store, "readwrite");
+        tx.objectStore(store).delete(key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch {
+      return false;
+    }
+  }
   var import_process2, DB_NAME, DB_VERSION, STORES, _db;
   var init_idb_cache = __esm({
     "src/idb-cache.js"() {
@@ -71554,6 +71567,57 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     invalidateCache(destGroupId, topicId);
     return { added, failed };
   }
+  async function moveTracksToPlaylist(destGroupId, topicId, sourceGroupId, trackIds) {
+    const destEntity = await _getEntity(destGroupId);
+    const sourceEntity = await _getEntity(sourceGroupId);
+    let moved = 0, forwarded = 0, failed = 0;
+    for (const tid of trackIds) {
+      let didForward = false;
+      try {
+        const msgs = await client.getMessages(sourceEntity, { ids: [tid] });
+        const msg = msgs[0];
+        if (!msg || !msg.media) {
+          failed++;
+          continue;
+        }
+        await client.invoke(new import_tl.Api.messages.ForwardMessages({
+          fromPeer: sourceEntity,
+          toPeer: destEntity,
+          id: [tid],
+          randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))],
+          topMsgId: topicId
+        }));
+        didForward = true;
+        forwarded++;
+        await client.deleteMessages(sourceEntity, [tid], { revoke: true });
+        moved++;
+        _removeTrackFromSourceCaches(sourceGroupId, tid);
+      } catch (e) {
+        console.error(`Failed to move track ${tid}:`, e);
+        if (!didForward) failed++;
+      }
+    }
+    invalidateCache(destGroupId, topicId);
+    invalidateCache(sourceGroupId, null);
+    return { moved, forwarded, failed };
+  }
+  function _removeTrackFromSourceCaches(groupId, trackId) {
+    try {
+      for (const k of Object.keys(_tracksCache)) {
+        if (!k.startsWith(`${groupId}:`)) continue;
+        const list = _tracksCache[k];
+        if (Array.isArray(list)) {
+          const idx = list.findIndex((t) => t && t.id === trackId);
+          if (idx >= 0) list.splice(idx, 1);
+        }
+      }
+    } catch {
+    }
+    try {
+      idbDelete(TRACKS_STORE, `${groupId}:${trackId}`);
+    } catch {
+    }
+  }
   async function findOrCreatePlaylistGroup() {
     const PLAYLIST_GROUP_NAME = "Playlists Cache";
     await _ensureConnected();
@@ -72471,6 +72535,8 @@ ${JSON.stringify(state)}`;
       var playlistModal = $("playlist-modal");
       var modalPlaylists = $("modal-playlists");
       var modalCancel = $("modal-cancel");
+      var playlistModalTitle = $("playlist-modal-title");
+      var pickerMode = "add";
       var btnSleepTimer = $("btn-sleep-timer");
       var sleepSheet = $("sleep-sheet");
       var sleepBadge = $("sleep-badge");
@@ -73136,6 +73202,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         el.className = "track-item" + (isPlaying ? " active" : "") + (isDownloaded ? " is-downloaded" : "");
         el.dataset.trackId = track.id;
         const addBtn = context.showAddBtn ? `<button class="track-add-btn" title="Add to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>` : "";
+        const moveBtn = context.showAddBtn ? `<button class="track-move-btn" title="Move to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>` : "";
         const placeholderSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
         el.innerHTML = `
         <div class="track-item-thumb-placeholder">${placeholderSvg}</div>
@@ -73146,6 +73213,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         <span class="track-item-downloaded" title="Available offline"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span>
         <span class="track-item-duration">${formatTime(track.duration)}</span>
         ${addBtn}
+        ${moveBtn}
     `;
         const _swapToImg = (url) => {
           if (!url) return;
@@ -73174,6 +73242,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         el.addEventListener("click", (e) => {
           if (e.target.closest(".track-add-btn")) return;
+          if (e.target.closest(".track-move-btn")) return;
           startPlayback(trackList, context.groupId, context.topicId, origIndex, !context.showAddBtn);
           closePanel();
         });
@@ -73191,7 +73260,22 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               return;
             }
             pendingAddTrack = { trackId: track.id, groupId: context.groupId };
-            showPlaylistPicker();
+            showPlaylistPicker("add");
+          });
+          el.querySelector(".track-move-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!playlistGroupId) {
+              showToast("Set a playlist group first");
+              switchTab("playlists");
+              return;
+            }
+            if (playlists.length === 0) {
+              showToast("Create a playlist first");
+              switchTab("playlists");
+              return;
+            }
+            pendingAddTrack = { trackId: track.id, groupId: context.groupId };
+            showPlaylistPicker("move");
           });
         }
         return el;
@@ -73282,6 +73366,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       }
       function _updateAddButton() {
         $("btn-add-playing").style.display = "flex";
+        $("btn-move-playing").style.display = "flex";
         $("btn-share").style.display = "flex";
       }
       function updateSidebarHighlight() {
@@ -74054,9 +74139,25 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         const track = playerTracks[currentTrackIndex];
         pendingAddTrack = { trackId: track.id, groupId: playerGroupId };
-        showPlaylistPicker();
+        showPlaylistPicker("add");
       });
-      function showPlaylistPicker() {
+      $("btn-move-playing").addEventListener("click", () => {
+        if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+        if (!playlistGroupId) {
+          showToast("Set a playlist group first");
+          return;
+        }
+        if (playlists.length === 0) {
+          showToast("Create a playlist first");
+          return;
+        }
+        const track = playerTracks[currentTrackIndex];
+        pendingAddTrack = { trackId: track.id, groupId: playerGroupId };
+        showPlaylistPicker("move");
+      });
+      function showPlaylistPicker(mode) {
+        pickerMode = mode === "move" ? "move" : "add";
+        playlistModalTitle.textContent = pickerMode === "move" ? "Move to playlist" : "Add to playlist";
         modalPlaylists.innerHTML = "";
         const pickable = playlists.filter((p) => !p.isAll && p.id !== 1);
         if (pickable.length === 0) {
@@ -74066,7 +74167,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           const el = document.createElement("div");
           el.className = "modal-playlist-item";
           el.textContent = (p.icon || "") + " " + p.title;
-          el.addEventListener("click", () => addTrackToPlaylist(p.id));
+          el.addEventListener("click", () => {
+            if (pickerMode === "move") moveTrackToPlaylist(p.id);
+            else addTrackToPlaylist(p.id);
+          });
           modalPlaylists.appendChild(el);
         });
         playlistModal.style.display = "flex";
@@ -74113,6 +74217,47 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           else showToast("Failed to add");
         } catch (e) {
           showToast("Failed to add");
+        }
+      }
+      async function moveTrackToPlaylist(topicId) {
+        if (!pendingAddTrack) return;
+        const { trackId, groupId } = pendingAddTrack;
+        pendingAddTrack = null;
+        playlistModal.style.display = "none";
+        const moveBtn = $("btn-move-playing");
+        if (moveBtn) moveBtn.classList.add("moving");
+        try {
+          const result = await moveTracksToPlaylist(playlistGroupId, topicId, groupId, [trackId]);
+          if (result.moved > 0) {
+            showToast("Moved to playlist");
+            _removeTrackFromRenderedLists(groupId, trackId);
+          } else if (result.forwarded > 0) {
+            showToast("Copied, but delete failed");
+          } else {
+            showToast("Failed to move");
+          }
+        } catch (e) {
+          showToast("Failed to move");
+        } finally {
+          if (moveBtn) moveBtn.classList.remove("moving");
+        }
+      }
+      function _removeTrackFromRenderedLists(groupId, trackId) {
+        try {
+          if (playerGroupId === groupId) {
+            const idx = playerTracks.findIndex((t) => t.id === trackId);
+            if (idx >= 0) {
+              playerTracks.splice(idx, 1);
+              if (idx < currentTrackIndex) currentTrackIndex--;
+              else if (idx === currentTrackIndex) {
+                if (currentTrackIndex >= playerTracks.length) {
+                  currentTrackIndex = playerTracks.length - 1;
+                }
+              }
+            }
+          }
+          document.querySelectorAll(`.track-item[data-track-id="${trackId}"]`).forEach((el) => el.remove());
+        } catch {
         }
       }
       var btnShare = $("btn-share");
@@ -74419,6 +74564,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
           if (s.trackTitle) {
             $("btn-add-playing").style.display = "flex";
+            $("btn-move-playing").style.display = "flex";
             $("btn-share").style.display = "flex";
           }
           if (!s.playerGroupId || !s.currentTrackId) {

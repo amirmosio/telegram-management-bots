@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="Music">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=75">
+    <link rel="stylesheet" href="style.css?v=76">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -168,6 +168,9 @@
                     <button id="btn-add-playing" class="overlay-add-btn" title="Add to playlist">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                     </button>
+                    <button id="btn-move-playing" class="overlay-move-btn" title="Move to playlist">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+                    </button>
                 </div>
             </div>
 
@@ -212,7 +215,7 @@
     <div id="playlist-modal" style="display:none">
         <div class="modal-backdrop"></div>
         <div class="modal-content">
-            <h3>Add to playlist</h3>
+            <h3 id="playlist-modal-title">Add to playlist</h3>
             <div id="modal-playlists"></div>
             <button id="modal-cancel" class="text-btn">Cancel</button>
         </div>
@@ -304,6 +307,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=75"></script>
+    <script src="app.bundle.js?v=76"></script>
 </body>
 </html>

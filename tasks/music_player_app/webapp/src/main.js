@@ -113,6 +113,13 @@ const btnRepeat = $('btn-repeat');
 const playlistModal = $('playlist-modal');
 const modalPlaylists = $('modal-playlists');
 const modalCancel = $('modal-cancel');
+const playlistModalTitle = $('playlist-modal-title');
+
+// Picker mode: 'add' forwards the track to the destination playlist;
+// 'move' forwards + deletes from the source so the track physically
+// migrates. The modal reuses the same DOM; only the title + click
+// handler change between modes.
+let pickerMode = 'add';
 
 // Sleep timer refs
 const btnSleepTimer = $('btn-sleep-timer');
@@ -876,6 +883,9 @@ function _createTrackEl(track, trackList, context) {
     const addBtn = context.showAddBtn
         ? `<button class="track-add-btn" title="Add to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>`
         : '';
+    const moveBtn = context.showAddBtn
+        ? `<button class="track-move-btn" title="Move to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>`
+        : '';
 
     const placeholderSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
     el.innerHTML = `
@@ -887,6 +897,7 @@ function _createTrackEl(track, trackList, context) {
         <span class="track-item-downloaded" title="Available offline"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span>
         <span class="track-item-duration">${formatTime(track.duration)}</span>
         ${addBtn}
+        ${moveBtn}
     `;
 
     // Thumb resolution order:
@@ -922,6 +933,7 @@ function _createTrackEl(track, trackList, context) {
 
     el.addEventListener('click', (e) => {
         if (e.target.closest('.track-add-btn')) return;
+        if (e.target.closest('.track-move-btn')) return;
         startPlayback(trackList, context.groupId, context.topicId, origIndex, !context.showAddBtn);
         closePanel();
     });
@@ -932,7 +944,14 @@ function _createTrackEl(track, trackList, context) {
             if (!playlistGroupId) { showToast('Set a playlist group first'); switchTab('playlists'); return; }
             if (playlists.length === 0) { showToast('Create a playlist first'); switchTab('playlists'); return; }
             pendingAddTrack = { trackId: track.id, groupId: context.groupId };
-            showPlaylistPicker();
+            showPlaylistPicker('add');
+        });
+        el.querySelector('.track-move-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!playlistGroupId) { showToast('Set a playlist group first'); switchTab('playlists'); return; }
+            if (playlists.length === 0) { showToast('Create a playlist first'); switchTab('playlists'); return; }
+            pendingAddTrack = { trackId: track.id, groupId: context.groupId };
+            showPlaylistPicker('move');
         });
     }
 
@@ -1045,6 +1064,7 @@ function renderTracksInto(container, trackList, filter, context, { isSearchResul
 
 function _updateAddButton() {
     $('btn-add-playing').style.display = 'flex';
+    $('btn-move-playing').style.display = 'flex';
     $('btn-share').style.display = 'flex';
 }
 
@@ -1888,10 +1908,21 @@ $('btn-add-playing').addEventListener('click', () => {
     if (playlists.length === 0) { showToast('Create a playlist first'); return; }
     const track = playerTracks[currentTrackIndex];
     pendingAddTrack = { trackId: track.id, groupId: playerGroupId };
-    showPlaylistPicker();
+    showPlaylistPicker('add');
 });
 
-function showPlaylistPicker() {
+$('btn-move-playing').addEventListener('click', () => {
+    if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+    if (!playlistGroupId) { showToast('Set a playlist group first'); return; }
+    if (playlists.length === 0) { showToast('Create a playlist first'); return; }
+    const track = playerTracks[currentTrackIndex];
+    pendingAddTrack = { trackId: track.id, groupId: playerGroupId };
+    showPlaylistPicker('move');
+});
+
+function showPlaylistPicker(mode) {
+    pickerMode = mode === 'move' ? 'move' : 'add';
+    playlistModalTitle.textContent = pickerMode === 'move' ? 'Move to playlist' : 'Add to playlist';
     modalPlaylists.innerHTML = '';
     // Exclude the synthetic "All" entry and the General/Search topic (id=1)
     // from the picker — neither is a real destination playlist.
@@ -1903,7 +1934,10 @@ function showPlaylistPicker() {
         const el = document.createElement('div');
         el.className = 'modal-playlist-item';
         el.textContent = (p.icon || '') + ' ' + p.title;
-        el.addEventListener('click', () => addTrackToPlaylist(p.id));
+        el.addEventListener('click', () => {
+            if (pickerMode === 'move') moveTrackToPlaylist(p.id);
+            else addTrackToPlaylist(p.id);
+        });
         modalPlaylists.appendChild(el);
     });
     playlistModal.style.display = 'flex';
@@ -1957,6 +1991,55 @@ async function addTrackToPlaylist(topicId) {
     } catch (e) {
         showToast('Failed to add');
     }
+}
+
+async function moveTrackToPlaylist(topicId) {
+    if (!pendingAddTrack) return;
+    const { trackId, groupId } = pendingAddTrack;
+    pendingAddTrack = null;
+    playlistModal.style.display = 'none';
+    const moveBtn = $('btn-move-playing');
+    if (moveBtn) moveBtn.classList.add('moving');
+    try {
+        const result = await tg.moveTracksToPlaylist(playlistGroupId, topicId, groupId, [trackId]);
+        if (result.moved > 0) {
+            showToast('Moved to playlist');
+            // Drop the moved track from any in-memory list rendered from the
+            // source so the row disappears immediately without a reload.
+            _removeTrackFromRenderedLists(groupId, trackId);
+        } else if (result.forwarded > 0) {
+            showToast('Copied, but delete failed');
+        } else {
+            showToast('Failed to move');
+        }
+    } catch (e) {
+        showToast('Failed to move');
+    } finally {
+        if (moveBtn) moveBtn.classList.remove('moving');
+    }
+}
+
+function _removeTrackFromRenderedLists(groupId, trackId) {
+    try {
+        // Player queue (drop the track; adjust currentTrackIndex).
+        if (playerGroupId === groupId) {
+            const idx = playerTracks.findIndex(t => t.id === trackId);
+            if (idx >= 0) {
+                playerTracks.splice(idx, 1);
+                if (idx < currentTrackIndex) currentTrackIndex--;
+                else if (idx === currentTrackIndex) {
+                    // The currently-playing track was just moved. Keep the
+                    // index in bounds so next/prev still works; don't stop
+                    // playback — the audio is already streaming.
+                    if (currentTrackIndex >= playerTracks.length) {
+                        currentTrackIndex = playerTracks.length - 1;
+                    }
+                }
+            }
+        }
+        // Any DOM rows for this track.
+        document.querySelectorAll(`.track-item[data-track-id="${trackId}"]`).forEach(el => el.remove());
+    } catch { /* non-fatal */ }
 }
 
 // ══════════════════════════════════════
@@ -2294,6 +2377,7 @@ async function restoreSession() {
         }
         if (s.trackTitle) {
             $('btn-add-playing').style.display = 'flex';
+            $('btn-move-playing').style.display = 'flex';
             $('btn-share').style.display = 'flex';
         }
 
