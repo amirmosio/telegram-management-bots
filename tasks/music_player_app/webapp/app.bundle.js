@@ -70530,7 +70530,10 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     const out = [];
     for (const rec of _downloadedRecords.values()) {
       if (rec.groupId !== groupId) continue;
-      if (topicId === null || rec.topicId === topicId) out.push(rec.track);
+      const msg = _msgCache[_trackKey(rec.groupId, rec.track?.id ?? rec.trackId)];
+      const liveTopic = msg?.replyTo?.replyToTopId || msg?.replyTo?.replyToMsgId || null;
+      const effectiveTopic = liveTopic ?? rec.topicId;
+      if (topicId === null || effectiveTopic === topicId) out.push(rec.track);
     }
     out.sort((a, b) => (b.id || 0) - (a.id || 0));
     return out;
@@ -70539,15 +70542,16 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     return idbGet(TRACKS_STORE, _trackKey(groupId, trackId));
   }
   function _deriveTopicContext(groupId, trackId, override = {}) {
-    let topicId = override.topicId;
-    let topicTitle = override.topicTitle;
-    if (topicId == null) {
-      const msg = _msgCache[_trackKey(groupId, trackId)];
-      topicId = msg?.replyTo?.replyToTopId || msg?.replyTo?.replyToMsgId || null;
-    }
-    if (topicTitle == null && topicId != null) {
+    const msg = _msgCache[_trackKey(groupId, trackId)];
+    let topicId = msg?.replyTo?.replyToTopId || msg?.replyTo?.replyToMsgId || null;
+    if (topicId == null && override.topicId != null) topicId = override.topicId;
+    let topicTitle = null;
+    if (topicId != null) {
       const topic = (_topicsCache[groupId] || []).find((t) => t.id === topicId);
       if (topic) topicTitle = topic.title;
+    }
+    if (topicTitle == null && override.topicTitle && override.topicId === topicId) {
+      topicTitle = override.topicTitle;
     }
     return { topicId, topicTitle };
   }

@@ -103,12 +103,21 @@ export async function listDownloadedTopics(groupId) {
 
 // Downloaded tracks in a given topic, sorted newest-first.
 // topicId === null returns every downloaded track in the group.
+//
+// If a live GramJS msg is in the cache for a given track, its replyTo
+// is trusted over the rec's stored topicId — this self-heals rows
+// that an older version tagged with the wrong topic (e.g. because the
+// streaming-complete path used the *currently viewed* playlist
+// instead of the track's actual topic).
 export async function listDownloadedTracksInTopic(groupId, topicId) {
     await ready;
     const out = [];
     for (const rec of _downloadedRecords.values()) {
         if (rec.groupId !== groupId) continue;
-        if (topicId === null || rec.topicId === topicId) out.push(rec.track);
+        const msg = _msgCache[_trackKey(rec.groupId, rec.track?.id ?? rec.trackId)];
+        const liveTopic = msg?.replyTo?.replyToTopId || msg?.replyTo?.replyToMsgId || null;
+        const effectiveTopic = liveTopic ?? rec.topicId;
+        if (topicId === null || effectiveTopic === topicId) out.push(rec.track);
     }
     out.sort((a, b) => (b.id || 0) - (a.id || 0));
     return out;
@@ -121,19 +130,28 @@ export async function getCachedTrackRecord(groupId, trackId) {
     return idbGet(TRACKS_STORE, _trackKey(groupId, trackId));
 }
 
-// Derive topic context from the cached GramJS msg (if main.js didn't
-// pass explicit values). Falls back to null, which keeps the row off
-// the offline playlist lists until a later cache pass fills it in.
+// Derive topic context for a track row. The cached GramJS msg is the
+// authoritative source — its replyTo tells us which forum topic the
+// track actually lives in. The caller's `override` is used only as a
+// fallback when the msg cache doesn't have this track (e.g. an early
+// write before scanTracks has warmed the cache). Using the override
+// as the primary source was the old behaviour, but it let stale UI
+// state (the *currently viewed* playlist) overwrite the real topic —
+// e.g. when streaming completed after the user had switched playlists,
+// the track got tagged with the wrong topic and then leaked into that
+// playlist's offline view.
 function _deriveTopicContext(groupId, trackId, override = {}) {
-    let topicId = override.topicId;
-    let topicTitle = override.topicTitle;
-    if (topicId == null) {
-        const msg = _msgCache[_trackKey(groupId, trackId)];
-        topicId = msg?.replyTo?.replyToTopId || msg?.replyTo?.replyToMsgId || null;
-    }
-    if (topicTitle == null && topicId != null) {
+    const msg = _msgCache[_trackKey(groupId, trackId)];
+    let topicId = msg?.replyTo?.replyToTopId || msg?.replyTo?.replyToMsgId || null;
+    if (topicId == null && override.topicId != null) topicId = override.topicId;
+
+    let topicTitle = null;
+    if (topicId != null) {
         const topic = (_topicsCache[groupId] || []).find(t => t.id === topicId);
         if (topic) topicTitle = topic.title;
+    }
+    if (topicTitle == null && override.topicTitle && override.topicId === topicId) {
+        topicTitle = override.topicTitle;
     }
     return { topicId, topicTitle };
 }
