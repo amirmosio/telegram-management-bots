@@ -1935,7 +1935,21 @@ function updateLyricsHighlight() {
     activeLyricIndex = idx;
     const lines = lyricsContent.querySelectorAll('.lyric-line');
     lines.forEach((el, i) => { el.classList.toggle('active', i === idx); el.classList.toggle('past', i < idx); });
-    if (idx >= 0 && lines[idx]) lines[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (idx >= 0 && lines[idx]) _scrollLyricIntoView(lines[idx]);
+}
+
+// Center the active lyric line *only* within #lyrics-container. Using
+// native scrollIntoView({block:'center'}) also scrolls every scrollable
+// ancestor — including #player, whose overflow let the artwork shift
+// out of view when a new track's first active lyric fired.
+function _scrollLyricIntoView(line) {
+    const container = lyricsContent?.parentElement;
+    if (!container || !line) return;
+    const cRect = container.getBoundingClientRect();
+    const lRect = line.getBoundingClientRect();
+    const delta = (lRect.top - cRect.top) - (cRect.height / 2) + (lRect.height / 2);
+    try { container.scrollTo({ top: container.scrollTop + delta, behavior: 'smooth' }); }
+    catch { container.scrollTop = container.scrollTop + delta; }
 }
 
 // ══════════════════════════════════════
@@ -2097,6 +2111,33 @@ $('btn-move-playing').addEventListener('click', () => {
     const track = playerTracks[currentTrackIndex];
     pendingAddTrack = { trackId: track.id, groupId: playerGroupId };
     showPlaylistPicker('move');
+});
+
+$('btn-delete-playing').addEventListener('click', async () => {
+    if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+    const track = playerTracks[currentTrackIndex];
+    const ok = await showConfirmModal(
+        'Delete track?',
+        `"${track.title || 'this track'}" will be permanently removed from Telegram.`
+    );
+    if (!ok) return;
+    const btn = $('btn-delete-playing');
+    const groupId = playerGroupId;
+    const trackId = track.id;
+    btn.classList.add('deleting');
+    try {
+        const result = await tg.deleteTracks(groupId, [trackId]);
+        if (result.deleted > 0) {
+            showToast('Deleted');
+            _removeTrackFromRenderedLists(groupId, trackId);
+        } else {
+            showToast('Failed to delete');
+        }
+    } catch (e) {
+        showToast('Failed to delete');
+    } finally {
+        btn.classList.remove('deleting');
+    }
 });
 
 function showPlaylistPicker(mode) {

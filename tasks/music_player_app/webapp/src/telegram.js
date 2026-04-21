@@ -1272,6 +1272,23 @@ export async function moveTracksToPlaylist(destGroupId, topicId, sourceGroupId, 
     return { moved, forwarded, failed };
 }
 
+// Delete messages from the source chat outright. Used by the delete button
+// on the now-playing overlay to drop the track from the current playlist.
+export async function deleteTracks(groupId, trackIds) {
+    const entity = await _getEntity(groupId);
+    let deleted = 0, failed = 0;
+    try {
+        await client.deleteMessages(entity, trackIds, { revoke: true });
+        deleted = trackIds.length;
+        for (const tid of trackIds) _removeTrackFromSourceCaches(groupId, tid);
+    } catch (e) {
+        console.error('Failed to delete tracks:', e);
+        failed = trackIds.length;
+    }
+    invalidateCache(groupId, null);
+    return { deleted, failed };
+}
+
 function _removeTrackFromSourceCaches(groupId, trackId) {
     try {
         for (const k of Object.keys(_tracksCache)) {

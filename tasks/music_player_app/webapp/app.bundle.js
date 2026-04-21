@@ -71635,6 +71635,20 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     invalidateCache(sourceGroupId, null);
     return { moved, forwarded, failed };
   }
+  async function deleteTracks(groupId, trackIds) {
+    const entity = await _getEntity(groupId);
+    let deleted = 0, failed = 0;
+    try {
+      await client.deleteMessages(entity, trackIds, { revoke: true });
+      deleted = trackIds.length;
+      for (const tid of trackIds) _removeTrackFromSourceCaches(groupId, tid);
+    } catch (e) {
+      console.error("Failed to delete tracks:", e);
+      failed = trackIds.length;
+    }
+    invalidateCache(groupId, null);
+    return { deleted, failed };
+  }
   function _removeTrackFromSourceCaches(groupId, trackId) {
     try {
       for (const k of Object.keys(_tracksCache)) {
@@ -74170,7 +74184,19 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           el.classList.toggle("active", i === idx);
           el.classList.toggle("past", i < idx);
         });
-        if (idx >= 0 && lines[idx]) lines[idx].scrollIntoView({ behavior: "smooth", block: "center" });
+        if (idx >= 0 && lines[idx]) _scrollLyricIntoView(lines[idx]);
+      }
+      function _scrollLyricIntoView(line) {
+        const container = lyricsContent?.parentElement;
+        if (!container || !line) return;
+        const cRect = container.getBoundingClientRect();
+        const lRect = line.getBoundingClientRect();
+        const delta = lRect.top - cRect.top - cRect.height / 2 + lRect.height / 2;
+        try {
+          container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
+        } catch {
+          container.scrollTop = container.scrollTop + delta;
+        }
       }
       function _showArtwork(src, gen) {
         const artworkIcon = $("artwork-icon");
@@ -74326,6 +74352,32 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const track = playerTracks[currentTrackIndex];
         pendingAddTrack = { trackId: track.id, groupId: playerGroupId };
         showPlaylistPicker("move");
+      });
+      $("btn-delete-playing").addEventListener("click", async () => {
+        if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+        const track = playerTracks[currentTrackIndex];
+        const ok = await showConfirmModal(
+          "Delete track?",
+          `"${track.title || "this track"}" will be permanently removed from Telegram.`
+        );
+        if (!ok) return;
+        const btn = $("btn-delete-playing");
+        const groupId = playerGroupId;
+        const trackId = track.id;
+        btn.classList.add("deleting");
+        try {
+          const result = await deleteTracks(groupId, [trackId]);
+          if (result.deleted > 0) {
+            showToast("Deleted");
+            _removeTrackFromRenderedLists(groupId, trackId);
+          } else {
+            showToast("Failed to delete");
+          }
+        } catch (e) {
+          showToast("Failed to delete");
+        } finally {
+          btn.classList.remove("deleting");
+        }
       });
       function showPlaylistPicker(mode) {
         pickerMode = mode === "move" ? "move" : "add";
