@@ -73624,51 +73624,88 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           currentDlPos = aligned;
           console.log("[stream] download from", aligned);
           let pos = aligned;
+          const isFinished = () => _totalFilled(localFilled) >= fileSize;
+          const cancelled = () => teardown || myCtrl.signal.aborted || dlGen !== myDlGen || _playGeneration !== gen;
+          const MAX_ATTEMPTS = 4;
+          let attempt = 0;
           try {
-            for await (const chunk of iterTrackDownload(gId, track.id, aligned, myCtrl.signal)) {
-              if (teardown || myCtrl.signal.aborted || dlGen !== myDlGen || _playGeneration !== gen) return;
-              const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
-              if (pos + u8.byteLength > fileSize) {
-                const trim = u8.subarray(0, fileSize - pos);
-                localBuffer.set(trim, pos);
-                localFilled = _addRange(localFilled, pos, pos + trim.byteLength);
-                sw.postMessage({
-                  type: "stream-chunk",
-                  key: blobKey,
-                  offset: pos,
-                  chunk: trim.slice().buffer
-                });
-                pos += trim.byteLength;
-              } else {
-                localBuffer.set(u8, pos);
-                localFilled = _addRange(localFilled, pos, pos + u8.byteLength);
-                sw.postMessage({
-                  type: "stream-chunk",
-                  key: blobKey,
-                  offset: pos,
-                  chunk: u8.slice().buffer
-                });
-                pos += u8.byteLength;
+            while (attempt < MAX_ATTEMPTS && !cancelled() && !isFinished()) {
+              const startPos = pos;
+              let sawChunk = false;
+              try {
+                for await (const chunk of iterTrackDownload(gId, track.id, pos, myCtrl.signal)) {
+                  if (cancelled()) return;
+                  sawChunk = true;
+                  const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+                  if (pos + u8.byteLength > fileSize) {
+                    const trim = u8.subarray(0, fileSize - pos);
+                    localBuffer.set(trim, pos);
+                    localFilled = _addRange(localFilled, pos, pos + trim.byteLength);
+                    sw.postMessage({
+                      type: "stream-chunk",
+                      key: blobKey,
+                      offset: pos,
+                      chunk: trim.slice().buffer
+                    });
+                    pos += trim.byteLength;
+                  } else {
+                    localBuffer.set(u8, pos);
+                    localFilled = _addRange(localFilled, pos, pos + u8.byteLength);
+                    sw.postMessage({
+                      type: "stream-chunk",
+                      key: blobKey,
+                      offset: pos,
+                      chunk: u8.slice().buffer
+                    });
+                    pos += u8.byteLength;
+                  }
+                  currentDlPos = pos;
+                  if (!cachedToIdb && isFinished()) {
+                    cachedToIdb = true;
+                    _streamDownloadActive = false;
+                    const blob = new Blob([localBuffer], { type: mime });
+                    const topicIdForCache = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
+                    cacheTrack(gId, track.id, {
+                      blob,
+                      track,
+                      topicId: topicIdForCache,
+                      topicTitle: panelTitle?.textContent || null
+                    }).then(() => console.log("[stream] cached complete track to IDB")).catch((e) => console.warn("[stream] cache failed:", e?.message || e));
+                    _prefetchNextTrack(gen);
+                  }
+                }
+              } catch (e) {
+                if (cancelled()) return;
+                console.warn("[stream] iter error at", pos, "(attempt", attempt + 1, "):", e?.message || e);
               }
-              currentDlPos = pos;
-              if (!cachedToIdb && _totalFilled(localFilled) >= fileSize) {
-                cachedToIdb = true;
-                _streamDownloadActive = false;
-                const blob = new Blob([localBuffer], { type: mime });
-                const topicIdForCache = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
-                cacheTrack(gId, track.id, {
-                  blob,
-                  track,
-                  topicId: topicIdForCache,
-                  topicTitle: panelTitle?.textContent || null
-                }).then(() => console.log("[stream] cached complete track to IDB")).catch((e) => console.warn("[stream] cache failed:", e?.message || e));
-                _prefetchNextTrack(gen);
-              }
+              if (cancelled() || isFinished()) break;
+              attempt++;
+              if (attempt >= MAX_ATTEMPTS) break;
+              const advanced = pos > startPos;
+              const backoffMs = advanced ? 250 : 500 * attempt;
+              console.log(
+                "[stream] iterator stalled at",
+                pos,
+                "/",
+                fileSize,
+                sawChunk ? "(partial)" : "(no data)",
+                "\u2014 retrying in",
+                backoffMs,
+                "ms"
+              );
+              await new Promise((r) => setTimeout(r, backoffMs));
             }
-          } catch (e) {
-            console.warn("[stream] download error:", e?.message || e);
           } finally {
             if (currentAbort === myCtrl) currentAbort = null;
+            if (!cancelled() && !isFinished() && dlGen === myDlGen) {
+              console.warn("[stream] giving up at", pos, "/", fileSize, "\u2014 signalling stream-end");
+              try {
+                sw.postMessage({ type: "stream-end", key: blobKey });
+              } catch {
+              }
+              _streamDownloadActive = false;
+              showToast("Streaming failed, try again");
+            }
           }
         };
         let seekDebounce = null;

@@ -1373,57 +1373,107 @@ async function _streamWithSeek(track, gen, sw) {
         currentDlPos = aligned;
         console.log('[stream] download from', aligned);
         let pos = aligned;
-        try {
-            for await (const chunk of tg.iterTrackDownload(gId, track.id, aligned, myCtrl.signal)) {
-                if (teardown || myCtrl.signal.aborted || dlGen !== myDlGen || _playGeneration !== gen) return;
-                const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
-                if (pos + u8.byteLength > fileSize) {
-                    // Trim the tail so we don't overflow the buffer.
-                    const trim = u8.subarray(0, fileSize - pos);
-                    localBuffer.set(trim, pos);
-                    localFilled = _addRange(localFilled, pos, pos + trim.byteLength);
-                    sw.postMessage({
-                        type: 'stream-chunk',
-                        key: blobKey,
-                        offset: pos,
-                        chunk: trim.slice().buffer,
-                    });
-                    pos += trim.byteLength;
-                } else {
-                    localBuffer.set(u8, pos);
-                    localFilled = _addRange(localFilled, pos, pos + u8.byteLength);
-                    sw.postMessage({
-                        type: 'stream-chunk',
-                        key: blobKey,
-                        offset: pos,
-                        chunk: u8.slice().buffer,
-                    });
-                    pos += u8.byteLength;
-                }
-                currentDlPos = pos;
 
-                // Once every byte is in, persist to IDB so future plays are instant.
-                if (!cachedToIdb && _totalFilled(localFilled) >= fileSize) {
-                    cachedToIdb = true;
-                    _streamDownloadActive = false;
-                    const blob = new Blob([localBuffer], { type: mime });
-                    const topicIdForCache = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
-                    tg.cacheTrack(gId, track.id, {
-                        blob, track,
-                        topicId: topicIdForCache,
-                        topicTitle: panelTitle?.textContent || null,
-                    })
-                        .then(() => console.log('[stream] cached complete track to IDB'))
-                        .catch(e => console.warn('[stream] cache failed:', e?.message || e));
-                    // Safe to prefetch next track now — no more concurrent
-                    // iterTrackDownload calls will fight over the sender.
-                    _prefetchNextTrack(gen);
+        // Guard: if this download didn't start us at the head of the file
+        // (seek from an already-partially-filled stream), we can't report
+        // completion just by looking at `pos >= fileSize` from here — other
+        // ranges may still be missing. But if we started at 0, we know that
+        // when pos catches up to fileSize, the whole file is in.
+
+        const isFinished = () => _totalFilled(localFilled) >= fileSize;
+        const cancelled = () =>
+            teardown || myCtrl.signal.aborted || dlGen !== myDlGen || _playGeneration !== gen;
+
+        // Retry a stalled iterator up to MAX_ATTEMPTS times, resuming from
+        // the last byte we received. Telegram's WebSocket sender can drop
+        // mid-iteration without throwing (auto-reconnect finishes but the
+        // iterator is already dead), leaving the SW audio waiters stuck on
+        // the next byte forever. Resuming from `pos` unblocks them.
+        const MAX_ATTEMPTS = 4;
+        let attempt = 0;
+        try {
+            while (attempt < MAX_ATTEMPTS && !cancelled() && !isFinished()) {
+                const startPos = pos;
+                let sawChunk = false;
+                try {
+                    for await (const chunk of tg.iterTrackDownload(gId, track.id, pos, myCtrl.signal)) {
+                        if (cancelled()) return;
+                        sawChunk = true;
+                        const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+                        if (pos + u8.byteLength > fileSize) {
+                            // Trim the tail so we don't overflow the buffer.
+                            const trim = u8.subarray(0, fileSize - pos);
+                            localBuffer.set(trim, pos);
+                            localFilled = _addRange(localFilled, pos, pos + trim.byteLength);
+                            sw.postMessage({
+                                type: 'stream-chunk',
+                                key: blobKey,
+                                offset: pos,
+                                chunk: trim.slice().buffer,
+                            });
+                            pos += trim.byteLength;
+                        } else {
+                            localBuffer.set(u8, pos);
+                            localFilled = _addRange(localFilled, pos, pos + u8.byteLength);
+                            sw.postMessage({
+                                type: 'stream-chunk',
+                                key: blobKey,
+                                offset: pos,
+                                chunk: u8.slice().buffer,
+                            });
+                            pos += u8.byteLength;
+                        }
+                        currentDlPos = pos;
+
+                        // Once every byte is in, persist to IDB so future plays are instant.
+                        if (!cachedToIdb && isFinished()) {
+                            cachedToIdb = true;
+                            _streamDownloadActive = false;
+                            const blob = new Blob([localBuffer], { type: mime });
+                            const topicIdForCache = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+                            tg.cacheTrack(gId, track.id, {
+                                blob, track,
+                                topicId: topicIdForCache,
+                                topicTitle: panelTitle?.textContent || null,
+                            })
+                                .then(() => console.log('[stream] cached complete track to IDB'))
+                                .catch(e => console.warn('[stream] cache failed:', e?.message || e));
+                            // Safe to prefetch next track now — no more concurrent
+                            // iterTrackDownload calls will fight over the sender.
+                            _prefetchNextTrack(gen);
+                        }
+                    }
+                } catch (e) {
+                    if (cancelled()) return;
+                    console.warn('[stream] iter error at', pos, '(attempt', attempt + 1, '):', e?.message || e);
                 }
+
+                if (cancelled() || isFinished()) break;
+
+                // Iterator exited without finishing the file. Retry from the
+                // current position. If we didn't advance at all on this
+                // attempt, back off harder so we don't hot-loop on a dead
+                // sender.
+                attempt++;
+                if (attempt >= MAX_ATTEMPTS) break;
+                const advanced = pos > startPos;
+                const backoffMs = advanced ? 250 : 500 * attempt;
+                console.log('[stream] iterator stalled at', pos, '/', fileSize,
+                    sawChunk ? '(partial)' : '(no data)', '— retrying in', backoffMs, 'ms');
+                await new Promise(r => setTimeout(r, backoffMs));
             }
-        } catch (e) {
-            console.warn('[stream] download error:', e?.message || e);
         } finally {
             if (currentAbort === myCtrl) currentAbort = null;
+            // If we burned through all retries and the file still isn't
+            // complete, unblock the SW so the <audio> element fails cleanly
+            // instead of hanging. Also clear the active flag so the next
+            // track's prefetch isn't gated out.
+            if (!cancelled() && !isFinished() && dlGen === myDlGen) {
+                console.warn('[stream] giving up at', pos, '/', fileSize, '— signalling stream-end');
+                try { sw.postMessage({ type: 'stream-end', key: blobKey }); } catch {}
+                _streamDownloadActive = false;
+                showToast('Streaming failed, try again');
+            }
         }
     };
 
