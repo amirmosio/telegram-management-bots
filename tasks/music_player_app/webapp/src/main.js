@@ -873,7 +873,9 @@ async function downloadAndPlay(item, searchRef) {
 //  RENDER TRACKS
 // ══════════════════════════════════════
 function _createTrackEl(track, trackList, context) {
-    const origIndex = trackList.indexOf(track);
+    // origIndex is resolved at click time (not render time) — after a move
+    // or other in-place mutation of trackList, a closed-over index would
+    // point at the wrong track.
     const isPlaying = track.id === currentTrackId;
     const isDownloaded = tg.isTrackDownloaded(context.groupId, track.id);
     const el = document.createElement('div');
@@ -934,7 +936,9 @@ function _createTrackEl(track, trackList, context) {
     el.addEventListener('click', (e) => {
         if (e.target.closest('.track-add-btn')) return;
         if (e.target.closest('.track-move-btn')) return;
-        startPlayback(trackList, context.groupId, context.topicId, origIndex, !context.showAddBtn);
+        const idx = trackList.indexOf(track);
+        if (idx < 0) return; // splice raced us (e.g. track was just moved)
+        startPlayback(trackList, context.groupId, context.topicId, idx, !context.showAddBtn);
         closePanel();
     });
 

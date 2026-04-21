@@ -73195,7 +73195,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
       }
       function _createTrackEl(track, trackList, context) {
-        const origIndex = trackList.indexOf(track);
         const isPlaying = track.id === currentTrackId;
         const isDownloaded = isTrackDownloaded(context.groupId, track.id);
         const el = document.createElement("div");
@@ -73243,7 +73242,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         el.addEventListener("click", (e) => {
           if (e.target.closest(".track-add-btn")) return;
           if (e.target.closest(".track-move-btn")) return;
-          startPlayback(trackList, context.groupId, context.topicId, origIndex, !context.showAddBtn);
+          const idx = trackList.indexOf(track);
+          if (idx < 0) return;
+          startPlayback(trackList, context.groupId, context.topicId, idx, !context.showAddBtn);
           closePanel();
         });
         if (context.showAddBtn) {
