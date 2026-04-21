@@ -71011,7 +71011,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       msg_id: msg.id,
       has_thumb: hasThumb,
       mime_type: doc.mimeType || "audio/mpeg",
-      file_size: doc.size?.value || doc.size || 0
+      // GramJS returns doc.size as a native BigInt in recent versions (older
+      // versions used a big-integer object with .value). Coerce to Number so
+      // downstream callers (Uint8Array allocation, range arithmetic, SW
+      // postMessage consumers) don't trip over BigInt↔Number mixing.
+      file_size: Number(doc.size?.value ?? doc.size ?? 0) || 0
     };
   }
   async function scanTracks(groupId, topicId = null, limit = PAGE_SIZE) {
