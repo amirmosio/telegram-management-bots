@@ -10,7 +10,7 @@
     <meta name="apple-mobile-web-app-title" content="Music">
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=88">
+    <link rel="stylesheet" href="style.css?v=89">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -222,6 +222,23 @@
         </div>
     </div>
 
+    <!-- Share dialog: copyable link + send-to-chat -->
+    <div id="share-modal" style="display:none">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3>Share</h3>
+            <div id="share-link-row" title="Tap to copy">
+                <span id="share-link-text">Preparing link…</span>
+                <svg id="share-link-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </div>
+            <div id="share-chat-search-wrap">
+                <input id="share-chat-search" type="text" placeholder="Send to chat…" autocomplete="off">
+            </div>
+            <div id="share-chats"></div>
+            <button id="share-cancel" class="text-btn">Cancel</button>
+        </div>
+    </div>
+
     <!-- Playlist picker modal -->
     <div id="playlist-modal" style="display:none">
         <div class="modal-backdrop"></div>
@@ -318,6 +335,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=89"></script>
+    <script src="app.bundle.js?v=90"></script>
 </body>
 </html>

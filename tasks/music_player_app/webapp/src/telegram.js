@@ -1500,6 +1500,54 @@ export async function shareTrack(shareGroupId, sourceGroupId, trackId) {
     return { msgId: newMsgId, link };
 }
 
+// List chats (users, groups, channels) suitable as share destinations.
+// Skips the share-aggregator channel itself and anything the user can't post to.
+export async function listChatsForShare(limit = 80) {
+    await _ensureConnected();
+    if (!client.connected) return [];
+    const dialogs = await client.getDialogs({ limit });
+    const chats = [];
+    for (const d of dialogs) {
+        const entity = d.entity;
+        if (!entity) continue;
+
+        let id, title, kind;
+        if (entity instanceof Api.User) {
+            if (entity.self || entity.deleted) continue;
+            const raw = entity.id?.value ?? entity.id;
+            id = Number(typeof raw === 'bigint' ? raw : raw); // positive user id
+            const first = entity.firstName || '';
+            const last = entity.lastName || '';
+            title = (first + ' ' + last).trim() || entity.username || 'User';
+            kind = entity.bot ? 'bot' : 'user';
+        } else if (_isGroup(entity)) {
+            id = _entityId(entity);
+            title = entity.title || 'Group';
+            if (_isChannel(entity)) {
+                if (entity.username === SHARE_CHANNEL_USERNAME) continue;
+                if (entity.broadcast && !(entity.creator || entity.adminRights)) continue;
+                kind = entity.broadcast ? 'channel' : 'group';
+            } else {
+                kind = 'group';
+            }
+        } else {
+            continue;
+        }
+
+        _groupsCache[id] = entity;
+        chats.push({ id, title, kind });
+    }
+    return chats;
+}
+
+// Send a plain text message (with an embedded URL) to a chat.
+// Telegram auto-generates a link preview below the text.
+export async function sendTextToChat(chatId, text) {
+    await _ensureConnected();
+    const entity = await _getEntity(chatId);
+    await client.sendMessage(entity, { message: text });
+}
+
 export async function resolveShareLink(msgId) {
     await _ensureConnected();
 

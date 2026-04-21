@@ -612,9 +612,113 @@ html, body {
 
 /* ── Modal ── */
 #playlist-modal,
-#confirm-modal {
+#confirm-modal,
+#share-modal {
     position: fixed; inset: 0; z-index: 100;
     display: flex; align-items: center; justify-content: center;
+}
+
+#share-modal .modal-content {
+    max-width: 380px;
+    max-height: 75vh;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 18px 14px;
+}
+
+#share-link-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-hover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: background 0.15s;
+    margin-bottom: 12px;
+}
+
+#share-link-row:hover { background: var(--bg-tertiary, var(--border)); }
+#share-link-row.copied { color: var(--accent); border-color: var(--accent); }
+
+#share-link-text {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+#share-link-icon { flex-shrink: 0; opacity: 0.7; }
+
+#share-chat-search-wrap { margin-bottom: 8px; }
+
+#share-chat-search {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+}
+
+#share-chat-search:focus { border-color: var(--accent); }
+
+#share-chats {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    min-height: 80px;
+    max-height: 40vh;
+}
+
+.share-chat-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s;
+}
+
+.share-chat-item:hover { background: var(--bg-hover); }
+
+.share-chat-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--text-primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+.share-chat-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.share-chat-type {
+    font-size: 11px;
+    color: var(--text-secondary);
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.share-chat-item.sending { opacity: 0.5; pointer-events: none; }
+
+.share-chats-placeholder {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
 }
 
 #confirm-modal-body {

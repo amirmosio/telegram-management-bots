@@ -2278,81 +2278,154 @@ function _removeTrackFromRenderedLists(groupId, trackId) {
 //  SHARE
 // ══════════════════════════════════════
 const btnShare = $('btn-share');
+const shareModal = $('share-modal');
+const shareLinkRow = $('share-link-row');
+const shareLinkText = $('share-link-text');
+const shareChatSearch = $('share-chat-search');
+const shareChatsEl = $('share-chats');
+const shareCancelBtn = $('share-cancel');
+
+let _shareCurrentLink = null;
+let _shareCurrentTrack = null;
+let _shareChatsCache = [];
+
+function _shareCaption(track) {
+    const title = track.title || 'Music';
+    const artist = track.artist ? ' — ' + track.artist : '';
+    return `${title}${artist}\n${_shareCurrentLink}`;
+}
+
+function _renderShareChats(filter) {
+    const q = (filter || '').trim().toLowerCase();
+    const list = q
+        ? _shareChatsCache.filter(c => c.title.toLowerCase().includes(q))
+        : _shareChatsCache;
+
+    shareChatsEl.innerHTML = '';
+    if (list.length === 0) {
+        shareChatsEl.innerHTML = '<div class="share-chats-placeholder">No chats found</div>';
+        return;
+    }
+    for (const chat of list) {
+        const el = document.createElement('div');
+        el.className = 'share-chat-item';
+        const initial = (chat.title.trim()[0] || '?').toUpperCase();
+        const typeLabel = chat.kind === 'user' ? 'DM'
+            : chat.kind === 'bot' ? 'Bot'
+            : chat.kind === 'channel' ? 'Channel'
+            : 'Group';
+        el.innerHTML = `
+            <div class="share-chat-avatar">${escapeHtml(initial)}</div>
+            <div class="share-chat-title">${escapeHtml(chat.title)}</div>
+            <div class="share-chat-type">${typeLabel}</div>
+        `;
+        el.addEventListener('click', () => _sendShareToChat(chat, el));
+        shareChatsEl.appendChild(el);
+    }
+}
+
+async function _sendShareToChat(chat, rowEl) {
+    if (!_shareCurrentLink || !_shareCurrentTrack) {
+        showToast('Link not ready yet');
+        return;
+    }
+    rowEl.classList.add('sending');
+    try {
+        await tg.sendTextToChat(chat.id, _shareCaption(_shareCurrentTrack));
+        showToast(`Sent to ${chat.title}`);
+        _closeShareDialog();
+    } catch (e) {
+        console.error('Send to chat failed:', e);
+        showToast('Failed to send: ' + e.message);
+        rowEl.classList.remove('sending');
+    }
+}
+
+function _closeShareDialog() {
+    shareModal.style.display = 'none';
+    shareLinkRow.classList.remove('copied');
+    shareChatSearch.value = '';
+    shareChatsEl.innerHTML = '';
+    _shareCurrentLink = null;
+    _shareCurrentTrack = null;
+}
+
+async function _copyShareLink() {
+    if (!_shareCurrentLink) return;
+    try {
+        await navigator.clipboard.writeText(_shareCurrentLink);
+        shareLinkRow.classList.add('copied');
+        showToast('Link copied!');
+        setTimeout(() => shareLinkRow.classList.remove('copied'), 1500);
+    } catch (e) {
+        showToast(_shareCurrentLink);
+    }
+}
+
+async function _prepareShareLink(track) {
+    // Ensure the share aggregator channel exists and the track is forwarded
+    // to it (once per track), then build the deep link.
+    let shareChannelId = localStorage.getItem('share_channel_id');
+    if (!shareChannelId) {
+        const channel = await tg.findOrCreateShareChannel();
+        shareChannelId = channel.id;
+        localStorage.setItem('share_channel_id', String(channel.id));
+        tg.muteChat(channel.id);
+        tg.archiveChat(channel.id);
+    }
+    const parsedShareId = parseInt(shareChannelId, 10);
+
+    const shareCacheKey = `share_${playerGroupId}_${track.id}`;
+    let sharedMsgId = localStorage.getItem(shareCacheKey);
+    if (!sharedMsgId) {
+        const { link } = await tg.shareTrack(parsedShareId, playerGroupId, track.id);
+        sharedMsgId = link.split('/').pop();
+        localStorage.setItem(shareCacheKey, sharedMsgId);
+        tg.archiveChat(parsedShareId);
+    }
+
+    const appUrl = window.location.origin + window.location.pathname;
+    const currentSec = Math.floor(audio.currentTime || 0);
+    return `${appUrl}?track=${_encodeTrackId(parseInt(sharedMsgId, 10))}&t=${currentSec}`;
+}
 
 btnShare.addEventListener('click', async () => {
     if (playerTracks.length === 0 || currentTrackIndex < 0) return;
     const track = playerTracks[currentTrackIndex];
+    _shareCurrentTrack = track;
+    _shareCurrentLink = null;
 
-    btnShare.classList.add('sharing');
-    showToast('Sharing...');
+    // Open the dialog immediately so the UI feels responsive.
+    shareLinkText.textContent = 'Preparing link…';
+    shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Loading chats…</div>';
+    shareModal.style.display = 'flex';
+
+    // Kick off link preparation and chat loading in parallel.
+    _prepareShareLink(track).then(link => {
+        if (_shareCurrentTrack !== track) return; // dialog closed/changed
+        _shareCurrentLink = link;
+        shareLinkText.textContent = link;
+    }).catch(e => {
+        console.error('Prepare share link failed:', e);
+        shareLinkText.textContent = 'Failed to build link';
+        localStorage.removeItem('share_channel_id');
+    });
 
     try {
-        // Find or create the share channel (join if needed)
-        let shareChannelId = localStorage.getItem('share_channel_id');
-        if (!shareChannelId) {
-            const channel = await tg.findOrCreateShareChannel();
-            shareChannelId = channel.id;
-            localStorage.setItem('share_channel_id', String(channel.id));
-            tg.muteChat(channel.id); // mute on first use
-            tg.archiveChat(channel.id); // archive on first use
-        }
-
-        const parsedShareId = parseInt(shareChannelId, 10);
-
-        // Check if this track was already shared (avoid duplicate forwards)
-        const shareCacheKey = `share_${playerGroupId}_${track.id}`;
-        let sharedMsgId = localStorage.getItem(shareCacheKey);
-
-        if (!sharedMsgId) {
-            // Forward the track for the first time
-            const { link } = await tg.shareTrack(
-                parsedShareId,
-                playerGroupId,
-                track.id
-            );
-            sharedMsgId = link.split('/').pop();
-            localStorage.setItem(shareCacheKey, sharedMsgId);
-
-            // Re-archive after sharing (forwarding unarchives the chat)
-            tg.archiveChat(parsedShareId);
-        }
-
-        // Build web app link with encoded track ID and current position
-        const appUrl = window.location.origin + window.location.pathname;
-        const currentSec = Math.floor(audio.currentTime || 0);
-        const shareLink = `${appUrl}?track=${_encodeTrackId(parseInt(sharedMsgId, 10))}&t=${currentSec}`;
-
-        // Use Web Share API on mobile (clipboard fails in async context on iOS)
-        const isMobile = window.matchMedia('(max-width: 700px)').matches;
-        if (isMobile && navigator.share) {
-            try {
-                await navigator.share({
-                    title: track.title || 'Music',
-                    text: `${track.title}${track.artist ? ' - ' + track.artist : ''}`,
-                    url: shareLink,
-                });
-                showToast('Shared!');
-            } catch (e) {
-                if (e.name !== 'AbortError') showToast('Share cancelled');
-            }
-        } else {
-            // Desktop: copy to clipboard
-            try {
-                await navigator.clipboard.writeText(shareLink);
-                showToast('Link copied!');
-            } catch (e) {
-                // Fallback: show the link
-                showToast(shareLink);
-            }
-        }
+        _shareChatsCache = await tg.listChatsForShare(80);
+        if (_shareCurrentTrack === track) _renderShareChats('');
     } catch (e) {
-        console.error('Share failed:', e);
-        showToast('Share failed: ' + e.message);
-        // Clear cached channel ID in case it's stale
-        localStorage.removeItem('share_channel_id');
+        console.error('List chats failed:', e);
+        shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Failed to load chats</div>';
     }
+});
 
-    btnShare.classList.remove('sharing');
+shareLinkRow.addEventListener('click', _copyShareLink);
+shareCancelBtn.addEventListener('click', _closeShareDialog);
+shareModal.querySelector('.modal-backdrop')?.addEventListener('click', _closeShareDialog);
+shareChatSearch.addEventListener('input', e => _renderShareChats(e.target.value));
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && shareModal.style.display === 'flex') _closeShareDialog();
 });
 
 // ══════════════════════════════════════
