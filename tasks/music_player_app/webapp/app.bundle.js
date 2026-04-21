@@ -73545,6 +73545,30 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
       }
       var SEEK_ALIGN = 512 * 1024;
+      var STREAM_CHUNK_TIMEOUT_MS = 12e3;
+      async function* _iterWithChunkTimeout(src, timeoutMs) {
+        try {
+          while (true) {
+            let timer;
+            const timeoutPromise = new Promise((_, rej) => {
+              timer = setTimeout(() => rej(new Error("stream-chunk-timeout")), timeoutMs);
+            });
+            let step;
+            try {
+              step = await Promise.race([src.next(), timeoutPromise]);
+            } finally {
+              clearTimeout(timer);
+            }
+            if (step.done) return;
+            yield step.value;
+          }
+        } finally {
+          try {
+            await src.return?.();
+          } catch {
+          }
+        }
+      }
       function _isFilled(filled, off) {
         for (const [s, e] of filled) if (off >= s && off < e) return true;
         return false;
@@ -73642,7 +73666,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               const startPos = pos;
               let sawChunk = false;
               try {
-                for await (const chunk of iterTrackDownload(gId, track.id, pos, myCtrl.signal)) {
+                const rawIter = iterTrackDownload(gId, track.id, pos, myCtrl.signal);
+                for await (const chunk of _iterWithChunkTimeout(rawIter, STREAM_CHUNK_TIMEOUT_MS)) {
                   if (cancelled()) return;
                   sawChunk = true;
                   const u8 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
