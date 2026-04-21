@@ -299,6 +299,15 @@ function showPlaylistTracks() {
     tabPlaylists.classList.remove('active');
     tabPlaylistTracks.classList.add('active');
     panelSubheader.style.display = 'flex';
+    // Re-derive the header title on every entry — switchTab() reuses this
+    // view when the user bounces between tabs, and without this the title
+    // still reads whatever the previous tab set (e.g. the browse group).
+    if (currentPlaylistTopicId === '__all__') {
+        panelTitle.textContent = 'All';
+    } else {
+        const p = playlists.find(p => p.id === currentPlaylistTopicId);
+        if (p) panelTitle.textContent = p.title;
+    }
     playlistTracksSearch.value = '';
     updateStorageUsage();
 }

@@ -72746,6 +72746,12 @@ ${JSON.stringify(state)}`;
         tabPlaylists.classList.remove("active");
         tabPlaylistTracks.classList.add("active");
         panelSubheader.style.display = "flex";
+        if (currentPlaylistTopicId === "__all__") {
+          panelTitle.textContent = "All";
+        } else {
+          const p = playlists.find((p2) => p2.id === currentPlaylistTopicId);
+          if (p) panelTitle.textContent = p.title;
+        }
         playlistTracksSearch.value = "";
         updateStorageUsage();
       }
