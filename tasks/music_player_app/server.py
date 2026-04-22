@@ -1,10 +1,13 @@
 import asyncio
 import json
+import logging
 import mimetypes
 from pathlib import Path
 
 import aiohttp
 from aiohttp import web
+
+logger = logging.getLogger(__name__)
 
 from tasks.music_player_app.music_source import MusicSource
 from tasks.music_player_app.lyrics import LyricsFetcher
@@ -27,6 +30,7 @@ class MusicServer:
         self.app = web.Application(middlewares=[self._cors_middleware])
         self._setup_routes()
         self._runner = None
+        self._proxy_session: aiohttp.ClientSession | None = None
 
     @web.middleware
     async def _cors_middleware(self, request, handler):
@@ -582,26 +586,36 @@ class MusicServer:
 
         timeout = aiohttp.ClientTimeout(total=15)
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    target_url,
-                    timeout=timeout,
-                    headers={"User-Agent": "TelegramMusicPlayer/1.0"},
-                ) as resp:
-                    body = await resp.read()
-                    return web.Response(
-                        body=body,
-                        status=resp.status,
-                        content_type=resp.content_type or "application/octet-stream",
-                    )
+            async with self._proxy_session.get(
+                target_url,
+                timeout=timeout,
+                headers={"User-Agent": "TelegramMusicPlayer/1.0"},
+            ) as resp:
+                body = await resp.read()
+                return web.Response(
+                    body=body,
+                    status=resp.status,
+                    content_type=resp.content_type or "application/octet-stream",
+                )
         except asyncio.TimeoutError:
+            logger.warning("proxy timeout host=%s", parsed.hostname)
             raise web.HTTPGatewayTimeout(text="Upstream timeout")
         except Exception as e:
-            raise web.HTTPBadGateway(text=str(e))
+            logger.warning(
+                "proxy failed host=%s err_type=%s err=%s",
+                parsed.hostname, type(e).__name__, e,
+            )
+            raise web.HTTPBadGateway(text=f"{type(e).__name__}: {e}")
 
     # ── Lifecycle ──
 
     async def start(self):
+        connector = aiohttp.TCPConnector(
+            limit=20,
+            ttl_dns_cache=300,
+            use_dns_cache=True,
+        )
+        self._proxy_session = aiohttp.ClientSession(connector=connector)
         self._runner = web.AppRunner(self.app)
         await self._runner.setup()
         site = web.TCPSite(self._runner, self.host, self.port)
@@ -609,5 +623,8 @@ class MusicServer:
         return self._runner
 
     async def stop(self):
+        if self._proxy_session:
+            await self._proxy_session.close()
+            self._proxy_session = None
         if self._runner:
             await self._runner.cleanup()
