@@ -86,7 +86,7 @@ AppSideService(
       const headers = { 'Accept': 'application/json', 'X-NP-Token': this.state.token };
       if (this.state.lastEtag) headers['If-None-Match'] = '"' + this.state.lastEtag + '"';
 
-      const res = await this.httpRequest({ url, method: 'GET', headers, timeout: 6000 });
+      const res = await this.fetch({ url, method: 'GET', headers, timeout: 6000 });
       if (!res || !res.status) return;
       if (res.status === 304) return;
       if (res.status !== 200) return;
