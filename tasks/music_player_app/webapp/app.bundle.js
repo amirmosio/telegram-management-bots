@@ -72005,19 +72005,25 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
-  async function _purgeStaleSyncMessages(client2, entity, peer, keepId) {
+  async function _findExistingSyncMessage(entity) {
     try {
-      const toDelete = [];
-      for await (const msg of client2.iterMessages(entity, { limit: 20, replyTo: 1 })) {
+      for await (const msg of client.iterMessages(entity, { limit: 30, replyTo: 1 })) {
+        if (msg?.message?.startsWith("\u{1F3B5}")) return msg.id;
+      }
+    } catch (_) {
+    }
+    return null;
+  }
+  async function _purgeStaleSyncMessages(entity, keepId) {
+    try {
+      const ids = [];
+      for await (const msg of client.iterMessages(entity, { limit: 30, replyTo: 1 })) {
         if (!msg?.message?.startsWith("\u{1F3B5}")) continue;
         if (msg.id === keepId) continue;
-        toDelete.push(msg.id);
+        ids.push(msg.id);
       }
-      if (toDelete.length) {
-        await client2.invoke(new import_tl.Api.messages.DeleteMessages({
-          revoke: true,
-          id: toDelete
-        })).catch(() => {
+      if (ids.length) {
+        await client.deleteMessages(entity, ids, { revoke: true }).catch(() => {
         });
       }
     } catch (_) {
@@ -72030,24 +72036,23 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     const peer = await client.getInputEntity(groupId);
     const text = `\u{1F3B5} Now Playing: ${state.title || "Unknown"}${state.artist ? " - " + state.artist : ""}
 ${JSON.stringify(state)}`;
-    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
-    if (cachedId) {
+    async function tryEdit(id) {
+      if (!id) return false;
       try {
-        await client.invoke(new import_tl.Api.messages.EditMessage({
-          peer,
-          id: cachedId,
-          message: text
-        }));
-        return;
-      } catch (e) {
-        localStorage.removeItem(SYNC_MSG_KEY);
-        await _purgeStaleSyncMessages(client, entity, peer, -1);
+        await client.invoke(new import_tl.Api.messages.EditMessage({ peer, id, message: text }));
+        localStorage.setItem(SYNC_MSG_KEY, String(id));
+        return true;
+      } catch (_) {
+        return false;
       }
     }
-    const sent = await client.sendMessage(entity, {
-      message: text,
-      replyTo: 1
-    });
+    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
+    if (await tryEdit(cachedId)) return;
+    localStorage.removeItem(SYNC_MSG_KEY);
+    const existingId = await _findExistingSyncMessage(entity);
+    if (await tryEdit(existingId)) return;
+    await _purgeStaleSyncMessages(entity, -1);
+    const sent = await client.sendMessage(entity, { message: text, replyTo: 1 });
     localStorage.setItem(SYNC_MSG_KEY, String(sent.id));
     try {
       await client.invoke(new import_tl.Api.messages.UpdatePinnedMessage({
@@ -72055,10 +72060,9 @@ ${JSON.stringify(state)}`;
         id: sent.id,
         silent: true
       }));
-    } catch (e) {
-      console.warn("Pin sync message failed:", e.message);
+    } catch (_) {
     }
-    _purgeStaleSyncMessages(client, entity, peer, sent.id).catch(() => {
+    _purgeStaleSyncMessages(entity, sent.id).catch(() => {
     });
   }
   async function _sha256Hex(input) {

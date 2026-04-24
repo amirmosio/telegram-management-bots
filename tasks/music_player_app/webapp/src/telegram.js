@@ -1780,67 +1780,73 @@ export async function downloadSearchResult(groupId, dlCmd) {
 const SYNC_MSG_KEY = 'sync_msg_id';
 const NP_TOKEN_KEY = 'np_token'; // localStorage cache of this account's watch token
 
-// Scrub every existing "🎵" message in General except `keepId`. Best-effort;
-// any failure is swallowed so a stale message can't break the sync path.
-async function _purgeStaleSyncMessages(client, entity, peer, keepId) {
+// Find the id of any existing "🎵" message in General. Returns null if none.
+async function _findExistingSyncMessage(entity) {
     try {
-        const toDelete = [];
-        for await (const msg of client.iterMessages(entity, { limit: 20, replyTo: 1 })) {
+        for await (const msg of client.iterMessages(entity, { limit: 30, replyTo: 1 })) {
+            if (msg?.message?.startsWith('🎵')) return msg.id;
+        }
+    } catch (_) {}
+    return null;
+}
+
+// Delete every "🎵" message in General except `keepId`. Uses GramJS's
+// `deleteMessages` helper so it routes to channels.DeleteMessages for
+// supergroups (required — messages.DeleteMessages is a no-op there).
+async function _purgeStaleSyncMessages(entity, keepId) {
+    try {
+        const ids = [];
+        for await (const msg of client.iterMessages(entity, { limit: 30, replyTo: 1 })) {
             if (!msg?.message?.startsWith('🎵')) continue;
             if (msg.id === keepId) continue;
-            toDelete.push(msg.id);
+            ids.push(msg.id);
         }
-        if (toDelete.length) {
-            await client.invoke(new Api.messages.DeleteMessages({
-                revoke: true, id: toDelete,
-            })).catch(() => {});
+        if (ids.length) {
+            await client.deleteMessages(entity, ids, { revoke: true }).catch(() => {});
         }
-    } catch (_) { /* best-effort */ }
+    } catch (_) {}
 }
 
 export async function saveSyncState(groupId, state) {
     await _ensureConnected();
-    if (!client.connected) return; // offline — silently skip
+    if (!client.connected) return;
     const entity = await _getEntity(groupId);
     const peer = await client.getInputEntity(groupId);
     const text = `🎵 Now Playing: ${state.title || 'Unknown'}${state.artist ? ' - ' + state.artist : ''}\n${JSON.stringify(state)}`;
 
-    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
-
-    // Edit-in-place on the cached message — cheap path, no Telegram spam.
-    if (cachedId) {
+    async function tryEdit(id) {
+        if (!id) return false;
         try {
-            await client.invoke(new Api.messages.EditMessage({
-                peer,
-                id: cachedId,
-                message: text,
-            }));
-            return;
-        } catch (e) {
-            // Cached message is gone / invalid. Drop it; delete any lingering
-            // "🎵" messages in General *before* we send a new one, so the
-            // group never accumulates stale sync messages.
-            localStorage.removeItem(SYNC_MSG_KEY);
-            await _purgeStaleSyncMessages(client, entity, peer, -1);
+            await client.invoke(new Api.messages.EditMessage({ peer, id, message: text }));
+            localStorage.setItem(SYNC_MSG_KEY, String(id));
+            return true;
+        } catch (_) {
+            return false;
         }
     }
 
-    const sent = await client.sendMessage(entity, {
-        message: text,
-        replyTo: 1,
-    });
-    localStorage.setItem(SYNC_MSG_KEY, String(sent.id));
+    // 1) Cached id — fast path after the first success.
+    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
+    if (await tryEdit(cachedId)) return;
 
+    // 2) A different device (or a fresh browser) may already have an existing
+    //    "🎵" message — find it and edit that so both devices converge on
+    //    the same single message instead of each sending their own.
+    localStorage.removeItem(SYNC_MSG_KEY);
+    const existingId = await _findExistingSyncMessage(entity);
+    if (await tryEdit(existingId)) return;
+
+    // 3) No usable message — scrub any leftovers, then send + pin one.
+    await _purgeStaleSyncMessages(entity, -1);
+    const sent = await client.sendMessage(entity, { message: text, replyTo: 1 });
+    localStorage.setItem(SYNC_MSG_KEY, String(sent.id));
     try {
         await client.invoke(new Api.messages.UpdatePinnedMessage({
             peer, id: sent.id, silent: true,
         }));
-    } catch (e) {
-        console.warn('Pin sync message failed:', e.message);
-    }
-
-    // Belt-and-braces: scrub anything that isn't our brand-new message.
-    _purgeStaleSyncMessages(client, entity, peer, sent.id).catch(() => {});
+    } catch (_) {}
+    // Guard against a race where two devices both reached step 3.
+    _purgeStaleSyncMessages(entity, sent.id).catch(() => {});
 }
 
 // Deterministic watch token derived from the logged-in Telegram account's
