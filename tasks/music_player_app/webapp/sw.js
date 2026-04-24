@@ -1,4 +1,4 @@
-const CACHE_NAME = 'music-player-v8';
+const CACHE_NAME = 'music-player-v9';
 const STATIC_ASSETS = [
     '/',
     '/style.css',
