@@ -30,6 +30,7 @@ Page(
       scrollOffset: 0,    // current scroll position (>=0)
       activeIdx: -1,
       tickTimer: null,
+      requestRetry: null, // setTimeout id for the keep-asking-state retry
     },
 
     build() {
@@ -37,14 +38,30 @@ Page(
       this._buildChrome();
       this._renderWaiting();
       this._startTick();
-      // Ask side service to push latest state.
-      this.request({ method: 'GET_STATE' }).catch(() => {});
+      // Keep asking the side service for state until something arrives.
+      // The side service may not be awake when the page first opens
+      // (iOS may have backgrounded the Zepp app), and a single fire-and-
+      // forget request would be lost in that window.
+      this._scheduleStateRequest();
     },
 
     onDestroy() {
       if (this.state.tickTimer) { clearInterval(this.state.tickTimer); this.state.tickTimer = null; }
+      if (this.state.requestRetry) { clearTimeout(this.state.requestRetry); this.state.requestRetry = null; }
       try { resumeDropWristScreenOff(); } catch (_) {}
       try { resumePalmScreenOff(); } catch (_) {}
+    },
+
+    _scheduleStateRequest() {
+      try { this.request({ method: 'GET_STATE' }).catch(() => {}); } catch (_) {}
+      if (this.state.requestRetry) clearTimeout(this.state.requestRetry);
+      this.state.requestRetry = setTimeout(() => {
+        // Stop retrying once any data has arrived.
+        const haveData = (Array.isArray(this.state.synced) && this.state.synced.length > 0) ||
+                         (typeof this.state.plain === 'string' && this.state.plain.length > 0) ||
+                         (this.state.track && this.state.track.title);
+        if (!haveData) this._scheduleStateRequest();
+      }, 2500);
     },
 
     _keepScreenOn() {

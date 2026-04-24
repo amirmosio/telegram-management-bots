@@ -21,6 +21,7 @@ AppSideService(
       token: '',
       lastEtag: null,
       lastTrackId: null,
+      lastSyncedSig: '',     // signature of the lyric doc we last sent
       lastData: null,        // remember the last full payload for re-emits
       lastEmitWall: 0,       // timestamp of last LYRICS/ANCHOR sent to watch
       polling: null,
@@ -105,13 +106,38 @@ AppSideService(
       this._normalizeClock(data);
 
       this.state.lastEtag = data.etag;
+
+      // Detect either of two reasons to push a fresh LYRICS doc to the watch:
+      //   1. Track changed (different trackId).
+      //   2. Same track, but lyrics content changed — happens when the
+      //      browser POSTed a track first and the lyric provider replied
+      //      seconds later (lrclib/musixmatch latency). Without this, the
+      //      watch would stay on "No lyrics for this track" forever.
       const trackChanged = data.trackId !== this.state.lastTrackId;
+      const sig = this._lyricsSignature(data);
+      const lyricsChanged = sig !== this.state.lastSyncedSig;
+
       this.state.lastTrackId = data.trackId;
+      this.state.lastSyncedSig = sig;
       this.state.lastData = data;
 
-      if (trackChanged) this._emitLyricsDoc(data);
+      if (trackChanged || lyricsChanged) this._emitLyricsDoc(data);
       else this._emitAnchor(data);
       this.state.lastEmitWall = Date.now();
+    },
+
+    // Cheap fingerprint of the lyric doc — lets us detect content changes
+    // without serializing the whole array on every poll.
+    _lyricsSignature(data) {
+      const synced = Array.isArray(data?.synced) ? data.synced : null;
+      const plain = typeof data?.plain === 'string' ? data.plain : null;
+      const tid = data?.trackId;
+      if (synced && synced.length > 0) {
+        const last = synced[synced.length - 1];
+        return `${tid}|s${synced.length}:${synced[0]?.time || 0}:${last?.time || 0}`;
+      }
+      if (plain) return `${tid}|p${plain.length}`;
+      return `${tid}|none`;
     },
 
     // Use the SERVER's "seconds since browser POSTed" as the elapsed
