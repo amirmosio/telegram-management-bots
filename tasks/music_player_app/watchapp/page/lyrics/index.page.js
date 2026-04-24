@@ -8,9 +8,8 @@ const { width: SCREEN_W, height: SCREEN_H } = getDeviceInfo();
 
 const COLOR_TITLE = 0xffffff;
 const COLOR_SUB = 0x9aa0a6;
-const COLOR_LINE_PAST = 0x5f6368;
-const COLOR_LINE_FUTURE = 0xb0b3b8;
-const COLOR_LINE_ACTIVE = 0x1a73e8;
+const COLOR_LINE_REST = 0x808080;   // grey for everything that's not now-playing
+const COLOR_LINE_ACTIVE = 0xffffff; // white for the current line
 
 const HEADER_H = 80;
 const LINE_FONT_SIZE = 20;
@@ -194,7 +193,7 @@ Page(
         this.state.lineBaseYs.push(cumY);
         const w = createWidget(widget.TEXT, {
           x: SIDE_PAD, y: HEADER_H + cumY, w: SCREEN_W - SIDE_PAD * 2, h,
-          color: COLOR_LINE_FUTURE, text_size: LINE_FONT_SIZE,
+          color: COLOR_LINE_REST, text_size: LINE_FONT_SIZE,
           align_h: align.CENTER_H, text_style: text_style.WRAP,
           text,
         });
@@ -260,7 +259,7 @@ Page(
       if (prev >= 0 && prev < lines.length && lines[prev]) {
         try {
           lines[prev].setProperty(prop.MORE, {
-            color: COLOR_LINE_PAST, text_size: LINE_FONT_SIZE,
+            color: COLOR_LINE_REST, text_size: LINE_FONT_SIZE,
           });
         } catch (_) {}
       }
