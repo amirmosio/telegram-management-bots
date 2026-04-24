@@ -1,6 +1,7 @@
 import { getDeviceInfo } from '@zos/device';
 import { createWidget, deleteWidget, widget, prop, align, text_style } from '@zos/ui';
-import { setPageBrightTime } from '@zos/display';
+import { setPageBrightTime, pauseDropWristScreenOff, resumeDropWristScreenOff, pausePalmScreenOff, resumePalmScreenOff } from '@zos/display';
+import { LocalStorage } from '@zos/storage';
 import { BasePage } from '@zeppos/zml/base-page';
 
 const { width: SCREEN_W, height: SCREEN_H } = getDeviceInfo();
@@ -31,7 +32,7 @@ Page(
     },
 
     build() {
-      setPageBrightTime({ brightTime: 60_000 });
+      this._keepScreenOn();
       this._buildChrome();
       this._renderWaiting();
       this._startTick();
@@ -41,6 +42,17 @@ Page(
 
     onDestroy() {
       if (this.state.tickTimer) { clearInterval(this.state.tickTimer); this.state.tickTimer = null; }
+      try { resumeDropWristScreenOff(); } catch (_) {}
+      try { resumePalmScreenOff(); } catch (_) {}
+    },
+
+    _keepScreenOn() {
+      // Max value Zepp OS accepts for brightTime is 600_000 (10 min). We
+      // re-arm from the tick loop so the screen never sleeps while the page
+      // is in the foreground.
+      try { setPageBrightTime({ brightTime: 600_000 }); } catch (_) {}
+      try { pauseDropWristScreenOff(); } catch (_) {}
+      try { pausePalmScreenOff(); } catch (_) {}
     },
 
     // === Messages from side service ===
@@ -94,6 +106,24 @@ Page(
       };
       this.state.activeIdx = -1;
       this._rebuildList();
+      this._cacheForWidget();
+    },
+
+    // Save a compact snapshot the app-widget can read on resume.
+    _cacheForWidget() {
+      try {
+        const ls = new LocalStorage();
+        ls.setItem('last_state', JSON.stringify({
+          title: this.state.track?.title || '',
+          artist: this.state.track?.artist || '',
+          t: this.state.anchor?.t || 0,
+          wallClock: this.state.anchor?.wallClock || Date.now(),
+          isPlaying: !!this.state.anchor?.isPlaying,
+          syncedSlim: Array.isArray(this.state.synced)
+            ? this.state.synced.map(l => ({ time: l.time, text: l.text || '' }))
+            : null,
+        }));
+      } catch (_) {}
     },
 
     _applyAnchor(a) {
@@ -172,7 +202,15 @@ Page(
 
     // === Tick: local clock + binary search ===
     _startTick() {
-      this.state.tickTimer = setInterval(() => this._tickHighlight(), 100);
+      let brightReArmCounter = 0;
+      this.state.tickTimer = setInterval(() => {
+        this._tickHighlight();
+        // Re-arm the screen-on timer once every ~30s so it never expires.
+        if (++brightReArmCounter >= 300) { // 300 * 100ms = 30s
+          brightReArmCounter = 0;
+          try { setPageBrightTime({ brightTime: 600_000 }); } catch (_) {}
+        }
+      }, 100);
     },
 
     _computeLocalTime() {
