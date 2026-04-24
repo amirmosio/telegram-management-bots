@@ -1780,33 +1780,31 @@ export async function downloadSearchResult(groupId, dlCmd) {
 const SYNC_MSG_KEY = 'sync_msg_id';
 const NP_TOKEN_KEY = 'np_token'; // localStorage cache of this account's watch token
 
-// Find the id of any existing "🎵" message in General. Returns null if none.
-async function _findExistingSyncMessage(entity) {
+// List every "🎵" message id currently in General, most-recent first.
+async function _listSyncMessageIds(entity) {
+    const ids = [];
     try {
         for await (const msg of client.iterMessages(entity, { limit: 30, replyTo: 1 })) {
-            if (msg?.message?.startsWith('🎵')) return msg.id;
+            if (msg?.message?.startsWith('🎵')) ids.push(msg.id);
         }
     } catch (_) {}
-    return null;
+    return ids;
 }
 
-// Delete every "🎵" message in General except `keepId`. Uses GramJS's
-// `deleteMessages` helper so it routes to channels.DeleteMessages for
-// supergroups (required — messages.DeleteMessages is a no-op there).
-async function _purgeStaleSyncMessages(entity, keepId) {
+// Delete a list of message ids, routing through GramJS's deleteMessages
+// helper (uses channels.DeleteMessages for supergroups, where the plain
+// messages.DeleteMessages is a silent no-op).
+async function _hardDelete(entity, ids) {
+    if (!ids.length) return;
     try {
-        const ids = [];
-        for await (const msg of client.iterMessages(entity, { limit: 30, replyTo: 1 })) {
-            if (!msg?.message?.startsWith('🎵')) continue;
-            if (msg.id === keepId) continue;
-            ids.push(msg.id);
-        }
-        if (ids.length) {
-            await client.deleteMessages(entity, ids, { revoke: true }).catch(() => {});
-        }
+        await client.deleteMessages(entity, ids, { revoke: true });
     } catch (_) {}
 }
 
+// Strict invariant: AFTER this returns, General contains exactly one
+// 🎵 message with the given state. Any others are deleted. If the cached
+// or pre-existing message can't be edited, delete it (and all other 🎵
+// messages) and send + pin a fresh one.
 export async function saveSyncState(groupId, state) {
     await _ensureConnected();
     if (!client.connected) return;
@@ -1814,39 +1812,51 @@ export async function saveSyncState(groupId, state) {
     const peer = await client.getInputEntity(groupId);
     const text = `🎵 Now Playing: ${state.title || 'Unknown'}${state.artist ? ' - ' + state.artist : ''}\n${JSON.stringify(state)}`;
 
-    async function tryEdit(id) {
-        if (!id) return false;
+    // Find every existing 🎵 message; consider cached id even if not in the
+    // recent window (Telegram pinning sometimes hides older replies).
+    const existing = await _listSyncMessageIds(entity);
+    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
+    if (cachedId && !existing.includes(cachedId)) existing.unshift(cachedId);
+
+    // Try editing each candidate (cached first if present), in order. The
+    // first successful edit wins and becomes the kept message.
+    const tried = new Set();
+    const candidates = [];
+    if (cachedId) candidates.push(cachedId);
+    for (const id of existing) if (id !== cachedId) candidates.push(id);
+
+    let keepId = null;
+    for (const id of candidates) {
+        if (tried.has(id)) continue;
+        tried.add(id);
         try {
             await client.invoke(new Api.messages.EditMessage({ peer, id, message: text }));
-            localStorage.setItem(SYNC_MSG_KEY, String(id));
-            return true;
-        } catch (_) {
-            return false;
-        }
+            keepId = id;
+            break;
+        } catch (_) { /* try next */ }
     }
 
-    // 1) Cached id — fast path after the first success.
-    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
-    if (await tryEdit(cachedId)) return;
+    if (keepId === null) {
+        // Nothing was editable — wipe everything and start fresh.
+        await _hardDelete(entity, existing);
+        const sent = await client.sendMessage(entity, { message: text, replyTo: 1 });
+        keepId = sent.id;
+        try {
+            await client.invoke(new Api.messages.UpdatePinnedMessage({
+                peer, id: keepId, silent: true,
+            }));
+        } catch (_) {}
+    }
 
-    // 2) A different device (or a fresh browser) may already have an existing
-    //    "🎵" message — find it and edit that so both devices converge on
-    //    the same single message instead of each sending their own.
-    localStorage.removeItem(SYNC_MSG_KEY);
-    const existingId = await _findExistingSyncMessage(entity);
-    if (await tryEdit(existingId)) return;
+    // Always: delete every 🎵 message that isn't the one we kept, then
+    // re-scan to catch races (a second device may have sent its own
+    // between our list and this point).
+    const others = existing.filter(id => id !== keepId);
+    await _hardDelete(entity, others);
+    const recheck = (await _listSyncMessageIds(entity)).filter(id => id !== keepId);
+    if (recheck.length) await _hardDelete(entity, recheck);
 
-    // 3) No usable message — scrub any leftovers, then send + pin one.
-    await _purgeStaleSyncMessages(entity, -1);
-    const sent = await client.sendMessage(entity, { message: text, replyTo: 1 });
-    localStorage.setItem(SYNC_MSG_KEY, String(sent.id));
-    try {
-        await client.invoke(new Api.messages.UpdatePinnedMessage({
-            peer, id: sent.id, silent: true,
-        }));
-    } catch (_) {}
-    // Guard against a race where two devices both reached step 3.
-    _purgeStaleSyncMessages(entity, sent.id).catch(() => {});
+    localStorage.setItem(SYNC_MSG_KEY, String(keepId));
 }
 
 // Deterministic watch token derived from the logged-in Telegram account's

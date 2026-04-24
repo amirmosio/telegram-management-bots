@@ -194,6 +194,7 @@ async def np_post(request: web.Request) -> web.Response:
     payload["_etag"] = new_etag
     payload["etag"] = new_etag
     payload["_updated"] = time.time()
+    payload["_received_at"] = time.time()
     _now_playing[tok] = payload
 
     # Wake any long-poll GETs waiting on this token.
@@ -234,6 +235,10 @@ async def np_get(request: web.Request) -> web.Response:
     if not state:
         return web.json_response({"etag": 0, "empty": True})
     body = {k: v for k, v in state.items() if not k.startswith("_")}
+    # Server-clock-only "seconds since the browser POSTed this state" — lets
+    # the side service compute the current playback position without trusting
+    # any cross-device wall-clock alignment.
+    body["serverElapsed"] = max(0.0, time.time() - state.get("_received_at", time.time()))
     resp = web.json_response(body)
     resp.headers["ETag"] = f'"{state.get("_etag", 0)}"'
     return resp

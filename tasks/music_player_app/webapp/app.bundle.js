@@ -72005,27 +72005,20 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
-  async function _findExistingSyncMessage(entity) {
+  async function _listSyncMessageIds(entity) {
+    const ids = [];
     try {
       for await (const msg of client.iterMessages(entity, { limit: 30, replyTo: 1 })) {
-        if (msg?.message?.startsWith("\u{1F3B5}")) return msg.id;
+        if (msg?.message?.startsWith("\u{1F3B5}")) ids.push(msg.id);
       }
     } catch (_) {
     }
-    return null;
+    return ids;
   }
-  async function _purgeStaleSyncMessages(entity, keepId) {
+  async function _hardDelete(entity, ids) {
+    if (!ids.length) return;
     try {
-      const ids = [];
-      for await (const msg of client.iterMessages(entity, { limit: 30, replyTo: 1 })) {
-        if (!msg?.message?.startsWith("\u{1F3B5}")) continue;
-        if (msg.id === keepId) continue;
-        ids.push(msg.id);
-      }
-      if (ids.length) {
-        await client.deleteMessages(entity, ids, { revoke: true }).catch(() => {
-        });
-      }
+      await client.deleteMessages(entity, ids, { revoke: true });
     } catch (_) {
     }
   }
@@ -72036,34 +72029,42 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     const peer = await client.getInputEntity(groupId);
     const text = `\u{1F3B5} Now Playing: ${state.title || "Unknown"}${state.artist ? " - " + state.artist : ""}
 ${JSON.stringify(state)}`;
-    async function tryEdit(id) {
-      if (!id) return false;
+    const existing = await _listSyncMessageIds(entity);
+    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
+    if (cachedId && !existing.includes(cachedId)) existing.unshift(cachedId);
+    const tried = /* @__PURE__ */ new Set();
+    const candidates = [];
+    if (cachedId) candidates.push(cachedId);
+    for (const id of existing) if (id !== cachedId) candidates.push(id);
+    let keepId = null;
+    for (const id of candidates) {
+      if (tried.has(id)) continue;
+      tried.add(id);
       try {
         await client.invoke(new import_tl.Api.messages.EditMessage({ peer, id, message: text }));
-        localStorage.setItem(SYNC_MSG_KEY, String(id));
-        return true;
+        keepId = id;
+        break;
       } catch (_) {
-        return false;
       }
     }
-    const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
-    if (await tryEdit(cachedId)) return;
-    localStorage.removeItem(SYNC_MSG_KEY);
-    const existingId = await _findExistingSyncMessage(entity);
-    if (await tryEdit(existingId)) return;
-    await _purgeStaleSyncMessages(entity, -1);
-    const sent = await client.sendMessage(entity, { message: text, replyTo: 1 });
-    localStorage.setItem(SYNC_MSG_KEY, String(sent.id));
-    try {
-      await client.invoke(new import_tl.Api.messages.UpdatePinnedMessage({
-        peer,
-        id: sent.id,
-        silent: true
-      }));
-    } catch (_) {
+    if (keepId === null) {
+      await _hardDelete(entity, existing);
+      const sent = await client.sendMessage(entity, { message: text, replyTo: 1 });
+      keepId = sent.id;
+      try {
+        await client.invoke(new import_tl.Api.messages.UpdatePinnedMessage({
+          peer,
+          id: keepId,
+          silent: true
+        }));
+      } catch (_) {
+      }
     }
-    _purgeStaleSyncMessages(entity, sent.id).catch(() => {
-    });
+    const others = existing.filter((id) => id !== keepId);
+    await _hardDelete(entity, others);
+    const recheck = (await _listSyncMessageIds(entity)).filter((id) => id !== keepId);
+    if (recheck.length) await _hardDelete(entity, recheck);
+    localStorage.setItem(SYNC_MSG_KEY, String(keepId));
   }
   async function _sha256Hex(input) {
     const buf = await (globalThis.crypto || window.crypto).subtle.digest(

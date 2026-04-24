@@ -6,12 +6,14 @@ const DEFAULT_TOKEN = '7d954cb439516a00dd444857d2e4407c84485d0edab8db9ca908e6e40
 const CHUNK_THRESHOLD_BYTES = 2800;
 const LINES_PER_CHUNK = 20;
 // Plain polling — Zepp's iOS this.fetch doesn't honor long-held responses
-// reliably (it returns early), so we just poll every 1.5s. Server returns
-// 304 immediately when the etag matches, so this is cheap. Real-time
-// enough for music control.
-const POLL_INTERVAL_MS = 1500;
+// reliably (it returns early), so we just poll every 1s. Server returns
+// 304 immediately when the etag matches, so this is cheap.
+const POLL_INTERVAL_MS = 1000;
 const FETCH_TIMEOUT_MS = 6000;
-const RESYNC_AFTER_MS = 20000;
+const RESYNC_AFTER_MS = 15000;
+// Extra anchor emit cadence (ms) so the watch keeps re-anchoring against
+// our local clock between server polls. Cheap one-message BLE pings.
+const LOCAL_ANCHOR_RE_EMIT_MS = 5000;
 
 AppSideService(
   BaseSideService({
@@ -100,6 +102,8 @@ AppSideService(
       }
       if (!data || data.empty) return;
 
+      this._normalizeClock(data);
+
       this.state.lastEtag = data.etag;
       const trackChanged = data.trackId !== this.state.lastTrackId;
       this.state.lastTrackId = data.trackId;
@@ -110,15 +114,41 @@ AppSideService(
       this.state.lastEmitWall = Date.now();
     },
 
-    // Safety net: even if BLE drops a message and the server hasn't changed,
-    // re-emit current state to the watch every RESYNC_AFTER_MS so the watch
-    // converges. Cheap — just one ANCHOR over BLE.
+    // Use the SERVER's "seconds since browser POSTed" as the elapsed
+    // measure (server clock only, no cross-device skew). Add it to t,
+    // then anchor the watch against OUR clock (phone↔watch are tightly
+    // synced via Zepp so that's drift-free).
+    _normalizeClock(data) {
+      const now = Date.now();
+      if (data.isPlaying && typeof data.serverElapsed === 'number') {
+        data.t = (Number(data.t) || 0) + Number(data.serverElapsed);
+      }
+      data.wallClock = now;
+    },
+
+    // Periodic re-anchor:
+    //   • Every LOCAL_ANCHOR_RE_EMIT_MS push a fresh ANCHOR computed from
+    //     our own clock so the watch never extrapolates more than ~5s
+    //     without a checkpoint (clock drift between watch and phone is
+    //     usually negligible, but five seconds caps it).
+    //   • RESYNC_AFTER_MS is a stronger safety net for the rare case the
+    //     poll loop has been silent (network was down, etc).
     _maybeResyncWatch() {
       const data = this.state.lastData;
       if (!data) return;
-      if (Date.now() - this.state.lastEmitWall < RESYNC_AFTER_MS) return;
-      this._emitAnchor(data);
-      this.state.lastEmitWall = Date.now();
+      const sinceEmit = Date.now() - this.state.lastEmitWall;
+      if (sinceEmit < LOCAL_ANCHOR_RE_EMIT_MS) return;
+      // Build a fresh ANCHOR using our extrapolated position.
+      const now = Date.now();
+      let t = Number(data.t) || 0;
+      if (data.isPlaying && typeof data.wallClock === 'number') {
+        t += (now - data.wallClock) / 1000;
+      }
+      this._send('ANCHOR', { t, wallClock: now, isPlaying: !!data.isPlaying });
+      // Update lastData so subsequent re-emits keep extrapolating from this.
+      data.t = t;
+      data.wallClock = now;
+      this.state.lastEmitWall = now;
     },
 
     _emitLyricsDoc(data) {
