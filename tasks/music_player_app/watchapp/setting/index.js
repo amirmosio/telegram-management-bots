@@ -1,46 +1,39 @@
 AppSettingsPage({
-  state: { loaded: false },
-
   build(props) {
-    const current = this._read(props);
+    const baseUrl = props.settingsStorage.getItem('baseUrl') || '';
+    const token = props.settingsStorage.getItem('token') || '';
 
-    return View({ style: { padding: 16 } }, [
-      Text({ style: { fontSize: 22, fontWeight: 'bold', marginBottom: 6 } }, 'Music Lyrics — setup'),
-      Text({ style: { fontSize: 13, color: '#555', marginBottom: 14 } },
-        'Enter the URL your Mac / server exposes. Example: http://192.168.1.23:8080 (no trailing slash). Token is optional unless WEBAPP_NP_TOKEN is set on the server.'),
+    return Section({ style: { padding: 16 } }, [
+      View({ style: { marginBottom: 8 } }, [
+        Text({ style: { fontSize: 20, fontWeight: 'bold' } }, 'Music Lyrics — setup'),
+      ]),
+      View({ style: { marginBottom: 16 } }, [
+        Text({ style: { fontSize: 13, color: '#555' } },
+          'Server URL is your music-player domain. Token comes from the web app → Watch setup.'),
+      ]),
 
-      Section({ title: 'Server URL' }, [
+      View({ style: { marginBottom: 12 } }, [
+        Text({ style: { fontSize: 14, marginBottom: 6 } }, 'Server URL'),
         TextInput({
-          label: 'Base URL',
-          value: current.baseUrl,
-          placeholder: 'http://192.168.1.23:8080',
-          onChange: (v) => this._save(props, { ...current, baseUrl: v.trim() }),
+          placeholder: 'https://telemusic.duckdns.org',
+          value: baseUrl,
+          onChange: (v) => props.settingsStorage.setItem('baseUrl', (v || '').trim()),
         }),
       ]),
 
-      Section({ title: 'Token (optional)' }, [
+      View({ style: { marginBottom: 16 } }, [
+        Text({ style: { fontSize: 14, marginBottom: 6 } }, 'Token'),
         TextInput({
-          label: 'X-NP-Token',
-          value: current.token,
-          placeholder: '(leave empty)',
-          onChange: (v) => this._save(props, { ...current, token: v.trim() }),
+          placeholder: 'Paste token from web app',
+          value: token,
+          onChange: (v) => props.settingsStorage.setItem('token', (v || '').trim()),
         }),
       ]),
 
-      Text({ style: { fontSize: 12, color: '#888', marginTop: 18 } },
-        'Tip: your Mac and iPhone must be on the same Wi-Fi. Use `ifconfig | grep inet` on the Mac to find the LAN IP.'),
+      View({}, [
+        Text({ style: { fontSize: 12, color: '#888' } },
+          'The token comes from the ⌚ Watch setup button in the web app. Different Telegram accounts have different tokens.'),
+      ]),
     ]);
-  },
-
-  _read(props) {
-    try {
-      const raw = props.settingsStorage.getItem('music_lyrics_settings');
-      if (raw) return JSON.parse(raw);
-    } catch (_) {}
-    return { baseUrl: '', token: '' };
-  },
-
-  _save(props, next) {
-    props.settingsStorage.setItem('music_lyrics_settings', JSON.stringify(next));
   },
 });

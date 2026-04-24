@@ -1,7 +1,9 @@
-import { BasePage } from '@zeppos/zml/base-page';
+import { BaseApp } from '@zeppos/zml/base-app';
 
-App({
-  globalData: {},
-  onCreate() {},
-  onDestroy() {},
-});
+App(
+  BaseApp({
+    globalData: {},
+    onCreate() {},
+    onDestroy() {},
+  }),
+);

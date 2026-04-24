@@ -1,4 +1,5 @@
 {
+  "configVersion": "v3",
   "app": {
     "appId": 1000001,
     "appName": "Music Lyrics",
@@ -6,28 +7,35 @@
     "version": { "code": 1, "name": "1.0.0" },
     "icon": "icon.png",
     "vender": "local",
-    "description": "Live synced lyrics from the Telegram Music Player web app",
-    "i18n": {
-      "en-US": { "name": "Music Lyrics", "description": "Live synced lyrics from the Telegram Music Player web app" }
-    }
+    "description": "Live synced lyrics from the Telegram Music Player web app"
   },
-  "permissions": ["device:os.bg_service", "data:os.device", "data:os.user.profile"],
+  "permissions": ["data:os.device.info", "device:os.local_storage"],
   "runtime": {
-    "apiVersion": { "compatible": "3.0.0", "target": "3.0.0", "minCompatible": "3.0.0" }
+    "apiVersion": { "compatible": "3.0", "target": "3.0", "minVersion": "3.0" }
   },
-  "platforms": [
-    { "name": "active_2", "deviceSource": 8454402 },
-    { "name": "active_2_square", "deviceSource": 8454403 }
-  ],
+  "debug": false,
   "targets": {
-    "active_2": {
-      "module": { "page": { "main": { "path": "page/lyrics" } }, "app-side": { "path": "app-side/index" } },
-      "platforms": [ { "name": "active_2", "dt": "round", "deviceSource": 8454402, "designWidth": 480 } ]
-    },
-    "active_2_square": {
-      "module": { "page": { "main": { "path": "page/lyrics" } }, "app-side": { "path": "app-side/index" } },
-      "platforms": [ { "name": "active_2_square", "dt": "square", "deviceSource": 8454403, "designWidth": 390 } ]
+    "common": {
+      "module": {
+        "page": {
+          "pages": ["page/lyrics/index.page"]
+        },
+        "app-side": {
+          "path": "app-side/index"
+        },
+        "setting": {
+          "path": "setting/index"
+        }
+      },
+      "platforms": [
+        { "st": "r" },
+        { "st": "s" }
+      ],
+      "designWidth": 480
     }
+  },
+  "i18n": {
+    "en-US": { "appName": "Music Lyrics" }
   },
   "defaultLanguage": "en-US"
 }

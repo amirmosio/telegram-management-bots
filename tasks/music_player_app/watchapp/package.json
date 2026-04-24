@@ -9,9 +9,12 @@
     "preview": "zeus preview"
   },
   "dependencies": {
-    "@zeppos/zml": "^1.2.0"
+    "@zeppos/zml": "^0.0.43"
   },
   "devDependencies": {
-    "@zeppos/zeus-cli": "^1.0.0"
+    "@zeppos/zeus-cli": "^1.9.0"
+  },
+  "_moduleAliases": {
+    "zeppos-app-utils": "node_modules/@zeppos/zeus-cli/private-modules/zeppos-app-utils"
   }
 }
