@@ -1,19 +1,11 @@
 import { BaseSideService } from '@zeppos/zml/base-side';
 
-// Server is fixed — this mini-app only talks to the hosted music-player.
 const BASE_URL = 'https://telemusic.duckdns.org';
-
-// Default token for the owner's Telegram account. User can override via
-// Zepp app → Music Lyrics → Settings → Token if they use a different account.
 const DEFAULT_TOKEN = '7d954cb439516a00dd444857d2e4407c84485d0edab8db9ca908e6e406e13dd0';
 
-// BLE messaging.peerSocket payload cap is ~3.5KB. Chunk lyric docs above this.
 const CHUNK_THRESHOLD_BYTES = 2800;
 const LINES_PER_CHUNK = 20;
-
-// Poll cadence. Cheap because GET uses If-None-Match; most responses are 304.
-const POLL_WHEN_ACTIVE_MS = 2000;
-const POLL_WHEN_IDLE_MS = 15000;
+const POLL_MS = 3000;
 
 AppSideService(
   BaseSideService({
@@ -21,7 +13,6 @@ AppSideService(
       token: '',
       lastEtag: null,
       lastTrackId: null,
-      activePeer: false,
       polling: null,
       stopped: false,
     },
@@ -41,7 +32,6 @@ AppSideService(
       if (this.state.polling) { clearTimeout(this.state.polling); this.state.polling = null; }
     },
 
-    // Re-read server URL / token when the user saves from Settings.
     onSettingsChange() {
       this._loadSettings();
       this.state.lastEtag = null;
@@ -49,11 +39,9 @@ AppSideService(
       this._pollOnce().catch(() => {});
     },
 
-    // Device page asked for current state. Trigger a fresh poll which will
-    // broadcast LYRICS/ANCHOR via the messaging channel.
+    // Device page asked for current state — force a refresh + re-emit.
     onRequest(req, res) {
-      const body = req && req.payload ? req.payload : req;
-      if (body && body.type === 'GET_STATE') {
+      if (req && req.method === 'GET_STATE') {
         this.state.lastEtag = null;
         this.state.lastTrackId = null;
         this._pollOnce().catch(() => {});
@@ -74,8 +62,7 @@ AppSideService(
       const tick = async () => {
         if (self.state.stopped) return;
         try { await self._pollOnce(); } catch (_) {}
-        const delay = self.state.activePeer ? POLL_WHEN_ACTIVE_MS : POLL_WHEN_IDLE_MS;
-        self.state.polling = setTimeout(tick, delay);
+        self.state.polling = setTimeout(tick, POLL_MS);
       };
       tick();
     },
@@ -86,12 +73,19 @@ AppSideService(
       const headers = { 'Accept': 'application/json', 'X-NP-Token': this.state.token };
       if (this.state.lastEtag) headers['If-None-Match'] = '"' + this.state.lastEtag + '"';
 
-      const res = await this.fetch({ url, method: 'GET', headers, timeout: 6000 });
+      let res;
+      try { res = await this.fetch({ url, method: 'GET', headers, timeout: 6000 }); }
+      catch (_) { return; }
+
       if (!res || !res.status) return;
       if (res.status === 304) return;
       if (res.status !== 200) return;
 
-      const data = res.body;
+      // res.body may be parsed JSON already, or a string depending on platform.
+      let data = res.body;
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (_) { return; }
+      }
       if (!data || data.empty) return;
 
       const etag = data.etag;
@@ -120,7 +114,7 @@ AppSideService(
       const serialized = JSON.stringify(full);
 
       if (serialized.length < CHUNK_THRESHOLD_BYTES) {
-        this._send({ type: 'LYRICS', payload: full });
+        this._send('LYRICS', full);
         return;
       }
 
@@ -128,11 +122,9 @@ AppSideService(
       const total = Math.ceil(lines.length / LINES_PER_CHUNK) || 1;
       for (let seq = 0; seq < total; seq++) {
         const slice = lines.slice(seq * LINES_PER_CHUNK, (seq + 1) * LINES_PER_CHUNK);
-        this._send({
-          type: 'LYRICS_CHUNK',
+        this._send('LYRICS_CHUNK', {
           trackId: data.trackId,
-          seq,
-          total,
+          seq, total,
           header: seq === 0 ? header : undefined,
           lines: slice,
         });
@@ -140,18 +132,15 @@ AppSideService(
     },
 
     _emitAnchor(data) {
-      this._send({
-        type: 'ANCHOR',
-        payload: {
-          t: data.t || 0,
-          wallClock: data.wallClock || Date.now(),
-          isPlaying: !!data.isPlaying,
-        },
+      this._send('ANCHOR', {
+        t: data.t || 0,
+        wallClock: data.wallClock || Date.now(),
+        isPlaying: !!data.isPlaying,
       });
     },
 
-    _send(msg) {
-      try { this.call(msg); } catch (_) {}
+    _send(method, params) {
+      try { this.call({ method, params }); } catch (_) {}
     },
   }),
 );
