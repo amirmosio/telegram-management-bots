@@ -1,5 +1,5 @@
 import { getDeviceInfo } from '@zos/device';
-import { createWidget, widget, prop, align, text_style } from '@zos/ui';
+import { createWidget, deleteWidget, widget, prop, align, text_style } from '@zos/ui';
 import { setPageBrightTime } from '@zos/display';
 import { BasePage } from '@zeppos/zml/base-page';
 
@@ -132,11 +132,10 @@ Page(
     },
 
     _clearList() {
+      for (const w of this.state.widgets.lineWidgets) {
+        try { deleteWidget(w); } catch (_) {}
+      }
       this.state.widgets.lineWidgets = [];
-      // Note: VIEW_CONTAINER children auto-clear when we rebuild via createWidget
-      // new TEXTs — simplest reset is to recreate the scroll widget, but Zepp
-      // also supports removeWidget. We just track our array and the new list
-      // replaces the prior one visually because we recreate from scratch.
     },
 
     _addLine(text, idx, active) {
