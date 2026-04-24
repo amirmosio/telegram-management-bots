@@ -72061,54 +72061,25 @@ ${JSON.stringify(state)}`;
     _purgeStaleSyncMessages(client, entity, peer, sent.id).catch(() => {
     });
   }
-  function _generateNpToken() {
-    const bytes = new Uint8Array(24);
-    (globalThis.crypto || window.crypto).getRandomValues(bytes);
-    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  async function _sha256Hex(input) {
+    const buf = await (globalThis.crypto || window.crypto).subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(input)
+    );
+    return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
   }
-  async function getOrCreateNpToken(groupId, { regenerate = false } = {}) {
-    if (regenerate) {
-      if (!groupId) return null;
-      const token2 = _generateNpToken();
-      const seed2 = { v: 1, ts: Date.now(), gId: groupId, npTok: token2 };
-      try {
-        await saveSyncState(groupId, seed2);
-      } catch (e) {
-        console.warn("Regenerate npTok failed:", e?.message || e);
-      }
-      localStorage.setItem(NP_TOKEN_KEY, token2);
-      return token2;
-    }
-    if (!groupId) return localStorage.getItem(NP_TOKEN_KEY) || null;
+  async function getOrCreateNpToken(_groupId) {
     try {
-      const state = await getSyncState(groupId);
-      if (state?.npTok && typeof state.npTok === "string" && state.npTok.length >= 16) {
-        localStorage.setItem(NP_TOKEN_KEY, state.npTok);
-        return state.npTok;
-      }
+      await _ensureConnected();
+      const me = await client.getMe();
+      const uid = me?.id?.value ?? me?.id;
+      if (uid == null) return localStorage.getItem(NP_TOKEN_KEY) || null;
+      const token = await _sha256Hex(NP_SALT + ":" + String(uid));
+      localStorage.setItem(NP_TOKEN_KEY, token);
+      return token;
     } catch (_) {
+      return localStorage.getItem(NP_TOKEN_KEY) || null;
     }
-    const cached = localStorage.getItem(NP_TOKEN_KEY);
-    if (cached && cached.length >= 16) {
-      const seed2 = { v: 1, ts: Date.now(), gId: groupId, npTok: cached };
-      try {
-        await saveSyncState(groupId, seed2);
-      } catch (_) {
-      }
-      return cached;
-    }
-    const token = _generateNpToken();
-    const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: token };
-    try {
-      await saveSyncState(groupId, seed);
-    } catch (e) {
-      console.warn("Seeding npTok into sync message failed:", e?.message || e);
-    }
-    localStorage.setItem(NP_TOKEN_KEY, token);
-    return token;
-  }
-  function clearCachedNpToken() {
-    localStorage.removeItem(NP_TOKEN_KEY);
   }
   async function getSyncState(groupId) {
     await _ensureConnected();
@@ -72152,7 +72123,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -72209,6 +72180,7 @@ ${JSON.stringify(state)}`;
       _dlCache = {};
       SYNC_MSG_KEY = "sync_msg_id";
       NP_TOKEN_KEY = "np_token";
+      NP_SALT = "musicplayer-np-v1";
     }
   });
 
@@ -74987,9 +74959,7 @@ ${_shareCurrentLink}`;
             pos: Math.floor(pos),
             shf: shuffleOn,
             rpt: repeatOn,
-            fp: playingFromPlaylist,
-            npTok: _npToken || void 0
-            // persist across devices once known
+            fp: playingFromPlaylist
           };
           _syncInFlight = true;
           localStorage.setItem("last_sync_ts", String(slim.ts));
@@ -75194,8 +75164,7 @@ ${_shareCurrentLink}`;
         tokenEl.textContent = "Loading\u2026";
         modal.style.display = "flex";
         try {
-          clearCachedNpToken();
-          const t = await getOrCreateNpToken(playlistGroupId);
+          const t = await getOrCreateNpToken();
           tokenEl.textContent = t || "(error \u2014 reload)";
           _npToken = t || _npToken;
         } catch (e) {
@@ -75219,19 +75188,6 @@ ${_shareCurrentLink}`;
         row.classList.add("copied");
         setTimeout(() => row.classList.remove("copied"), 1200);
         showToast("Token copied");
-      });
-      $("watch-regen").addEventListener("click", async () => {
-        const tokenEl = $("watch-token-text");
-        tokenEl.textContent = "Regenerating\u2026";
-        try {
-          clearCachedNpToken();
-          const t = await getOrCreateNpToken(playlistGroupId, { regenerate: true });
-          _npToken = t;
-          tokenEl.textContent = t || "(error \u2014 reload)";
-          showToast("New token \u2014 repaste in Zepp");
-        } catch (e) {
-          tokenEl.textContent = "(error \u2014 reload)";
-        }
       });
       $("btn-logout").addEventListener("click", async () => {
         if (!confirm("Log out of Telegram? Downloaded tracks on this device will be cleared.")) return;

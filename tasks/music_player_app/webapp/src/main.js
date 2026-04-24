@@ -2700,7 +2700,6 @@ function _broadcastState(kind = 'state') {
             gId: playerGroupId, tId: playerTopicId, trk: currentTrackId,
             pos: Math.floor(pos),
             shf: shuffleOn, rpt: repeatOn, fp: playingFromPlaylist,
-            npTok: _npToken || undefined, // persist across devices once known
         };
         _syncInFlight = true;
         localStorage.setItem('last_sync_ts', String(slim.ts));
@@ -2902,10 +2901,7 @@ async function _openWatchModal() {
     tokenEl.textContent = 'Loading…';
     modal.style.display = 'flex';
     try {
-        // Drop any locally-cached token so we re-read from the pinned message.
-        // Prevents showing a stale token if another device regenerated.
-        tg.clearCachedNpToken();
-        const t = await tg.getOrCreateNpToken(playlistGroupId);
+        const t = await tg.getOrCreateNpToken();
         tokenEl.textContent = t || '(error — reload)';
         _npToken = t || _npToken;
     } catch (e) {
@@ -2926,20 +2922,6 @@ $('watch-token-row').addEventListener('click', async () => {
     row.classList.add('copied');
     setTimeout(() => row.classList.remove('copied'), 1200);
     showToast('Token copied');
-});
-
-$('watch-regen').addEventListener('click', async () => {
-    const tokenEl = $('watch-token-text');
-    tokenEl.textContent = 'Regenerating…';
-    try {
-        tg.clearCachedNpToken();
-        const t = await tg.getOrCreateNpToken(playlistGroupId, { regenerate: true });
-        _npToken = t;
-        tokenEl.textContent = t || '(error — reload)';
-        showToast('New token — repaste in Zepp');
-    } catch (e) {
-        tokenEl.textContent = '(error — reload)';
-    }
 });
 
 $('btn-logout').addEventListener('click', async () => {

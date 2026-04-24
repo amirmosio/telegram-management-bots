@@ -1843,65 +1843,35 @@ export async function saveSyncState(groupId, state) {
     _purgeStaleSyncMessages(client, entity, peer, sent.id).catch(() => {});
 }
 
-// Generate a new 24-byte (48 hex char) token.
-function _generateNpToken() {
-    const bytes = new Uint8Array(24);
-    (globalThis.crypto || window.crypto).getRandomValues(bytes);
-    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+// Deterministic watch token derived from the logged-in Telegram account's
+// user ID. Every browser signed into the same account computes the same
+// value with zero storage/round-trips. `NP_SALT` prevents anyone who only
+// knows the bare user ID from computing the token — they'd also need to
+// read the app's source.
+const NP_SALT = 'musicplayer-np-v1';
+
+async function _sha256Hex(input) {
+    const buf = await (globalThis.crypto || window.crypto).subtle.digest(
+        'SHA-256', new TextEncoder().encode(input),
+    );
+    return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Return the Telegram-account-scoped token used as X-NP-Token. The token is
-// read from / written to the pinned sync message in General so every device
-// logged into the same Telegram account shares one slot on the server.
-//
-// Authoritative source is the pinned message, NOT localStorage — otherwise a
-// regenerate on one device leaves another device's cache stale. localStorage
-// only exists as an offline fallback when Telegram is unreachable.
-//
-// `regenerate: true` forces a brand-new token regardless of what's pinned.
-export async function getOrCreateNpToken(groupId, { regenerate = false } = {}) {
-    if (regenerate) {
-        if (!groupId) return null;
-        const token = _generateNpToken();
-        const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: token };
-        try { await saveSyncState(groupId, seed); }
-        catch (e) { console.warn('Regenerate npTok failed:', e?.message || e); }
+// Return the Telegram-account-scoped token used as X-NP-Token. Pure function
+// of the Telegram user ID — same on Mac / iPhone / any other browser signed
+// into the same account. `groupId` is ignored (kept for API compat).
+export async function getOrCreateNpToken(_groupId) {
+    try {
+        await _ensureConnected();
+        const me = await client.getMe();
+        const uid = me?.id?.value ?? me?.id;
+        if (uid == null) return localStorage.getItem(NP_TOKEN_KEY) || null;
+        const token = await _sha256Hex(NP_SALT + ':' + String(uid));
         localStorage.setItem(NP_TOKEN_KEY, token);
         return token;
+    } catch (_) {
+        return localStorage.getItem(NP_TOKEN_KEY) || null;
     }
-
-    // No group yet — can't hit Telegram. Best we can do is the cache.
-    if (!groupId) return localStorage.getItem(NP_TOKEN_KEY) || null;
-
-    // Always check the pinned message first: it's the source of truth.
-    try {
-        const state = await getSyncState(groupId);
-        if (state?.npTok && typeof state.npTok === 'string' && state.npTok.length >= 16) {
-            localStorage.setItem(NP_TOKEN_KEY, state.npTok);
-            return state.npTok;
-        }
-    } catch (_) { /* fall through — treat as "no pinned token yet" */ }
-
-    // Pinned message exists without a token, OR we couldn't reach Telegram.
-    // If we have a cached token, re-pin it so the next device can pick it up.
-    const cached = localStorage.getItem(NP_TOKEN_KEY);
-    if (cached && cached.length >= 16) {
-        const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: cached };
-        try { await saveSyncState(groupId, seed); } catch (_) {}
-        return cached;
-    }
-
-    // Fresh install on this Telegram account — create + pin a new token.
-    const token = _generateNpToken();
-    const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: token };
-    try { await saveSyncState(groupId, seed); }
-    catch (e) { console.warn('Seeding npTok into sync message failed:', e?.message || e); }
-    localStorage.setItem(NP_TOKEN_KEY, token);
-    return token;
-}
-
-export function clearCachedNpToken() {
-    localStorage.removeItem(NP_TOKEN_KEY);
 }
 
 export async function getSyncState(groupId) {
