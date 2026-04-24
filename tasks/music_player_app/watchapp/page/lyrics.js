@@ -1,6 +1,5 @@
 import { getDeviceInfo } from '@zos/device';
 import { createWidget, widget, prop, align, text_style } from '@zos/ui';
-import { push } from '@zos/router';
 import { setPageBrightTime } from '@zos/display';
 import { BasePage } from '@zeppos/zml/base-page';
 

@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import mimetypes
-import time
 from pathlib import Path
 
 import aiohttp
@@ -32,8 +31,6 @@ class MusicServer:
         self._setup_routes()
         self._runner = None
         self._proxy_session: aiohttp.ClientSession | None = None
-        # Now-playing relay: dict keyed by X-NP-Token (per-Telegram-account).
-        self._now_playing: dict[str, dict] = {}
 
     @web.middleware
     async def _cors_middleware(self, request, handler):
@@ -135,10 +132,6 @@ class MusicServer:
 
         # CORS proxy for external APIs (Musixmatch, lyrics.ovh, ChartLyrics)
         self.app.router.add_get("/proxy", self._handle_proxy)
-
-        # Now-playing relay (browser POSTs, Zepp watchapp side service GETs)
-        self.app.router.add_post("/api/now-playing", self._handle_np_post)
-        self.app.router.add_get("/api/now-playing", self._handle_np_get)
 
     # ── Auth ──
 
@@ -613,72 +606,6 @@ class MusicServer:
                 parsed.hostname, type(e).__name__, e,
             )
             raise web.HTTPBadGateway(text=f"{type(e).__name__}: {e}")
-
-    # ── Now-playing relay (multi-user, keyed by X-NP-Token) ──
-    # Mirrors recognize_server.py so local dev and the deployed stack behave the
-    # same. Browser attaches a Telegram-account-scoped token (from the pinned
-    # sync message); Zepp side-service sends the same token.
-
-    _NP_MAX_AGE_SEC = 86400
-    _NP_TOKEN_MIN = 16
-    _NP_TOKEN_MAX = 128
-    _NP_TOKEN_ALPHABET = set("0123456789abcdefABCDEF-_")
-
-    @classmethod
-    def _valid_np_token(cls, tok):
-        if not tok or not isinstance(tok, str):
-            return False
-        if not (cls._NP_TOKEN_MIN <= len(tok) <= cls._NP_TOKEN_MAX):
-            return False
-        return all(c in cls._NP_TOKEN_ALPHABET for c in tok)
-
-    def _np_gc(self):
-        now = time.time()
-        stale = [t for t, s in self._now_playing.items() if now - s.get("_updated", 0) > self._NP_MAX_AGE_SEC]
-        for t in stale:
-            self._now_playing.pop(t, None)
-
-    async def _handle_np_post(self, request):
-        tok = request.headers.get("X-NP-Token", "")
-        if not self._valid_np_token(tok):
-            return web.json_response({"error": "bad_token"}, status=401)
-        try:
-            payload = await request.json()
-        except Exception:
-            return web.json_response({"error": "bad_json"}, status=400)
-        if not isinstance(payload, dict):
-            return web.json_response({"error": "bad_json"}, status=400)
-
-        self._np_gc()
-        prev = self._now_playing.get(tok, {})
-        track_id = payload.get("trackId")
-        if prev and prev.get("trackId") == track_id:
-            if "synced" not in payload and prev.get("synced") is not None:
-                payload["synced"] = prev["synced"]
-            if "plain" not in payload and prev.get("plain") is not None:
-                payload["plain"] = prev["plain"]
-
-        new_etag = int(prev.get("_etag", 0)) + 1
-        payload["_etag"] = new_etag
-        payload["etag"] = new_etag
-        payload["_updated"] = time.time()
-        self._now_playing[tok] = payload
-        return web.json_response({"ok": True, "etag": new_etag})
-
-    async def _handle_np_get(self, request):
-        tok = request.headers.get("X-NP-Token", "")
-        if not self._valid_np_token(tok):
-            return web.json_response({"error": "bad_token"}, status=401)
-        state = self._now_playing.get(tok)
-        if not state:
-            return web.json_response({"etag": 0, "empty": True})
-        inm = request.headers.get("If-None-Match", "").strip('"')
-        if inm and inm == str(state.get("_etag", 0)):
-            return web.Response(status=304)
-        body = {k: v for k, v in state.items() if not k.startswith("_")}
-        resp = web.json_response(body)
-        resp.headers["ETag"] = f'"{state.get("_etag", 0)}"'
-        return resp
 
     # ── Lifecycle ──
 
