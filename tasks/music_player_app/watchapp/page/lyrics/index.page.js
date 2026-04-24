@@ -1,5 +1,5 @@
 import { getDeviceInfo } from '@zos/device';
-import { createWidget, deleteWidget, widget, prop, align, text_style } from '@zos/ui';
+import { createWidget, deleteWidget, getTextLayout, widget, prop, align, text_style } from '@zos/ui';
 import { setPageBrightTime, pauseDropWristScreenOff, resumeDropWristScreenOff, pausePalmScreenOff, resumePalmScreenOff } from '@zos/display';
 import { LocalStorage } from '@zos/storage';
 import { BasePage } from '@zeppos/zml/base-page';
@@ -13,9 +13,8 @@ const COLOR_LINE_FUTURE = 0xb0b3b8;
 const COLOR_LINE_ACTIVE = 0x1a73e8;
 
 const HEADER_H = 80;
-const LINE_H = 44;
-const LINE_FONT_SIZE = 22;
-const LINE_FONT_SIZE_ACTIVE = 26;
+const LINE_FONT_SIZE = 20;
+const LINE_FONT_SIZE_ACTIVE = 24; // a bit bigger; user wants subtle emphasis
 const SIDE_PAD = 16;
 
 Page(
@@ -26,7 +25,10 @@ Page(
       plain: null,
       anchor: { t: 0, wallClock: Date.now(), isPlaying: false },
       chunkBuf: null,
-      widgets: { title: null, artist: null, scroll: null, lineWidgets: [] },
+      widgets: { title: null, artist: null, lineWidgets: [] },
+      lineBaseYs: [],     // cumulative Y of each line within the lyrics area
+      contentHeight: 0,   // total height of all wrapped lines
+      scrollOffset: 0,    // current scroll position (>=0)
       activeIdx: -1,
       tickTimer: null,
     },
@@ -148,17 +150,13 @@ Page(
         color: COLOR_SUB, text_size: 16, text_style: text_style.ELLIPSIS,
         align_h: align.CENTER_H, text: '',
       });
-      this.state.widgets.scroll = createWidget(widget.VIEW_CONTAINER, {
-        x: 0, y: HEADER_H, w: SCREEN_W, h: SCREEN_H - HEADER_H,
-        scroll_enable: true, scroll_vertical: true,
-      });
     },
 
     _renderWaiting() {
       this._clearList();
       if (this.state.widgets.title) this.state.widgets.title.setProperty(prop.TEXT, 'Music Lyrics');
       if (this.state.widgets.artist) this.state.widgets.artist.setProperty(prop.TEXT, 'Connecting…');
-      this._addLine('Play a song in the web app.', 0, false);
+      this._renderStaticLines(['Play a song in the web app.']);
     },
 
     _clearList() {
@@ -166,21 +164,44 @@ Page(
         try { deleteWidget(w); } catch (_) {}
       }
       this.state.widgets.lineWidgets = [];
+      this.state.lineBaseYs = [];
+      this.state.contentHeight = 0;
+      this.state.scrollOffset = 0;
     },
 
-    _addLine(text, idx, active) {
-      const sc = this.state.widgets.scroll;
-      if (!sc) return null;
-      const y = idx * LINE_H + 8;
-      const w = createWidget(widget.TEXT, {
-        x: SIDE_PAD, y: HEADER_H + y, w: SCREEN_W - SIDE_PAD * 2, h: LINE_H - 4,
-        color: active ? COLOR_LINE_ACTIVE : COLOR_LINE_FUTURE,
-        text_size: active ? LINE_FONT_SIZE_ACTIVE : LINE_FONT_SIZE,
-        align_h: align.CENTER_H, text_style: text_style.WRAP,
-        text: text || ' ',
-      });
-      this.state.widgets.lineWidgets.push(w);
-      return w;
+    // Compute how tall a wrapped text needs to be at a given font size.
+    _measureLineHeight(text, fontSize) {
+      try {
+        const layout = getTextLayout(text || ' ', {
+          text_size: fontSize,
+          text_width: SCREEN_W - SIDE_PAD * 2,
+          wrapped: 1,
+        });
+        return Math.max((layout && layout.height) || 0, fontSize * 1.4);
+      } catch (_) {
+        return fontSize * 1.6;
+      }
+    },
+
+    _renderStaticLines(lines) {
+      this._clearList();
+      let cumY = 8;
+      for (let i = 0; i < lines.length; i++) {
+        const text = lines[i] || ' ';
+        // Always size the slot for the LARGER (active) font, so toggling
+        // active state doesn't shift layout.
+        const h = this._measureLineHeight(text, LINE_FONT_SIZE_ACTIVE) + 10;
+        this.state.lineBaseYs.push(cumY);
+        const w = createWidget(widget.TEXT, {
+          x: SIDE_PAD, y: HEADER_H + cumY, w: SCREEN_W - SIDE_PAD * 2, h,
+          color: COLOR_LINE_FUTURE, text_size: LINE_FONT_SIZE,
+          align_h: align.CENTER_H, text_style: text_style.WRAP,
+          text,
+        });
+        this.state.widgets.lineWidgets.push(w);
+        cumY += h;
+      }
+      this.state.contentHeight = cumY;
     },
 
     _rebuildList() {
@@ -190,13 +211,12 @@ Page(
       if (this.state.widgets.artist) this.state.widgets.artist.setProperty(prop.TEXT, t?.artist || '');
 
       if (Array.isArray(this.state.synced) && this.state.synced.length > 0) {
-        this.state.synced.forEach((line, i) => this._addLine(line.text || ' ', i, false));
+        this._renderStaticLines(this.state.synced.map(l => l.text || ' '));
         this._tickHighlight(true);
       } else if (this.state.plain) {
-        const lines = String(this.state.plain).split('\n');
-        lines.forEach((line, i) => this._addLine(line || ' ', i, false));
+        this._renderStaticLines(String(this.state.plain).split('\n'));
       } else {
-        this._addLine('No lyrics for this track.', 0, false);
+        this._renderStaticLines(['No lyrics for this track.']);
       }
     },
 
@@ -236,6 +256,7 @@ Page(
     _applyActive(idx) {
       const prev = this.state.activeIdx;
       const lines = this.state.widgets.lineWidgets;
+      // Mark previously-active line as past (dimmer) and shrink font back.
       if (prev >= 0 && prev < lines.length && lines[prev]) {
         try {
           lines[prev].setProperty(prop.MORE, {
@@ -243,6 +264,7 @@ Page(
           });
         } catch (_) {}
       }
+      // Highlight the new active line: accent color + slightly bigger.
       if (idx >= 0 && idx < lines.length && lines[idx]) {
         try {
           lines[idx].setProperty(prop.MORE, {
@@ -251,6 +273,38 @@ Page(
         } catch (_) {}
       }
       this.state.activeIdx = idx;
+
+      // Auto-scroll: keep the active line vertically centered in the
+      // lyrics area below the header.
+      if (idx >= 0 && idx < this.state.lineBaseYs.length) {
+        const lyricsAreaH = SCREEN_H - HEADER_H;
+        const baseY = this.state.lineBaseYs[idx];
+        const nextBaseY = (idx + 1 < this.state.lineBaseYs.length)
+          ? this.state.lineBaseYs[idx + 1]
+          : this.state.contentHeight;
+        const lineH = nextBaseY - baseY;
+        const targetCenter = baseY + lineH / 2;
+        let target = targetCenter - lyricsAreaH / 2;
+        const maxScroll = Math.max(0, this.state.contentHeight - lyricsAreaH);
+        if (target < 0) target = 0;
+        if (target > maxScroll) target = maxScroll;
+        this._scrollTo(target);
+      }
+    },
+
+    _scrollTo(offset) {
+      if (Math.abs(offset - this.state.scrollOffset) < 1) return;
+      this.state.scrollOffset = offset;
+      const lines = this.state.widgets.lineWidgets;
+      for (let i = 0; i < lines.length; i++) {
+        const w = lines[i];
+        if (!w) continue;
+        try {
+          w.setProperty(prop.MORE, {
+            y: HEADER_H + this.state.lineBaseYs[i] - offset,
+          });
+        } catch (_) {}
+      }
     },
   }),
 );
