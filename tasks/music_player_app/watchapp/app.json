@@ -39,7 +39,7 @@
         "secondary-widget": {
           "widgets": [
             {
-              "path": "app-widget/index",
+              "path": "secondary-widget/index",
               "icon": "icon.png",
               "preview": "preview.png",
               "name": "Music Lyrics",
