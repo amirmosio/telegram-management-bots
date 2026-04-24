@@ -1854,40 +1854,48 @@ function _generateNpToken() {
 // read from / written to the pinned sync message in General so every device
 // logged into the same Telegram account shares one slot on the server.
 //
-// Call order:
-//   1. localStorage fast-path (no Telegram round-trip after first visit)
-//   2. getSyncState → if payload has npTok, cache + return
-//   3. generate fresh token → seed the pinned message (saveSyncState) → cache
+// Authoritative source is the pinned message, NOT localStorage — otherwise a
+// regenerate on one device leaves another device's cache stale. localStorage
+// only exists as an offline fallback when Telegram is unreachable.
 //
-// `regenerate: true` forces step 3, useful when the user suspects a leak.
+// `regenerate: true` forces a brand-new token regardless of what's pinned.
 export async function getOrCreateNpToken(groupId, { regenerate = false } = {}) {
-    if (!regenerate) {
-        const cached = localStorage.getItem(NP_TOKEN_KEY);
-        if (cached && cached.length >= 16) return cached;
-    }
-    if (!groupId) return null;
-
-    let token = null;
-    if (!regenerate) {
-        try {
-            const state = await getSyncState(groupId);
-            if (state?.npTok && typeof state.npTok === 'string' && state.npTok.length >= 16) {
-                token = state.npTok;
-            }
-        } catch (_) { /* ignore */ }
-    }
-
-    if (!token) {
-        token = _generateNpToken();
-        // Seed the pinned message with just the token + version. Once the user
-        // plays a song, _broadcastState overwrites with full state + npTok.
+    if (regenerate) {
+        if (!groupId) return null;
+        const token = _generateNpToken();
         const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: token };
-        try {
-            await saveSyncState(groupId, seed);
-        } catch (e) {
-            console.warn('Seeding npTok into sync message failed:', e?.message || e);
-        }
+        try { await saveSyncState(groupId, seed); }
+        catch (e) { console.warn('Regenerate npTok failed:', e?.message || e); }
+        localStorage.setItem(NP_TOKEN_KEY, token);
+        return token;
     }
+
+    // No group yet — can't hit Telegram. Best we can do is the cache.
+    if (!groupId) return localStorage.getItem(NP_TOKEN_KEY) || null;
+
+    // Always check the pinned message first: it's the source of truth.
+    try {
+        const state = await getSyncState(groupId);
+        if (state?.npTok && typeof state.npTok === 'string' && state.npTok.length >= 16) {
+            localStorage.setItem(NP_TOKEN_KEY, state.npTok);
+            return state.npTok;
+        }
+    } catch (_) { /* fall through — treat as "no pinned token yet" */ }
+
+    // Pinned message exists without a token, OR we couldn't reach Telegram.
+    // If we have a cached token, re-pin it so the next device can pick it up.
+    const cached = localStorage.getItem(NP_TOKEN_KEY);
+    if (cached && cached.length >= 16) {
+        const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: cached };
+        try { await saveSyncState(groupId, seed); } catch (_) {}
+        return cached;
+    }
+
+    // Fresh install on this Telegram account — create + pin a new token.
+    const token = _generateNpToken();
+    const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: token };
+    try { await saveSyncState(groupId, seed); }
+    catch (e) { console.warn('Seeding npTok into sync message failed:', e?.message || e); }
     localStorage.setItem(NP_TOKEN_KEY, token);
     return token;
 }

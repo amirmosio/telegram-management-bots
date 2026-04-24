@@ -72067,29 +72067,42 @@ ${JSON.stringify(state)}`;
     return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   }
   async function getOrCreateNpToken(groupId, { regenerate = false } = {}) {
-    if (!regenerate) {
-      const cached = localStorage.getItem(NP_TOKEN_KEY);
-      if (cached && cached.length >= 16) return cached;
-    }
-    if (!groupId) return null;
-    let token = null;
-    if (!regenerate) {
+    if (regenerate) {
+      if (!groupId) return null;
+      const token2 = _generateNpToken();
+      const seed2 = { v: 1, ts: Date.now(), gId: groupId, npTok: token2 };
       try {
-        const state = await getSyncState(groupId);
-        if (state?.npTok && typeof state.npTok === "string" && state.npTok.length >= 16) {
-          token = state.npTok;
-        }
+        await saveSyncState(groupId, seed2);
+      } catch (e) {
+        console.warn("Regenerate npTok failed:", e?.message || e);
+      }
+      localStorage.setItem(NP_TOKEN_KEY, token2);
+      return token2;
+    }
+    if (!groupId) return localStorage.getItem(NP_TOKEN_KEY) || null;
+    try {
+      const state = await getSyncState(groupId);
+      if (state?.npTok && typeof state.npTok === "string" && state.npTok.length >= 16) {
+        localStorage.setItem(NP_TOKEN_KEY, state.npTok);
+        return state.npTok;
+      }
+    } catch (_) {
+    }
+    const cached = localStorage.getItem(NP_TOKEN_KEY);
+    if (cached && cached.length >= 16) {
+      const seed2 = { v: 1, ts: Date.now(), gId: groupId, npTok: cached };
+      try {
+        await saveSyncState(groupId, seed2);
       } catch (_) {
       }
+      return cached;
     }
-    if (!token) {
-      token = _generateNpToken();
-      const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: token };
-      try {
-        await saveSyncState(groupId, seed);
-      } catch (e) {
-        console.warn("Seeding npTok into sync message failed:", e?.message || e);
-      }
+    const token = _generateNpToken();
+    const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: token };
+    try {
+      await saveSyncState(groupId, seed);
+    } catch (e) {
+      console.warn("Seeding npTok into sync message failed:", e?.message || e);
     }
     localStorage.setItem(NP_TOKEN_KEY, token);
     return token;
@@ -75181,6 +75194,7 @@ ${_shareCurrentLink}`;
         tokenEl.textContent = "Loading\u2026";
         modal.style.display = "flex";
         try {
+          clearCachedNpToken();
           const t = await getOrCreateNpToken(playlistGroupId);
           tokenEl.textContent = t || "(error \u2014 reload)";
           _npToken = t || _npToken;

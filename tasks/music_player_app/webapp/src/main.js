@@ -2902,6 +2902,9 @@ async function _openWatchModal() {
     tokenEl.textContent = 'Loading…';
     modal.style.display = 'flex';
     try {
+        // Drop any locally-cached token so we re-read from the pinned message.
+        // Prevents showing a stale token if another device regenerated.
+        tg.clearCachedNpToken();
         const t = await tg.getOrCreateNpToken(playlistGroupId);
         tokenEl.textContent = t || '(error — reload)';
         _npToken = t || _npToken;
