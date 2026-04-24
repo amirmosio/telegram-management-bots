@@ -10,7 +10,7 @@ const CW = W || 240;
 const CH = H || 240;
 
 function _openApp() {
-  try { push({ url: 'page/lyrics/index' }); } catch (_) {}
+  try { push({ url: 'page/lyrics/index.page' }); } catch (_) {}
 }
 
 AppWidget({
