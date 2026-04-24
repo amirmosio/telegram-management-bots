@@ -50,11 +50,21 @@ AppSideService(
       this._pollOnce().catch(() => {});
     },
 
-    // Device page asked for current state — force a refresh + re-emit.
+    // Device page asked for current state. Two fixes here together:
+    //   1. Immediately re-emit any cached state so the watch isn't blank
+    //      while the next poll completes (and so we recover from a missed
+    //      previous emit while the watch was asleep).
+    //   2. Clear all de-dup state — the next poll will re-emit even if
+    //      the server hasn't changed since our last fetch (the previous
+    //      304 path would otherwise skip the emit).
     onRequest(req, res) {
       if (req && req.method === 'GET_STATE') {
+        if (this.state.lastData) {
+          try { this._emitLyricsDoc(this.state.lastData); } catch (_) {}
+        }
         this.state.lastEtag = null;
         this.state.lastTrackId = null;
+        this.state.lastSyncedSig = '';
         this._pollOnce().catch(() => {});
         res(null, { ok: true });
         return;
