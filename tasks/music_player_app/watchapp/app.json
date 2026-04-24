@@ -1,7 +1,7 @@
 {
   "configVersion": "v3",
   "app": {
-    "appId": 1000001,
+    "appId": 3948571,
     "appName": "Music Lyrics",
     "appType": "app",
     "version": { "code": 1, "name": "1.0.0" },
