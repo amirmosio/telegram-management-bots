@@ -1,0 +1,17 @@
+{
+  "name": "music-lyrics-watchapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zepp OS mini-app that mirrors synced lyrics from the Telegram Music Player web app onto an Amazfit Active 2.",
+  "scripts": {
+    "dev": "zeus dev",
+    "build": "zeus build",
+    "preview": "zeus preview"
+  },
+  "dependencies": {
+    "@zeppos/zml": "^1.2.0"
+  },
+  "devDependencies": {
+    "@zeppos/zeus-cli": "^1.0.0"
+  }
+}

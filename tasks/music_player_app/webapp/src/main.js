@@ -28,6 +28,7 @@ let playingFromPlaylist = false;
 let _playGeneration = 0; // incremented on each track switch to cancel stale async ops
 let syncedLyrics = [];
 let activeLyricIndex = -1;
+let _currentLyricsPayload = { synced: null, plain: null }; // mirror of last _renderLyricsResult, broadcast to watch
 let isSeeking = false;
 let shuffleOn = false;
 let repeatOn = false;
@@ -1219,11 +1220,14 @@ async function playTrack(index) {
     };
     audio.addEventListener('playing', onPlaying, { once: true });
 
+    // New track → wipe lyrics payload; the next _renderLyricsResult fill it.
+    _currentLyricsPayload = { synced: null, plain: null };
+
     // ── Launch audio, lyrics, artwork ALL in parallel ──
     updateMediaSession();
     fetchLyricsForTrack(track, gen);
     fetchArtworkForTrack(track, gen);
-    _syncToTelegram();
+    _broadcastState('state');
 
     try {
         // 1. Check memory + IDB cache (instant playback)
@@ -1884,14 +1888,18 @@ function updateMediaPositionState() {
 function _renderLyricsResult(result) {
     if (result?.synced && result.synced.length > 0) {
         syncedLyrics = result.synced;
+        _currentLyricsPayload = { synced: result.synced, plain: null };
         renderSyncedLyrics();
     } else if (result?.plain) {
         syncedLyrics = [];
+        _currentLyricsPayload = { synced: null, plain: result.plain };
         renderPlainLyrics(result.plain);
     } else {
         syncedLyrics = [];
+        _currentLyricsPayload = { synced: null, plain: null };
         lyricsContent.innerHTML = '<div class="lyrics-placeholder">No lyrics available</div>';
     }
+    _broadcastState('track');
 }
 
 async function fetchLyricsForTrack(track, gen) {
@@ -2647,33 +2655,86 @@ function saveSession() {
 }
 
 setInterval(saveSession, 3000);
-audio.addEventListener('pause', () => { saveSession(); _syncToTelegram(); });
-window.addEventListener('beforeunload', () => { saveSession(); _syncToTelegram(); });
+audio.addEventListener('pause', () => { saveSession(); _broadcastState('state'); });
+audio.addEventListener('play', () => { _broadcastState('state'); });
+audio.addEventListener('seeked', () => { _broadcastState('state'); });
+window.addEventListener('beforeunload', () => { saveSession(); _broadcastState('state'); });
+// Heartbeat: re-anchor time every 10s while playing so the watch clock
+// can't drift. Cheap HTTP POST; no Telegram edit (that branch throttles itself).
+setInterval(() => { if (!audio.paused) _broadcastState('state'); }, 10000);
 
-// ── Cross-device sync via Telegram ──
+// ── Cross-device broadcast ──
+// One fan-out for two consumers:
+//   1. Telegram pinned-message (other browser tabs on same account)
+//   2. Local aiohttp /api/now-playing  (Zepp watchapp via iPhone side-service)
+// kind='track'  — song just changed or lyrics just resolved; HTTP payload
+//                 carries the full lyric doc in addition to position.
+// kind='state'  — play/pause/seek/heartbeat; HTTP payload is slim, server
+//                 preserves previously stored lyrics for the same trackId.
 let _syncInFlight = false;
-function _syncToTelegram() {
-    if (!playlistGroupId || currentTrackIndex < 0 || _syncInFlight) return;
+let _npToken = null; // Telegram-account-scoped; lazy-loaded on first broadcast
+
+// Resolve the watch token once per session. Cached in localStorage by
+// telegram.js — so after the first visit this is a sync-cheap read.
+async function _ensureNpToken() {
+    if (_npToken) return _npToken;
+    try { _npToken = await tg.getOrCreateNpToken(playlistGroupId); } catch (_) {}
+    return _npToken;
+}
+// Kick off the lookup eagerly so the first _broadcastState already has it.
+(async () => { try { await _ensureNpToken(); } catch (_) {} })();
+
+function _broadcastState(kind = 'state') {
+    if (!playlistGroupId || currentTrackIndex < 0) return;
     const track = playerTracks[currentTrackIndex];
     if (!track) return;
-    const state = {
-        v: 1,
-        ts: Date.now(),
+    const now = Date.now();
+    const pos = audio.currentTime || 0;
+
+    // --- Telegram branch (slim, edits a pinned message) ---
+    if (!_syncInFlight) {
+        const slim = {
+            v: 1, ts: now,
+            title: track.title || '',
+            artist: track.artist || '',
+            gId: playerGroupId, tId: playerTopicId, trk: currentTrackId,
+            pos: Math.floor(pos),
+            shf: shuffleOn, rpt: repeatOn, fp: playingFromPlaylist,
+            npTok: _npToken || undefined, // persist across devices once known
+        };
+        _syncInFlight = true;
+        localStorage.setItem('last_sync_ts', String(slim.ts));
+        tg.saveSyncState(playlistGroupId, slim)
+            .catch(e => console.warn('Sync to Telegram failed:', e.message))
+            .finally(() => { _syncInFlight = false; });
+    }
+
+    // --- HTTP branch (rich, feeds the watch) ---
+    // Skip if we haven't resolved the token yet; next broadcast will pick it up.
+    if (!_npToken) { _ensureNpToken(); return; }
+
+    const rich = {
+        trackId: currentTrackId,
         title: track.title || '',
         artist: track.artist || '',
-        gId: playerGroupId,
-        tId: playerTopicId,
-        trk: currentTrackId,
-        pos: Math.floor(audio.currentTime || 0),
-        shf: shuffleOn,
-        rpt: repeatOn,
-        fp: playingFromPlaylist,
+        duration: track.duration || 0,
+        t: pos,
+        wallClock: now,
+        isPlaying: !audio.paused,
     };
-    _syncInFlight = true;
-    localStorage.setItem('last_sync_ts', String(state.ts));
-    tg.saveSyncState(playlistGroupId, state)
-        .catch(e => console.warn('Sync to Telegram failed:', e.message))
-        .finally(() => { _syncInFlight = false; });
+    if (kind === 'track') {
+        rich.synced = _currentLyricsPayload.synced;
+        rich.plain = _currentLyricsPayload.plain;
+    }
+    fetch('/api/now-playing', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-NP-Token': _npToken,
+        },
+        body: JSON.stringify(rich),
+        keepalive: true,
+    }).catch(() => {});
 }
 
 // Restore the complete app state
@@ -2833,6 +2894,50 @@ let loginPhone = '';
 
 function showLogin() { loginScreen.style.display = 'flex'; $('app').style.display = 'none'; }
 function showApp() { loginScreen.style.display = 'none'; $('app').style.display = 'flex'; }
+
+// ── Watch setup modal ─────────────────────────────────────
+async function _openWatchModal() {
+    const modal = $('watch-modal');
+    const tokenEl = $('watch-token-text');
+    tokenEl.textContent = 'Loading…';
+    modal.style.display = 'flex';
+    try {
+        const t = await tg.getOrCreateNpToken(playlistGroupId);
+        tokenEl.textContent = t || '(error — reload)';
+        _npToken = t || _npToken;
+    } catch (e) {
+        tokenEl.textContent = '(error — reload)';
+    }
+}
+function _closeWatchModal() { $('watch-modal').style.display = 'none'; }
+
+$('btn-watch').addEventListener('click', _openWatchModal);
+$('watch-cancel').addEventListener('click', _closeWatchModal);
+$('watch-modal').querySelector('.modal-backdrop').addEventListener('click', _closeWatchModal);
+
+$('watch-token-row').addEventListener('click', async () => {
+    const row = $('watch-token-row');
+    const txt = $('watch-token-text').textContent || '';
+    if (!txt || txt === 'Loading…') return;
+    try { await navigator.clipboard.writeText(txt); } catch (_) {}
+    row.classList.add('copied');
+    setTimeout(() => row.classList.remove('copied'), 1200);
+    showToast('Token copied');
+});
+
+$('watch-regen').addEventListener('click', async () => {
+    const tokenEl = $('watch-token-text');
+    tokenEl.textContent = 'Regenerating…';
+    try {
+        tg.clearCachedNpToken();
+        const t = await tg.getOrCreateNpToken(playlistGroupId, { regenerate: true });
+        _npToken = t;
+        tokenEl.textContent = t || '(error — reload)';
+        showToast('New token — repaste in Zepp');
+    } catch (e) {
+        tokenEl.textContent = '(error — reload)';
+    }
+});
 
 $('btn-logout').addEventListener('click', async () => {
     if (!confirm('Log out of Telegram? Downloaded tracks on this device will be cleared.')) return;

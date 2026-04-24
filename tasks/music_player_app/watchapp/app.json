@@ -1,0 +1,33 @@
+{
+  "app": {
+    "appId": 1000001,
+    "appName": "Music Lyrics",
+    "appType": "app",
+    "version": { "code": 1, "name": "1.0.0" },
+    "icon": "icon.png",
+    "vender": "local",
+    "description": "Live synced lyrics from the Telegram Music Player web app",
+    "i18n": {
+      "en-US": { "name": "Music Lyrics", "description": "Live synced lyrics from the Telegram Music Player web app" }
+    }
+  },
+  "permissions": ["device:os.bg_service", "data:os.device", "data:os.user.profile"],
+  "runtime": {
+    "apiVersion": { "compatible": "3.0.0", "target": "3.0.0", "minCompatible": "3.0.0" }
+  },
+  "platforms": [
+    { "name": "active_2", "deviceSource": 8454402 },
+    { "name": "active_2_square", "deviceSource": 8454403 }
+  ],
+  "targets": {
+    "active_2": {
+      "module": { "page": { "main": { "path": "page/lyrics" } }, "app-side": { "path": "app-side/index" } },
+      "platforms": [ { "name": "active_2", "dt": "round", "deviceSource": 8454402, "designWidth": 480 } ]
+    },
+    "active_2_square": {
+      "module": { "page": { "main": { "path": "page/lyrics" } }, "app-side": { "path": "app-side/index" } },
+      "platforms": [ { "name": "active_2_square", "dt": "square", "deviceSource": 8454403, "designWidth": 390 } ]
+    }
+  },
+  "defaultLanguage": "en-US"
+}

@@ -126,10 +126,95 @@ async def recognize(request: web.Request) -> web.Response:
     })
 
 
+###############################################################################
+#  Now-playing relay (multi-user, capability-token gated)
+#
+#  POST /api/now-playing   X-NP-Token: <hex>    body: {trackId, title, artist,
+#    duration, t, wallClock, isPlaying, synced?, plain?}
+#  GET  /api/now-playing   X-NP-Token: <hex>    → latest payload for that token
+#                                                 or {etag:0, empty:true}.
+#                                                 Supports If-None-Match → 304.
+#
+#  State is keyed by X-NP-Token: each Telegram account owns one token (rotated
+#  through a pinned message in its playlist group), so one Zepp side-service
+#  watches exactly one slot. Idle slots GC'd after 24h.
+###############################################################################
+
+_NP_MAX_AGE_SEC = 86400            # drop slots idle >24h
+_NP_TOKEN_MIN = 16                 # shortest acceptable token
+_NP_TOKEN_MAX = 128
+_NP_TOKEN_ALPHABET = set("0123456789abcdefABCDEF-_")
+_now_playing: Dict[str, Dict] = {}
+
+
+def _valid_np_token(tok: str) -> bool:
+    if not tok or not isinstance(tok, str):
+        return False
+    if not (_NP_TOKEN_MIN <= len(tok) <= _NP_TOKEN_MAX):
+        return False
+    return all(c in _NP_TOKEN_ALPHABET for c in tok)
+
+
+def _np_gc() -> None:
+    now = time.time()
+    stale = [t for t, s in _now_playing.items() if now - s.get("_updated", 0) > _NP_MAX_AGE_SEC]
+    for t in stale:
+        _now_playing.pop(t, None)
+
+
+async def np_post(request: web.Request) -> web.Response:
+    tok = request.headers.get("X-NP-Token", "")
+    if not _valid_np_token(tok):
+        return web.json_response({"error": "bad_token"}, status=401)
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"error": "bad_json"}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"error": "bad_json"}, status=400)
+
+    _np_gc()
+    prev = _now_playing.get(tok, {})
+    track_id = payload.get("trackId")
+
+    # Preserve synced/plain on TICK-only POSTs for the same trackId so the
+    # Zepp side-service doesn't lose the lyric doc between events.
+    if prev and prev.get("trackId") == track_id:
+        if "synced" not in payload and prev.get("synced") is not None:
+            payload["synced"] = prev["synced"]
+        if "plain" not in payload and prev.get("plain") is not None:
+            payload["plain"] = prev["plain"]
+
+    new_etag = int(prev.get("_etag", 0)) + 1
+    payload["_etag"] = new_etag
+    payload["etag"] = new_etag
+    payload["_updated"] = time.time()
+    _now_playing[tok] = payload
+    return web.json_response({"ok": True, "etag": new_etag})
+
+
+async def np_get(request: web.Request) -> web.Response:
+    tok = request.headers.get("X-NP-Token", "")
+    if not _valid_np_token(tok):
+        return web.json_response({"error": "bad_token"}, status=401)
+    state = _now_playing.get(tok)
+    if not state:
+        return web.json_response({"etag": 0, "empty": True})
+    inm = request.headers.get("If-None-Match", "").strip('"')
+    if inm and inm == str(state.get("_etag", 0)):
+        return web.Response(status=304)
+    body = {k: v for k, v in state.items() if not k.startswith("_")}
+    resp = web.json_response(body)
+    resp.headers["ETag"] = f'"{state.get("_etag", 0)}"'
+    return resp
+
+
 def make_app() -> web.Application:
     app = web.Application(client_max_size=6 * 1024 * 1024)
     app.router.add_get("/api/recognize/health", health)
     app.router.add_post("/api/recognize", recognize)
+    app.router.add_post("/api/now-playing", np_post)
+    app.router.add_get("/api/now-playing", np_get)
     return app
 
 

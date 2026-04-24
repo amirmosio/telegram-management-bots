@@ -1778,6 +1778,25 @@ export async function downloadSearchResult(groupId, dlCmd) {
 //  CROSS-DEVICE SYNC (pinned message in General topic)
 // ══════════════════════════════════════
 const SYNC_MSG_KEY = 'sync_msg_id';
+const NP_TOKEN_KEY = 'np_token'; // localStorage cache of this account's watch token
+
+// Scrub every existing "🎵" message in General except `keepId`. Best-effort;
+// any failure is swallowed so a stale message can't break the sync path.
+async function _purgeStaleSyncMessages(client, entity, peer, keepId) {
+    try {
+        const toDelete = [];
+        for await (const msg of client.iterMessages(entity, { limit: 20, replyTo: 1 })) {
+            if (!msg?.message?.startsWith('🎵')) continue;
+            if (msg.id === keepId) continue;
+            toDelete.push(msg.id);
+        }
+        if (toDelete.length) {
+            await client.invoke(new Api.messages.DeleteMessages({
+                revoke: true, id: toDelete,
+            })).catch(() => {});
+        }
+    } catch (_) { /* best-effort */ }
+}
 
 export async function saveSyncState(groupId, state) {
     await _ensureConnected();
@@ -1788,7 +1807,7 @@ export async function saveSyncState(groupId, state) {
 
     const cachedId = parseInt(localStorage.getItem(SYNC_MSG_KEY), 10);
 
-    // Try editing existing message first
+    // Edit-in-place on the cached message — cheap path, no Telegram spam.
     if (cachedId) {
         try {
             await client.invoke(new Api.messages.EditMessage({
@@ -1798,12 +1817,14 @@ export async function saveSyncState(groupId, state) {
             }));
             return;
         } catch (e) {
-            // Message deleted or invalid — fall through to send new
+            // Cached message is gone / invalid. Drop it; delete any lingering
+            // "🎵" messages in General *before* we send a new one, so the
+            // group never accumulates stale sync messages.
             localStorage.removeItem(SYNC_MSG_KEY);
+            await _purgeStaleSyncMessages(client, entity, peer, -1);
         }
     }
 
-    // Send new message in General topic (id=1) and pin it
     const sent = await client.sendMessage(entity, {
         message: text,
         replyTo: 1,
@@ -1812,13 +1833,67 @@ export async function saveSyncState(groupId, state) {
 
     try {
         await client.invoke(new Api.messages.UpdatePinnedMessage({
-            peer,
-            id: sent.id,
-            silent: true,
+            peer, id: sent.id, silent: true,
         }));
     } catch (e) {
         console.warn('Pin sync message failed:', e.message);
     }
+
+    // Belt-and-braces: scrub anything that isn't our brand-new message.
+    _purgeStaleSyncMessages(client, entity, peer, sent.id).catch(() => {});
+}
+
+// Generate a new 24-byte (48 hex char) token.
+function _generateNpToken() {
+    const bytes = new Uint8Array(24);
+    (globalThis.crypto || window.crypto).getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Return the Telegram-account-scoped token used as X-NP-Token. The token is
+// read from / written to the pinned sync message in General so every device
+// logged into the same Telegram account shares one slot on the server.
+//
+// Call order:
+//   1. localStorage fast-path (no Telegram round-trip after first visit)
+//   2. getSyncState → if payload has npTok, cache + return
+//   3. generate fresh token → seed the pinned message (saveSyncState) → cache
+//
+// `regenerate: true` forces step 3, useful when the user suspects a leak.
+export async function getOrCreateNpToken(groupId, { regenerate = false } = {}) {
+    if (!regenerate) {
+        const cached = localStorage.getItem(NP_TOKEN_KEY);
+        if (cached && cached.length >= 16) return cached;
+    }
+    if (!groupId) return null;
+
+    let token = null;
+    if (!regenerate) {
+        try {
+            const state = await getSyncState(groupId);
+            if (state?.npTok && typeof state.npTok === 'string' && state.npTok.length >= 16) {
+                token = state.npTok;
+            }
+        } catch (_) { /* ignore */ }
+    }
+
+    if (!token) {
+        token = _generateNpToken();
+        // Seed the pinned message with just the token + version. Once the user
+        // plays a song, _broadcastState overwrites with full state + npTok.
+        const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: token };
+        try {
+            await saveSyncState(groupId, seed);
+        } catch (e) {
+            console.warn('Seeding npTok into sync message failed:', e?.message || e);
+        }
+    }
+    localStorage.setItem(NP_TOKEN_KEY, token);
+    return token;
+}
+
+export function clearCachedNpToken() {
+    localStorage.removeItem(NP_TOKEN_KEY);
 }
 
 export async function getSyncState(groupId) {

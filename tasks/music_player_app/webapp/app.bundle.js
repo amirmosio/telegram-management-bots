@@ -72005,6 +72005,24 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
+  async function _purgeStaleSyncMessages(client2, entity, peer, keepId) {
+    try {
+      const toDelete = [];
+      for await (const msg of client2.iterMessages(entity, { limit: 20, replyTo: 1 })) {
+        if (!msg?.message?.startsWith("\u{1F3B5}")) continue;
+        if (msg.id === keepId) continue;
+        toDelete.push(msg.id);
+      }
+      if (toDelete.length) {
+        await client2.invoke(new import_tl.Api.messages.DeleteMessages({
+          revoke: true,
+          id: toDelete
+        })).catch(() => {
+        });
+      }
+    } catch (_) {
+    }
+  }
   async function saveSyncState(groupId, state) {
     await _ensureConnected();
     if (!client.connected) return;
@@ -72023,6 +72041,7 @@ ${JSON.stringify(state)}`;
         return;
       } catch (e) {
         localStorage.removeItem(SYNC_MSG_KEY);
+        await _purgeStaleSyncMessages(client, entity, peer, -1);
       }
     }
     const sent = await client.sendMessage(entity, {
@@ -72039,6 +72058,44 @@ ${JSON.stringify(state)}`;
     } catch (e) {
       console.warn("Pin sync message failed:", e.message);
     }
+    _purgeStaleSyncMessages(client, entity, peer, sent.id).catch(() => {
+    });
+  }
+  function _generateNpToken() {
+    const bytes = new Uint8Array(24);
+    (globalThis.crypto || window.crypto).getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  async function getOrCreateNpToken(groupId, { regenerate = false } = {}) {
+    if (!regenerate) {
+      const cached = localStorage.getItem(NP_TOKEN_KEY);
+      if (cached && cached.length >= 16) return cached;
+    }
+    if (!groupId) return null;
+    let token = null;
+    if (!regenerate) {
+      try {
+        const state = await getSyncState(groupId);
+        if (state?.npTok && typeof state.npTok === "string" && state.npTok.length >= 16) {
+          token = state.npTok;
+        }
+      } catch (_) {
+      }
+    }
+    if (!token) {
+      token = _generateNpToken();
+      const seed = { v: 1, ts: Date.now(), gId: groupId, npTok: token };
+      try {
+        await saveSyncState(groupId, seed);
+      } catch (e) {
+        console.warn("Seeding npTok into sync message failed:", e?.message || e);
+      }
+    }
+    localStorage.setItem(NP_TOKEN_KEY, token);
+    return token;
+  }
+  function clearCachedNpToken() {
+    localStorage.removeItem(NP_TOKEN_KEY);
   }
   async function getSyncState(groupId) {
     await _ensureConnected();
@@ -72082,7 +72139,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -72138,6 +72195,7 @@ ${JSON.stringify(state)}`;
       SHARE_CHANNEL_TITLE = "TG Music Player Shared";
       _dlCache = {};
       SYNC_MSG_KEY = "sync_msg_id";
+      NP_TOKEN_KEY = "np_token";
     }
   });
 
@@ -72562,6 +72620,7 @@ ${JSON.stringify(state)}`;
       var _playGeneration = 0;
       var syncedLyrics = [];
       var activeLyricIndex = -1;
+      var _currentLyricsPayload = { synced: null, plain: null };
       var isSeeking = false;
       var shuffleOn = false;
       var repeatOn = false;
@@ -73578,10 +73637,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           if (!_streamDownloadActive) _prefetchNextTrack(gen);
         };
         audio.addEventListener("playing", onPlaying, { once: true });
+        _currentLyricsPayload = { synced: null, plain: null };
         updateMediaSession();
         fetchLyricsForTrack(track, gen);
         fetchArtworkForTrack(track, gen);
-        _syncToTelegram();
+        _broadcastState("state");
         try {
           const cachedUrl = await getCachedTrackUrl(playerGroupId, track.id);
           if (_playGeneration !== gen) return;
@@ -74163,14 +74223,18 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       function _renderLyricsResult(result) {
         if (result?.synced && result.synced.length > 0) {
           syncedLyrics = result.synced;
+          _currentLyricsPayload = { synced: result.synced, plain: null };
           renderSyncedLyrics();
         } else if (result?.plain) {
           syncedLyrics = [];
+          _currentLyricsPayload = { synced: null, plain: result.plain };
           renderPlainLyrics(result.plain);
         } else {
           syncedLyrics = [];
+          _currentLyricsPayload = { synced: null, plain: null };
           lyricsContent.innerHTML = '<div class="lyrics-placeholder">No lyrics available</div>';
         }
+        _broadcastState("track");
       }
       async function fetchLyricsForTrack(track, gen) {
         try {
@@ -74861,34 +74925,91 @@ ${_shareCurrentLink}`;
       setInterval(saveSession, 3e3);
       audio.addEventListener("pause", () => {
         saveSession();
-        _syncToTelegram();
+        _broadcastState("state");
+      });
+      audio.addEventListener("play", () => {
+        _broadcastState("state");
+      });
+      audio.addEventListener("seeked", () => {
+        _broadcastState("state");
       });
       window.addEventListener("beforeunload", () => {
         saveSession();
-        _syncToTelegram();
+        _broadcastState("state");
       });
+      setInterval(() => {
+        if (!audio.paused) _broadcastState("state");
+      }, 1e4);
       var _syncInFlight = false;
-      function _syncToTelegram() {
-        if (!playlistGroupId || currentTrackIndex < 0 || _syncInFlight) return;
+      var _npToken = null;
+      async function _ensureNpToken() {
+        if (_npToken) return _npToken;
+        try {
+          _npToken = await getOrCreateNpToken(playlistGroupId);
+        } catch (_) {
+        }
+        return _npToken;
+      }
+      (async () => {
+        try {
+          await _ensureNpToken();
+        } catch (_) {
+        }
+      })();
+      function _broadcastState(kind = "state") {
+        if (!playlistGroupId || currentTrackIndex < 0) return;
         const track = playerTracks[currentTrackIndex];
         if (!track) return;
-        const state = {
-          v: 1,
-          ts: Date.now(),
+        const now = Date.now();
+        const pos = audio.currentTime || 0;
+        if (!_syncInFlight) {
+          const slim = {
+            v: 1,
+            ts: now,
+            title: track.title || "",
+            artist: track.artist || "",
+            gId: playerGroupId,
+            tId: playerTopicId,
+            trk: currentTrackId,
+            pos: Math.floor(pos),
+            shf: shuffleOn,
+            rpt: repeatOn,
+            fp: playingFromPlaylist,
+            npTok: _npToken || void 0
+            // persist across devices once known
+          };
+          _syncInFlight = true;
+          localStorage.setItem("last_sync_ts", String(slim.ts));
+          saveSyncState(playlistGroupId, slim).catch((e) => console.warn("Sync to Telegram failed:", e.message)).finally(() => {
+            _syncInFlight = false;
+          });
+        }
+        if (!_npToken) {
+          _ensureNpToken();
+          return;
+        }
+        const rich = {
+          trackId: currentTrackId,
           title: track.title || "",
           artist: track.artist || "",
-          gId: playerGroupId,
-          tId: playerTopicId,
-          trk: currentTrackId,
-          pos: Math.floor(audio.currentTime || 0),
-          shf: shuffleOn,
-          rpt: repeatOn,
-          fp: playingFromPlaylist
+          duration: track.duration || 0,
+          t: pos,
+          wallClock: now,
+          isPlaying: !audio.paused
         };
-        _syncInFlight = true;
-        localStorage.setItem("last_sync_ts", String(state.ts));
-        saveSyncState(playlistGroupId, state).catch((e) => console.warn("Sync to Telegram failed:", e.message)).finally(() => {
-          _syncInFlight = false;
+        if (kind === "track") {
+          rich.synced = _currentLyricsPayload.synced;
+          rich.plain = _currentLyricsPayload.plain;
+        }
+        fetch("/api/now-playing", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-NP-Token": _npToken
+          },
+          body: JSON.stringify(rich),
+          keepalive: true
+        }).catch(() => {
         });
       }
       async function restoreSession() {
@@ -75054,6 +75175,50 @@ ${_shareCurrentLink}`;
         loginScreen.style.display = "none";
         $("app").style.display = "flex";
       }
+      async function _openWatchModal() {
+        const modal = $("watch-modal");
+        const tokenEl = $("watch-token-text");
+        tokenEl.textContent = "Loading\u2026";
+        modal.style.display = "flex";
+        try {
+          const t = await getOrCreateNpToken(playlistGroupId);
+          tokenEl.textContent = t || "(error \u2014 reload)";
+          _npToken = t || _npToken;
+        } catch (e) {
+          tokenEl.textContent = "(error \u2014 reload)";
+        }
+      }
+      function _closeWatchModal() {
+        $("watch-modal").style.display = "none";
+      }
+      $("btn-watch").addEventListener("click", _openWatchModal);
+      $("watch-cancel").addEventListener("click", _closeWatchModal);
+      $("watch-modal").querySelector(".modal-backdrop").addEventListener("click", _closeWatchModal);
+      $("watch-token-row").addEventListener("click", async () => {
+        const row = $("watch-token-row");
+        const txt = $("watch-token-text").textContent || "";
+        if (!txt || txt === "Loading\u2026") return;
+        try {
+          await navigator.clipboard.writeText(txt);
+        } catch (_) {
+        }
+        row.classList.add("copied");
+        setTimeout(() => row.classList.remove("copied"), 1200);
+        showToast("Token copied");
+      });
+      $("watch-regen").addEventListener("click", async () => {
+        const tokenEl = $("watch-token-text");
+        tokenEl.textContent = "Regenerating\u2026";
+        try {
+          clearCachedNpToken();
+          const t = await getOrCreateNpToken(playlistGroupId, { regenerate: true });
+          _npToken = t;
+          tokenEl.textContent = t || "(error \u2014 reload)";
+          showToast("New token \u2014 repaste in Zepp");
+        } catch (e) {
+          tokenEl.textContent = "(error \u2014 reload)";
+        }
+      });
       $("btn-logout").addEventListener("click", async () => {
         if (!confirm("Log out of Telegram? Downloaded tracks on this device will be cleared.")) return;
         const btn = $("btn-logout");
