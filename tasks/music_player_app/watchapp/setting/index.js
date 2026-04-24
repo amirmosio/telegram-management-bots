@@ -1,38 +1,22 @@
 AppSettingsPage({
   build(props) {
-    const baseUrl = props.settingsStorage.getItem('baseUrl') || '';
     const token = props.settingsStorage.getItem('token') || '';
 
     return Section({ style: { padding: 16 } }, [
       View({ style: { marginBottom: 8 } }, [
-        Text({ style: { fontSize: 20, fontWeight: 'bold' } }, 'Music Lyrics — setup'),
+        Text({ style: { fontSize: 20, fontWeight: 'bold' } }, 'Music Lyrics'),
       ]),
       View({ style: { marginBottom: 16 } }, [
         Text({ style: { fontSize: 13, color: '#555' } },
-          'Server URL is your music-player domain. Token comes from the web app → Watch setup.'),
+          "Works out of the box for the owner's Telegram account. If you use a different Telegram account, paste its token (from the ⌚ Watch setup button in the web app)."),
       ]),
-
-      View({ style: { marginBottom: 12 } }, [
-        Text({ style: { fontSize: 14, marginBottom: 6 } }, 'Server URL'),
+      View({ style: { marginBottom: 8 } }, [
+        Text({ style: { fontSize: 14, marginBottom: 6 } }, 'Token (optional override)'),
         TextInput({
-          placeholder: 'https://telemusic.duckdns.org',
-          value: baseUrl,
-          onChange: (v) => props.settingsStorage.setItem('baseUrl', (v || '').trim()),
-        }),
-      ]),
-
-      View({ style: { marginBottom: 16 } }, [
-        Text({ style: { fontSize: 14, marginBottom: 6 } }, 'Token'),
-        TextInput({
-          placeholder: 'Paste token from web app',
+          placeholder: 'Leave empty to use default',
           value: token,
           onChange: (v) => props.settingsStorage.setItem('token', (v || '').trim()),
         }),
-      ]),
-
-      View({}, [
-        Text({ style: { fontSize: 12, color: '#888' } },
-          'The token comes from the ⌚ Watch setup button in the web app. Different Telegram accounts have different tokens.'),
       ]),
     ]);
   },

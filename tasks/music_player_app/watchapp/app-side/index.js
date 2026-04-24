@@ -1,5 +1,12 @@
 import { BaseSideService } from '@zeppos/zml/base-side';
 
+// Server is fixed — this mini-app only talks to the hosted music-player.
+const BASE_URL = 'https://telemusic.duckdns.org';
+
+// Default token for the owner's Telegram account. User can override via
+// Zepp app → Music Lyrics → Settings → Token if they use a different account.
+const DEFAULT_TOKEN = '7d954cb439516a00dd444857d2e4407c84485d0edab8db9ca908e6e406e13dd0';
+
 // BLE messaging.peerSocket payload cap is ~3.5KB. Chunk lyric docs above this.
 const CHUNK_THRESHOLD_BYTES = 2800;
 const LINES_PER_CHUNK = 20;
@@ -11,7 +18,6 @@ const POLL_WHEN_IDLE_MS = 15000;
 AppSideService(
   BaseSideService({
     state: {
-      baseUrl: '',
       token: '',
       lastEtag: null,
       lastTrackId: null,
@@ -59,9 +65,8 @@ AppSideService(
 
     _loadSettings() {
       try {
-        this.state.baseUrl = (this.settings.getItem('baseUrl') || '').replace(/\/$/, '');
-        this.state.token = this.settings.getItem('token') || '';
-      } catch (_) {}
+        this.state.token = (this.settings.getItem('token') || '').trim() || DEFAULT_TOKEN;
+      } catch (_) { this.state.token = DEFAULT_TOKEN; }
     },
 
     _startPolling() {
@@ -76,8 +81,8 @@ AppSideService(
     },
 
     async _pollOnce() {
-      if (!this.state.baseUrl || !this.state.token) return;
-      const url = this.state.baseUrl + '/api/now-playing';
+      if (!this.state.token) return;
+      const url = BASE_URL + '/api/now-playing';
       const headers = { 'Accept': 'application/json', 'X-NP-Token': this.state.token };
       if (this.state.lastEtag) headers['If-None-Match'] = '"' + this.state.lastEtag + '"';
 
