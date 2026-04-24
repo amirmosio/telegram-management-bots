@@ -135,6 +135,9 @@ Page(
         isPlaying: !!a.isPlaying,
       };
       this._tickHighlight(true);
+      // Keep the widget's snapshot in lockstep so a swipe-to-card after
+      // a play/pause/seek shows correct timing.
+      this._cacheForWidget();
     },
 
     // === UI chrome ===

@@ -1,75 +1,129 @@
-// Carousel card showing the latest cached song info. Tapping the card on
-// Active 2 opens the full app automatically — no explicit button widget
-// needed (and adding one with a solid background hides the text).
-import { createWidget, deleteWidget, widget, align, text_style } from '@zos/ui';
+// Carousel card showing the latest cached song info.
+// Reads the snapshot the main page writes to LocalStorage, then ticks
+// every 250 ms while the user is looking at the card so the current
+// lyric line updates as the song plays.
+import { createWidget, deleteWidget, widget, prop, align, text_style } from '@zos/ui';
 import { getDeviceInfo } from '@zos/device';
 import { LocalStorage } from '@zos/storage';
 
 const { width: W, height: H } = getDeviceInfo();
 
+const LINE_REFRESH_MS = 250;
+
 AppWidget({
   state: {
     rendered: [],
+    titleW: null,
+    artistW: null,
+    lineW: null,
+    tickTimer: null,
+    lastLineText: null,
   },
 
   onInit() {},
 
   build() {
-    this._render();
+    this._mount();
+    this._startTick();
   },
 
   onResume() {
-    this._clearRendered();
-    this._render();
+    // Re-read from storage in case the main page wrote a new snapshot.
+    this._unmount();
+    this._mount();
+    this._startTick();
   },
 
-  _clearRendered() {
+  onPause() {
+    this._stopTick();
+  },
+
+  onDestroy() {
+    this._stopTick();
+    this._unmount();
+  },
+
+  _startTick() {
+    this._stopTick();
+    this.state.tickTimer = setInterval(() => this._refreshLine(), LINE_REFRESH_MS);
+  },
+
+  _stopTick() {
+    if (this.state.tickTimer) { clearInterval(this.state.tickTimer); this.state.tickTimer = null; }
+  },
+
+  _unmount() {
     for (const w of this.state.rendered) {
       try { deleteWidget(w); } catch (_) {}
     }
     this.state.rendered = [];
+    this.state.titleW = this.state.artistW = this.state.lineW = null;
+    this.state.lastLineText = null;
   },
 
-  _push(w) { if (w) this.state.rendered.push(w); },
+  _push(w) { if (w) this.state.rendered.push(w); return w; },
 
-  _render() {
+  _mount() {
     const snapshot = this._loadSnapshot();
+    const cw = W || 240;
+    const ch = H || 120;
 
     if (!snapshot) {
       this._push(createWidget(widget.TEXT, {
-        x: 12, y: Math.max(20, (H || 120) / 2 - 20), w: (W || 240) - 24, h: 26,
+        x: 12, y: Math.max(20, ch / 2 - 24), w: cw - 24, h: 26,
         color: 0xffffff, text_size: 18,
         align_h: align.CENTER_H, text_style: text_style.ELLIPSIS,
         text: 'Music Lyrics',
       }));
       this._push(createWidget(widget.TEXT, {
-        x: 12, y: Math.max(48, (H || 120) / 2 + 6), w: (W || 240) - 24, h: 22,
-        color: 0x9aa0a6, text_size: 14,
+        x: 12, y: Math.max(48, ch / 2 + 4), w: cw - 24, h: 22,
+        color: 0x808080, text_size: 14,
         align_h: align.CENTER_H, text_style: text_style.ELLIPSIS,
-        text: 'Open app & play a song',
+        text: 'Open the app once to seed',
       }));
       return;
     }
 
-    // Layout: title (top), artist, current line (largest, white).
-    this._push(createWidget(widget.TEXT, {
-      x: 12, y: 8, w: (W || 240) - 24, h: 22,
+    // Title (small) + artist (smaller, dim) + lyric line (largest, white).
+    this.state.titleW = this._push(createWidget(widget.TEXT, {
+      x: 8, y: 6, w: cw - 16, h: 22,
       color: 0xffffff, text_size: 16,
       align_h: align.CENTER_H, text_style: text_style.ELLIPSIS,
       text: snapshot.title || 'Music Lyrics',
     }));
-    this._push(createWidget(widget.TEXT, {
-      x: 12, y: 30, w: (W || 240) - 24, h: 18,
-      color: 0x9aa0a6, text_size: 12,
+    this.state.artistW = this._push(createWidget(widget.TEXT, {
+      x: 8, y: 28, w: cw - 16, h: 18,
+      color: 0x808080, text_size: 12,
       align_h: align.CENTER_H, text_style: text_style.ELLIPSIS,
       text: snapshot.artist || '',
     }));
-    this._push(createWidget(widget.TEXT, {
-      x: 8, y: 52, w: (W || 240) - 16, h: Math.max(40, (H || 120) - 56),
+    // Lyric line — give it the rest of the card.
+    this.state.lineW = this._push(createWidget(widget.TEXT, {
+      x: 6, y: 50, w: cw - 12, h: Math.max(40, ch - 56),
       color: 0xffffff, text_size: 18,
       align_h: align.CENTER_H, text_style: text_style.WRAP,
       text: this._currentLineAt(snapshot) || '—',
     }));
+    this.state.lastLineText = this._currentLineAt(snapshot);
+  },
+
+  // Tick — recompute current line from cached anchor and update only the
+  // line widget if it changed. No re-mount = no flicker.
+  _refreshLine() {
+    if (!this.state.lineW) return;
+    const snapshot = this._loadSnapshot();
+    if (!snapshot) return;
+    const line = this._currentLineAt(snapshot) || '—';
+    if (line === this.state.lastLineText) return;
+    try { this.state.lineW.setProperty(prop.MORE, { text: line }); } catch (_) {}
+    this.state.lastLineText = line;
+    // Title/artist may also have changed (track switched) — refresh cheaply.
+    if (this.state.titleW) {
+      try { this.state.titleW.setProperty(prop.MORE, { text: snapshot.title || 'Music Lyrics' }); } catch (_) {}
+    }
+    if (this.state.artistW) {
+      try { this.state.artistW.setProperty(prop.MORE, { text: snapshot.artist || '' }); } catch (_) {}
+    }
   },
 
   _loadSnapshot() {
