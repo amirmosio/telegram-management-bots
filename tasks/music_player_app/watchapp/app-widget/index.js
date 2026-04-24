@@ -1,16 +1,11 @@
-// App-widget card shown in the swipe-left/right carousel on the watch face.
-// Glance-only — renders the latest cached song title, artist, and current
-// lyric line. The full app (long-press / tap) shows the whole scrollable list.
-//
-// Data flow: the main page caches { title, artist, synced, anchor } into
-// LocalStorage on every LYRICS message. This widget reads it on onResume.
-// There is no active polling here — Zepp app-widgets don't run continuously.
+// Carousel card showing the latest cached song info. Tapping the card on
+// Active 2 opens the full app automatically — no explicit button widget
+// needed (and adding one with a solid background hides the text).
 import { createWidget, deleteWidget, widget, align, text_style } from '@zos/ui';
 import { getDeviceInfo } from '@zos/device';
 import { LocalStorage } from '@zos/storage';
-import { push } from '@zos/router';
 
-const { width: W } = getDeviceInfo();
+const { width: W, height: H } = getDeviceInfo();
 
 AppWidget({
   state: {
@@ -35,56 +30,47 @@ AppWidget({
     this.state.rendered = [];
   },
 
+  _push(w) { if (w) this.state.rendered.push(w); },
+
   _render() {
     const snapshot = this._loadSnapshot();
+
     if (!snapshot) {
       this._push(createWidget(widget.TEXT, {
-        x: 10, y: 20, w: W - 20, h: 22,
-        color: 0xffffff, text_size: 16,
+        x: 12, y: Math.max(20, (H || 120) / 2 - 20), w: (W || 240) - 24, h: 26,
+        color: 0xffffff, text_size: 18,
         align_h: align.CENTER_H, text_style: text_style.ELLIPSIS,
         text: 'Music Lyrics',
       }));
       this._push(createWidget(widget.TEXT, {
-        x: 10, y: 46, w: W - 20, h: 20,
-        color: 0x9aa0a6, text_size: 13,
+        x: 12, y: Math.max(48, (H || 120) / 2 + 6), w: (W || 240) - 24, h: 22,
+        color: 0x9aa0a6, text_size: 14,
         align_h: align.CENTER_H, text_style: text_style.ELLIPSIS,
-        text: 'Tap to open',
-      }));
-      this._push(createWidget(widget.BUTTON, {
-        x: 0, y: 0, w: W, h: 120,
-        text: '', normal_color: 0x000000, press_color: 0x111111,
-        click_func: () => { try { push({ url: 'page/lyrics/index' }); } catch (_) {} },
+        text: 'Open app & play a song',
       }));
       return;
     }
 
+    // Layout: title (top), artist, current line (largest, white).
     this._push(createWidget(widget.TEXT, {
-      x: 10, y: 8, w: W - 20, h: 22,
+      x: 12, y: 8, w: (W || 240) - 24, h: 22,
       color: 0xffffff, text_size: 16,
       align_h: align.CENTER_H, text_style: text_style.ELLIPSIS,
       text: snapshot.title || 'Music Lyrics',
     }));
     this._push(createWidget(widget.TEXT, {
-      x: 10, y: 32, w: W - 20, h: 18,
+      x: 12, y: 30, w: (W || 240) - 24, h: 18,
       color: 0x9aa0a6, text_size: 12,
       align_h: align.CENTER_H, text_style: text_style.ELLIPSIS,
       text: snapshot.artist || '',
     }));
     this._push(createWidget(widget.TEXT, {
-      x: 10, y: 58, w: W - 20, h: 44,
-      color: 0x1a73e8, text_size: 18,
+      x: 8, y: 52, w: (W || 240) - 16, h: Math.max(40, (H || 120) - 56),
+      color: 0xffffff, text_size: 18,
       align_h: align.CENTER_H, text_style: text_style.WRAP,
       text: this._currentLineAt(snapshot) || '—',
     }));
-    // Tap anywhere to open the full lyrics page.
-    this._push(createWidget(widget.BUTTON, {
-      x: 0, y: 0, w: W, h: 120,
-      text: '', normal_color: 0x000000, press_color: 0x111111,
-      click_func: () => { try { push({ url: 'page/lyrics/index' }); } catch (_) {} },
-    }));
   },
-
-  _push(w) { this.state.rendered.push(w); },
 
   _loadSnapshot() {
     try {

@@ -5,7 +5,11 @@ const DEFAULT_TOKEN = '7d954cb439516a00dd444857d2e4407c84485d0edab8db9ca908e6e40
 
 const CHUNK_THRESHOLD_BYTES = 2800;
 const LINES_PER_CHUNK = 20;
-const POLL_MS = 3000;
+// Long-poll: server holds the GET for ~25s and returns immediately on a
+// real change. We give the fetch a slightly larger budget then reconnect.
+const FETCH_TIMEOUT_MS = 32000;
+const RECONNECT_DELAY_MS = 200;       // tiny breather between connections
+const RESYNC_AFTER_MS = 30000;         // re-emit current state every 30s
 
 AppSideService(
   BaseSideService({
@@ -13,6 +17,8 @@ AppSideService(
       token: '',
       lastEtag: null,
       lastTrackId: null,
+      lastData: null,        // remember the last full payload for re-emits
+      lastEmitWall: 0,       // timestamp of last LYRICS/ANCHOR sent to watch
       polling: null,
       stopped: false,
     },
@@ -62,11 +68,16 @@ AppSideService(
       const tick = async () => {
         if (self.state.stopped) return;
         try { await self._pollOnce(); } catch (_) {}
-        self.state.polling = setTimeout(tick, POLL_MS);
+        self._maybeResyncWatch();
+        self.state.polling = setTimeout(tick, RECONNECT_DELAY_MS);
       };
       tick();
     },
 
+    // Long-poll the server. Returns when:
+    //   - new data arrives  (200) → emit
+    //   - timeout / no change (304) → just re-loop
+    //   - network error → brief sleep then re-loop
     async _pollOnce() {
       if (!this.state.token) return;
       const url = BASE_URL + '/api/now-playing';
@@ -74,28 +85,38 @@ AppSideService(
       if (this.state.lastEtag) headers['If-None-Match'] = '"' + this.state.lastEtag + '"';
 
       let res;
-      try { res = await this.fetch({ url, method: 'GET', headers, timeout: 6000 }); }
+      try { res = await this.fetch({ url, method: 'GET', headers, timeout: FETCH_TIMEOUT_MS }); }
       catch (_) { return; }
 
       if (!res || !res.status) return;
       if (res.status === 304) return;
       if (res.status !== 200) return;
 
-      // res.body may be parsed JSON already, or a string depending on platform.
       let data = res.body;
       if (typeof data === 'string') {
         try { data = JSON.parse(data); } catch (_) { return; }
       }
       if (!data || data.empty) return;
 
-      const etag = data.etag;
-      this.state.lastEtag = etag;
-
+      this.state.lastEtag = data.etag;
       const trackChanged = data.trackId !== this.state.lastTrackId;
       this.state.lastTrackId = data.trackId;
+      this.state.lastData = data;
 
       if (trackChanged) this._emitLyricsDoc(data);
       else this._emitAnchor(data);
+      this.state.lastEmitWall = Date.now();
+    },
+
+    // Safety net: even if BLE drops a message and the server hasn't changed,
+    // re-emit current state to the watch every RESYNC_AFTER_MS so the watch
+    // converges. Cheap — just one ANCHOR over BLE.
+    _maybeResyncWatch() {
+      const data = this.state.lastData;
+      if (!data) return;
+      if (Date.now() - this.state.lastEmitWall < RESYNC_AFTER_MS) return;
+      this._emitAnchor(data);
+      this.state.lastEmitWall = Date.now();
     },
 
     _emitLyricsDoc(data) {

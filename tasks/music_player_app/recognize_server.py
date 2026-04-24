@@ -21,6 +21,7 @@ Response (no match):
   {"recognized": false}
 """
 
+import asyncio
 import logging
 import time
 from collections import defaultdict
@@ -144,7 +145,11 @@ _NP_MAX_AGE_SEC = 86400            # drop slots idle >24h
 _NP_TOKEN_MIN = 16                 # shortest acceptable token
 _NP_TOKEN_MAX = 128
 _NP_TOKEN_ALPHABET = set("0123456789abcdefABCDEF-_")
+_NP_LONGPOLL_TIMEOUT = 25          # seconds; below nginx proxy_read_timeout
 _now_playing: Dict[str, Dict] = {}
+# Per-token list of pending long-poll futures. POST resolves them so the
+# Zepp side service GET returns immediately on a real change.
+_np_waiters: Dict[str, List[asyncio.Future]] = defaultdict(list)
 
 
 def _valid_np_token(tok: str) -> bool:
@@ -190,6 +195,14 @@ async def np_post(request: web.Request) -> web.Response:
     payload["etag"] = new_etag
     payload["_updated"] = time.time()
     _now_playing[tok] = payload
+
+    # Wake any long-poll GETs waiting on this token.
+    waiters = _np_waiters.pop(tok, [])
+    for f in waiters:
+        if not f.done():
+            try: f.set_result(None)
+            except Exception: pass
+
     return web.json_response({"ok": True, "etag": new_etag})
 
 
@@ -197,12 +210,29 @@ async def np_get(request: web.Request) -> web.Response:
     tok = request.headers.get("X-NP-Token", "")
     if not _valid_np_token(tok):
         return web.json_response({"error": "bad_token"}, status=401)
+
     state = _now_playing.get(tok)
+    inm = request.headers.get("If-None-Match", "").strip('"')
+
+    # Long-poll: if the client already has the latest etag (or no state
+    # exists yet but client is asking), wait until something changes or
+    # until our timeout. nginx proxies this through unchanged.
+    state_etag = str(state.get("_etag", 0)) if state else "0"
+    if inm and inm == state_etag:
+        loop = asyncio.get_event_loop()
+        f = loop.create_future()
+        _np_waiters[tok].append(f)
+        try:
+            await asyncio.wait_for(f, timeout=_NP_LONGPOLL_TIMEOUT)
+        except asyncio.TimeoutError:
+            try: _np_waiters[tok].remove(f)
+            except ValueError: pass
+            return web.Response(status=304)
+        # Refresh after wake-up.
+        state = _now_playing.get(tok)
+
     if not state:
         return web.json_response({"etag": 0, "empty": True})
-    inm = request.headers.get("If-None-Match", "").strip('"')
-    if inm and inm == str(state.get("_etag", 0)):
-        return web.Response(status=304)
     body = {k: v for k, v in state.items() if not k.startswith("_")}
     resp = web.json_response(body)
     resp.headers["ETag"] = f'"{state.get("_etag", 0)}"'
