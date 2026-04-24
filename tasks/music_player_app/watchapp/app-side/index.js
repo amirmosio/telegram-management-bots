@@ -5,11 +5,13 @@ const DEFAULT_TOKEN = '7d954cb439516a00dd444857d2e4407c84485d0edab8db9ca908e6e40
 
 const CHUNK_THRESHOLD_BYTES = 2800;
 const LINES_PER_CHUNK = 20;
-// Long-poll: server holds the GET for ~25s and returns immediately on a
-// real change. We give the fetch a slightly larger budget then reconnect.
-const FETCH_TIMEOUT_MS = 32000;
-const RECONNECT_DELAY_MS = 200;       // tiny breather between connections
-const RESYNC_AFTER_MS = 30000;         // re-emit current state every 30s
+// Plain polling — Zepp's iOS this.fetch doesn't honor long-held responses
+// reliably (it returns early), so we just poll every 1.5s. Server returns
+// 304 immediately when the etag matches, so this is cheap. Real-time
+// enough for music control.
+const POLL_INTERVAL_MS = 1500;
+const FETCH_TIMEOUT_MS = 6000;
+const RESYNC_AFTER_MS = 20000;
 
 AppSideService(
   BaseSideService({
@@ -69,7 +71,7 @@ AppSideService(
         if (self.state.stopped) return;
         try { await self._pollOnce(); } catch (_) {}
         self._maybeResyncWatch();
-        self.state.polling = setTimeout(tick, RECONNECT_DELAY_MS);
+        self.state.polling = setTimeout(tick, POLL_INTERVAL_MS);
       };
       tick();
     },
