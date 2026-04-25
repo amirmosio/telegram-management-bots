@@ -16,13 +16,7 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html, body {
-    /* `100%` of the html box doesn't include the iOS home-indicator
-       zone when viewport-fit=cover is set in standalone PWA mode, so
-       the page leaves a black strip at the bottom. `100dvh` includes
-       the entire visible viewport including safe areas. The 100%
-       line stays first as a fallback for old engines that ignore dvh. */
     height: 100%;
-    height: 100dvh;
     overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background: var(--bg-primary);
@@ -1506,11 +1500,6 @@ html, body {
     #side-panel {
         position: fixed; left: -320px; top: 0; bottom: 0;
         transition: left 0.3s ease; z-index: 20;
-        /* Background extends edge-to-edge (full screen height); the
-           padding pushes the contained content out of the notch and
-           home-indicator zones. */
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
     }
     #side-panel.open { left: 0; }
     #btn-show-panel { display: flex; }
@@ -1527,14 +1516,9 @@ html, body {
        backdrop, so the desktop-only halo would just muddy it. */
     #player-halo { display: none; }
 
-    /* Artwork becomes fullscreen background. Use `fixed` (not absolute)
-       so it's anchored to the viewport, not #player — that way the
-       blurred backdrop fills behind the status bar AND home indicator
-       even if #player or any ancestor doesn't quite extend to the
-       safe-area edges. Content (controls, side-panel) gets explicit
-       safe-area padding below; the bg ignores all of that. */
+    /* Artwork becomes fullscreen background */
     #artwork {
-        position: fixed;
+        position: absolute;
         inset: 0;
         width: 100%; height: 100%;
         max-width: none;
