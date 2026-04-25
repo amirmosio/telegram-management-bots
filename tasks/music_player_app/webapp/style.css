@@ -1019,6 +1019,26 @@ html, body {
 
 .lyric-line.past { color: var(--text-secondary); }
 
+.lyric-text { display: block; }
+.lyric-translation {
+    display: block;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--text-dim);
+    opacity: 0.7;
+    margin-top: 2px;
+    font-weight: 400;
+    transform: none;
+}
+.lyric-line.active .lyric-translation {
+    color: var(--text-secondary);
+    opacity: 0.85;
+    font-size: 14px;
+}
+
+#btn-translate.active { color: var(--accent); }
+#btn-translate.loading { opacity: 0.5; pointer-events: none; }
+
 /* ── Progress Bar ── */
 #progress-section {
     display: flex; align-items: center; gap: 10px;
@@ -1576,6 +1596,17 @@ html, body {
     }
 
     .lyric-line.past { color: rgba(255,255,255,0.5); }
+
+    .lyric-translation {
+        font-size: 13px;
+        color: rgba(255,255,255,0.55);
+        opacity: 0.85;
+        text-shadow: 0 1px 8px rgba(0,0,0,0.5);
+    }
+    .lyric-line.active .lyric-translation {
+        color: rgba(255,255,255,0.7);
+        font-size: 14px;
+    }
 
     .lyrics-placeholder { color: rgba(255,255,255,0.3); }
 

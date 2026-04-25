@@ -70622,6 +70622,14 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     } catch {
     }
   }
+  async function updateTrackTranslation(groupId, trackId, lang, lines) {
+    const existing = (await getCachedTrackRecord(groupId, trackId))?.translations || {};
+    const next = { ...existing, [lang]: lines };
+    try {
+      await _upsertTrackRow(groupId, trackId, { translations: next });
+    } catch {
+    }
+  }
   async function initClient() {
     if (_initPromise) return _initPromise;
     _initPromise = (async () => {
@@ -71289,6 +71297,31 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
     }
     return tracks;
+  }
+  async function translateLines(lines, toLang = "en") {
+    if (!Array.isArray(lines) || lines.length === 0) return [];
+    await _ensureConnected();
+    const idxs = [];
+    const items = [];
+    for (let i = 0; i < lines.length; i++) {
+      const t = (lines[i] || "").trim();
+      if (t) {
+        idxs.push(i);
+        items.push(new import_tl.Api.TextWithEntities({ text: lines[i], entities: [] }));
+      }
+    }
+    const out = lines.map(() => "");
+    if (items.length === 0) return out;
+    const resp = await client.invoke(new import_tl.Api.messages.TranslateText({
+      text: items,
+      toLang
+    }));
+    if (resp?.result) {
+      for (let i = 0; i < idxs.length; i++) {
+        out[idxs[i]] = resp.result[i]?.text || "";
+      }
+    }
+    return out;
   }
   function getCachedTracks(groupId, topicId = null) {
     return _tracksCache[_trackCacheKey(groupId, topicId)] || [];
@@ -72614,6 +72647,9 @@ ${JSON.stringify(state)}`;
       var syncedLyrics = [];
       var activeLyricIndex = -1;
       var _currentLyricsPayload = { synced: null, plain: null };
+      var translateOn = localStorage.getItem("translateOn") === "1";
+      var _currentTranslation = null;
+      var _translationFetching = false;
       var isSeeking = false;
       var shuffleOn = false;
       var repeatOn = false;
@@ -72681,6 +72717,7 @@ ${JSON.stringify(state)}`;
       var modalCancel = $("modal-cancel");
       var playlistModalTitle = $("playlist-modal-title");
       var pickerMode = "add";
+      var btnTranslate = $("btn-translate");
       var btnSleepTimer = $("btn-sleep-timer");
       var sleepSheet = $("sleep-sheet");
       var sleepBadge = $("sleep-badge");
@@ -73613,6 +73650,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         progressBuffered.style.width = "0%";
         syncedLyrics = [];
         activeLyricIndex = -1;
+        _currentTranslation = null;
         lyricsContent.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
         const artworkIcon = $("artwork-icon");
         const artworkImg = $("artwork-img");
@@ -74257,7 +74295,69 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           _currentLyricsPayload = { synced: null, plain: null };
           lyricsContent.innerHTML = '<div class="lyrics-placeholder">No lyrics available</div>';
         }
+        _updateTranslateButtonVisibility();
+        if (translateOn) _ensureTranslation();
         _broadcastState("track");
+      }
+      function _updateTranslateButtonVisibility() {
+        if (!btnTranslate) return;
+        const hasLyrics = !!(_currentLyricsPayload.synced || _currentLyricsPayload.plain);
+        btnTranslate.style.display = hasLyrics ? "" : "none";
+        btnTranslate.classList.toggle("active", translateOn);
+      }
+      function _rerenderLyrics() {
+        if (_currentLyricsPayload.synced) renderSyncedLyrics();
+        else if (_currentLyricsPayload.plain) renderPlainLyrics(_currentLyricsPayload.plain);
+        if (_currentLyricsPayload.synced) {
+          activeLyricIndex = -1;
+          updateLyricsHighlight();
+        }
+      }
+      async function _ensureTranslation() {
+        if (_translationFetching) return;
+        if (!_currentLyricsPayload.synced && !_currentLyricsPayload.plain) return;
+        const trackId = currentTrackId;
+        const groupId = playerGroupId;
+        if (!trackId || !groupId) return;
+        try {
+          const row = await getCachedTrackRecord(groupId, trackId);
+          if (currentTrackId !== trackId) return;
+          const cached = row?.translations?.en;
+          if (Array.isArray(cached) && cached.length > 0) {
+            _currentTranslation = cached;
+            _rerenderLyrics();
+            return;
+          }
+        } catch {
+        }
+        const sourceLines = _currentLyricsPayload.synced ? _currentLyricsPayload.synced.map((l) => l.text || "") : _currentLyricsPayload.plain.split("\n");
+        if (sourceLines.length === 0) return;
+        _translationFetching = true;
+        btnTranslate?.classList.add("loading");
+        try {
+          const lines = await translateLines(sourceLines, "en");
+          if (currentTrackId !== trackId) return;
+          _currentTranslation = lines;
+          _rerenderLyrics();
+          updateTrackTranslation(groupId, trackId, "en", lines).catch(() => {
+          });
+        } catch (e) {
+          if (currentTrackId === trackId) showToast("Translation failed");
+        } finally {
+          _translationFetching = false;
+          btnTranslate?.classList.remove("loading");
+        }
+      }
+      function toggleTranslate() {
+        translateOn = !translateOn;
+        localStorage.setItem("translateOn", translateOn ? "1" : "0");
+        btnTranslate?.classList.toggle("active", translateOn);
+        if (translateOn) _ensureTranslation();
+        else _rerenderLyrics();
+      }
+      if (btnTranslate) {
+        btnTranslate.addEventListener("click", toggleTranslate);
+        btnTranslate.style.display = "none";
       }
       async function fetchLyricsForTrack(track, gen) {
         try {
@@ -74288,18 +74388,36 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           lyricsContent.innerHTML = '<div class="lyrics-placeholder">No lyrics available</div>';
         }
       }
+      function _appendLyricLine(parent, text, translation, baseClass, onClick) {
+        const el = document.createElement("div");
+        el.className = baseClass;
+        const textEl = document.createElement("div");
+        textEl.className = "lyric-text";
+        textEl.textContent = text || "\xA0";
+        el.appendChild(textEl);
+        if (translateOn && translation) {
+          const tEl = document.createElement("div");
+          tEl.className = "lyric-translation";
+          tEl.textContent = translation;
+          el.appendChild(tEl);
+        }
+        if (onClick) el.addEventListener("click", onClick);
+        parent.appendChild(el);
+      }
       function renderSyncedLyrics() {
         lyricsContent.innerHTML = "";
-        syncedLyrics.forEach((line) => {
-          const el = document.createElement("div");
-          el.className = "lyric-line";
-          el.textContent = line.text || "\xA0";
-          el.addEventListener("click", () => {
-            audio.currentTime = line.time;
-            audio.play().catch(() => {
-            });
-          });
-          lyricsContent.appendChild(el);
+        syncedLyrics.forEach((line, i) => {
+          _appendLyricLine(
+            lyricsContent,
+            line.text,
+            _currentTranslation?.[i],
+            "lyric-line",
+            () => {
+              audio.currentTime = line.time;
+              audio.play().catch(() => {
+              });
+            }
+          );
         });
         activeLyricIndex = -1;
         $("artwork").classList.add("lyrics-active");
@@ -74307,11 +74425,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       function renderPlainLyrics(text) {
         lyricsContent.innerHTML = "";
         $("artwork").classList.add("lyrics-active");
-        text.split("\n").forEach((line) => {
-          const el = document.createElement("div");
-          el.className = "lyric-line past";
-          el.textContent = line || "\xA0";
-          lyricsContent.appendChild(el);
+        text.split("\n").forEach((line, i) => {
+          _appendLyricLine(lyricsContent, line, _currentTranslation?.[i], "lyric-line past", null);
         });
       }
       function updateLyricsHighlight() {

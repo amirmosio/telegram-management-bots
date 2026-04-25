@@ -225,6 +225,14 @@ export async function updateTrackArtwork(groupId, trackId, artworkBlob, context 
     try { await _upsertTrackRow(groupId, trackId, patch); } catch {}
 }
 
+// Translation upsert. Stored as { translations: { [lang]: [string, ...] } },
+// parallel-indexed to the source lyric lines.
+export async function updateTrackTranslation(groupId, trackId, lang, lines) {
+    const existing = (await getCachedTrackRecord(groupId, trackId))?.translations || {};
+    const next = { ...existing, [lang]: lines };
+    try { await _upsertTrackRow(groupId, trackId, { translations: next }); } catch {}
+}
+
 
 // ════════════════════════════════════
 //  CLIENT INIT & AUTH
@@ -1025,6 +1033,37 @@ export async function searchTracksInChat(groupId, topicId = null, query = '') {
         }
     }
     return tracks;
+}
+
+// Translate an array of strings via Telegram's MTProto translate.
+// Source language is auto-detected. Returns a parallel array of
+// translations; empty input lines short-circuit to '' without round-trip.
+export async function translateLines(lines, toLang = 'en') {
+    if (!Array.isArray(lines) || lines.length === 0) return [];
+    await _ensureConnected();
+
+    const idxs = [];
+    const items = [];
+    for (let i = 0; i < lines.length; i++) {
+        const t = (lines[i] || '').trim();
+        if (t) {
+            idxs.push(i);
+            items.push(new Api.TextWithEntities({ text: lines[i], entities: [] }));
+        }
+    }
+    const out = lines.map(() => '');
+    if (items.length === 0) return out;
+
+    const resp = await client.invoke(new Api.messages.TranslateText({
+        text: items,
+        toLang,
+    }));
+    if (resp?.result) {
+        for (let i = 0; i < idxs.length; i++) {
+            out[idxs[i]] = resp.result[i]?.text || '';
+        }
+    }
+    return out;
 }
 
 export function getCachedTracks(groupId, topicId = null) {

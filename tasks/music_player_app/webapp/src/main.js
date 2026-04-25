@@ -29,6 +29,9 @@ let _playGeneration = 0; // incremented on each track switch to cancel stale asy
 let syncedLyrics = [];
 let activeLyricIndex = -1;
 let _currentLyricsPayload = { synced: null, plain: null }; // mirror of last _renderLyricsResult, broadcast to watch
+let translateOn = localStorage.getItem('translateOn') === '1';
+let _currentTranslation = null; // parallel array of strings; null = not loaded
+let _translationFetching = false;
 let isSeeking = false;
 let shuffleOn = false;
 let repeatOn = false;
@@ -121,6 +124,9 @@ const playlistModalTitle = $('playlist-modal-title');
 // migrates. The modal reuses the same DOM; only the title + click
 // handler change between modes.
 let pickerMode = 'add';
+
+// Translate button
+const btnTranslate = $('btn-translate');
 
 // Sleep timer refs
 const btnSleepTimer = $('btn-sleep-timer');
@@ -1188,6 +1194,7 @@ async function playTrack(index) {
 
     syncedLyrics = [];
     activeLyricIndex = -1;
+    _currentTranslation = null;
     lyricsContent.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
 
     const artworkIcon = $('artwork-icon');
@@ -1916,7 +1923,80 @@ function _renderLyricsResult(result) {
         _currentLyricsPayload = { synced: null, plain: null };
         lyricsContent.innerHTML = '<div class="lyrics-placeholder">No lyrics available</div>';
     }
+    _updateTranslateButtonVisibility();
+    if (translateOn) _ensureTranslation();
     _broadcastState('track');
+}
+
+function _updateTranslateButtonVisibility() {
+    if (!btnTranslate) return;
+    const hasLyrics = !!(_currentLyricsPayload.synced || _currentLyricsPayload.plain);
+    btnTranslate.style.display = hasLyrics ? '' : 'none';
+    btnTranslate.classList.toggle('active', translateOn);
+}
+
+function _rerenderLyrics() {
+    if (_currentLyricsPayload.synced) renderSyncedLyrics();
+    else if (_currentLyricsPayload.plain) renderPlainLyrics(_currentLyricsPayload.plain);
+    // Re-apply highlight for synced lyrics
+    if (_currentLyricsPayload.synced) {
+        activeLyricIndex = -1;
+        updateLyricsHighlight();
+    }
+}
+
+async function _ensureTranslation() {
+    if (_translationFetching) return;
+    if (!_currentLyricsPayload.synced && !_currentLyricsPayload.plain) return;
+    const trackId = currentTrackId;
+    const groupId = playerGroupId;
+    if (!trackId || !groupId) return;
+
+    // Cache hit?
+    try {
+        const row = await tg.getCachedTrackRecord(groupId, trackId);
+        if (currentTrackId !== trackId) return;
+        const cached = row?.translations?.en;
+        if (Array.isArray(cached) && cached.length > 0) {
+            _currentTranslation = cached;
+            _rerenderLyrics();
+            return;
+        }
+    } catch {}
+
+    // Fetch fresh
+    const sourceLines = _currentLyricsPayload.synced
+        ? _currentLyricsPayload.synced.map(l => l.text || '')
+        : _currentLyricsPayload.plain.split('\n');
+    if (sourceLines.length === 0) return;
+
+    _translationFetching = true;
+    btnTranslate?.classList.add('loading');
+    try {
+        const lines = await tg.translateLines(sourceLines, 'en');
+        if (currentTrackId !== trackId) return;
+        _currentTranslation = lines;
+        _rerenderLyrics();
+        tg.updateTrackTranslation(groupId, trackId, 'en', lines).catch(() => {});
+    } catch (e) {
+        if (currentTrackId === trackId) showToast('Translation failed');
+    } finally {
+        _translationFetching = false;
+        btnTranslate?.classList.remove('loading');
+    }
+}
+
+function toggleTranslate() {
+    translateOn = !translateOn;
+    localStorage.setItem('translateOn', translateOn ? '1' : '0');
+    btnTranslate?.classList.toggle('active', translateOn);
+    if (translateOn) _ensureTranslation();
+    else _rerenderLyrics();
+}
+
+if (btnTranslate) {
+    btnTranslate.addEventListener('click', toggleTranslate);
+    btnTranslate.style.display = 'none'; // shown once lyrics are available
 }
 
 async function fetchLyricsForTrack(track, gen) {
@@ -1953,14 +2033,33 @@ async function fetchLyricsForTrack(track, gen) {
     }
 }
 
+function _appendLyricLine(parent, text, translation, baseClass, onClick) {
+    const el = document.createElement('div');
+    el.className = baseClass;
+    const textEl = document.createElement('div');
+    textEl.className = 'lyric-text';
+    textEl.textContent = text || '\u00A0';
+    el.appendChild(textEl);
+    if (translateOn && translation) {
+        const tEl = document.createElement('div');
+        tEl.className = 'lyric-translation';
+        tEl.textContent = translation;
+        el.appendChild(tEl);
+    }
+    if (onClick) el.addEventListener('click', onClick);
+    parent.appendChild(el);
+}
+
 function renderSyncedLyrics() {
     lyricsContent.innerHTML = '';
-    syncedLyrics.forEach(line => {
-        const el = document.createElement('div');
-        el.className = 'lyric-line';
-        el.textContent = line.text || '\u00A0';
-        el.addEventListener('click', () => { audio.currentTime = line.time; audio.play().catch(() => {}); });
-        lyricsContent.appendChild(el);
+    syncedLyrics.forEach((line, i) => {
+        _appendLyricLine(
+            lyricsContent,
+            line.text,
+            _currentTranslation?.[i],
+            'lyric-line',
+            () => { audio.currentTime = line.time; audio.play().catch(() => {}); },
+        );
     });
     activeLyricIndex = -1;
     $('artwork').classList.add('lyrics-active');
@@ -1969,11 +2068,8 @@ function renderSyncedLyrics() {
 function renderPlainLyrics(text) {
     lyricsContent.innerHTML = '';
     $('artwork').classList.add('lyrics-active');
-    text.split('\n').forEach(line => {
-        const el = document.createElement('div');
-        el.className = 'lyric-line past';
-        el.textContent = line || '\u00A0';
-        lyricsContent.appendChild(el);
+    text.split('\n').forEach((line, i) => {
+        _appendLyricLine(lyricsContent, line, _currentTranslation?.[i], 'lyric-line past', null);
     });
 }
 
