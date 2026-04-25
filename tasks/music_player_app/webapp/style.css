@@ -1506,6 +1506,11 @@ html, body {
     #side-panel {
         position: fixed; left: -320px; top: 0; bottom: 0;
         transition: left 0.3s ease; z-index: 20;
+        /* Background extends edge-to-edge (full screen height); the
+           padding pushes the contained content out of the notch and
+           home-indicator zones. */
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
     }
     #side-panel.open { left: 0; }
     #btn-show-panel { display: flex; }
@@ -1522,9 +1527,14 @@ html, body {
        backdrop, so the desktop-only halo would just muddy it. */
     #player-halo { display: none; }
 
-    /* Artwork becomes fullscreen background */
+    /* Artwork becomes fullscreen background. Use `fixed` (not absolute)
+       so it's anchored to the viewport, not #player — that way the
+       blurred backdrop fills behind the status bar AND home indicator
+       even if #player or any ancestor doesn't quite extend to the
+       safe-area edges. Content (controls, side-panel) gets explicit
+       safe-area padding below; the bg ignores all of that. */
     #artwork {
-        position: absolute;
+        position: fixed;
         inset: 0;
         width: 100%; height: 100%;
         max-width: none;
@@ -1547,10 +1557,13 @@ html, body {
 
     #artwork-icon { opacity: 0.3; }
 
-    /* Overlay moves to bottom, above controls */
+    /* Overlay moves to bottom, above controls. Bottom offset includes
+       env(safe-area-inset-bottom) so the overlay rises with the
+       controls to avoid overlapping them on devices with a home
+       indicator. */
     #artwork-overlay {
         position: fixed;
-        bottom: 110px;
+        bottom: calc(110px + env(safe-area-inset-bottom));
         left: 0; right: 0;
         top: auto;
         padding: 12px 20px;
@@ -1652,7 +1665,10 @@ html, body {
     #controls {
         position: relative;
         z-index: 4;
-        padding-bottom: 16px;
+        /* Keep the play/skip buttons clear of the iOS home indicator
+           while the fullscreen artwork (position: fixed) continues to
+           render behind this padded zone. */
+        padding-bottom: calc(16px + env(safe-area-inset-bottom));
     }
 
     .control-btn { color: rgba(255,255,255,0.9); }
