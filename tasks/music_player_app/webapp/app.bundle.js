@@ -71218,7 +71218,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
-  async function prefetchTrack(groupId, trackId, context = {}) {
+  async function prefetchTrack(groupId, trackId, context = {}, signal = null) {
+    if (signal?.aborted) throw new Error("aborted");
     const blobKey = _trackKey(groupId, trackId);
     if (_blobCache[blobKey]) return "already";
     const existingRow = await idbGet(TRACKS_STORE, blobKey);
@@ -71241,9 +71242,10 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     const track = context.track || _extractAudioMeta(msg);
     const runDownload = async () => {
       const chunks = [];
-      for await (const chunk of iterTrackDownload(groupId, trackId)) {
+      for await (const chunk of iterTrackDownload(groupId, trackId, 0, signal)) {
         chunks.push(chunk);
       }
+      if (signal?.aborted) throw new Error("aborted");
       if (chunks.length === 0) throw new Error("Empty download");
       const blob = new Blob(chunks, { type: mime });
       await cacheTrack(groupId, trackId, {
@@ -71257,6 +71259,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       await runDownload();
       return "cached";
     } catch (e) {
+      if (signal?.aborted) throw e;
       const m = String(e?.message || e);
       if (m.includes("FILE_REFERENCE")) {
         console.warn("[prefetch] file ref expired, refreshing", trackId);
@@ -73583,6 +73586,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
           _currentStreamCleanup = null;
         }
+        if (_prefetchAbort) {
+          try {
+            _prefetchAbort.abort();
+          } catch {
+          }
+          _prefetchAbort = null;
+        }
         const gen = ++_playGeneration;
         _isLoadingAudio = true;
         _committedNextIndex = -1;
@@ -74012,22 +74022,45 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         } while (rand === currentTrackIndex && playerTracks.length > 1);
         return rand;
       }
+      var _prefetchAbort = null;
       async function _prefetchNextTrack(gen) {
-        if (_playGeneration !== gen) return;
-        if (playerTracks.length < 2 && !shuffleOn) return;
+        if (_prefetchAbort) {
+          try {
+            _prefetchAbort.abort();
+          } catch {
+          }
+        }
+        if (_playGeneration !== gen) {
+          _prefetchAbort = null;
+          return;
+        }
+        if (playerTracks.length < 2 && !shuffleOn) {
+          _prefetchAbort = null;
+          return;
+        }
         let nextIdx;
         if (shuffleOn) {
           nextIdx = await _pickShuffleIndex();
         } else {
           nextIdx = (currentTrackIndex + 1) % playerTracks.length;
         }
-        if (_playGeneration !== gen) return;
+        if (_playGeneration !== gen) {
+          _prefetchAbort = null;
+          return;
+        }
         _committedNextIndex = nextIdx;
         const nextT = playerTracks[nextIdx];
-        if (!nextT) return;
+        if (!nextT) {
+          _prefetchAbort = null;
+          return;
+        }
+        const ctrl = new AbortController();
+        _prefetchAbort = ctrl;
         try {
-          await prefetchTrack(playerGroupId, nextT.id);
+          await prefetchTrack(playerGroupId, nextT.id, {}, ctrl.signal);
         } catch {
+        } finally {
+          if (_prefetchAbort === ctrl) _prefetchAbort = null;
         }
       }
       function prevTrack() {

@@ -941,7 +941,13 @@ async function _refreshTrackMsg(groupId, trackId) {
 // The optional `context` argument lets the caller attach the topic it
 // knows (e.g. the currently-open playlist) so offline browsing can
 // show the downloaded track under the right playlist.
-export async function prefetchTrack(groupId, trackId, context = {}) {
+// `signal` (optional AbortSignal) lets the caller cancel an in-flight
+// prefetch. Critical for the next-track prefetch path: without it, every
+// track change leaves the previous prefetch's iterDownload running on
+// the exported MTProto sender, and rapid track changes pile up getFile
+// requests until Chrome runs out of WebSocket slots.
+export async function prefetchTrack(groupId, trackId, context = {}, signal = null) {
+    if (signal?.aborted) throw new Error('aborted');
     const blobKey = _trackKey(groupId, trackId);
     if (_blobCache[blobKey]) return 'already';
     const existingRow = await idbGet(TRACKS_STORE, blobKey);
@@ -966,9 +972,10 @@ export async function prefetchTrack(groupId, trackId, context = {}) {
 
     const runDownload = async () => {
         const chunks = [];
-        for await (const chunk of iterTrackDownload(groupId, trackId)) {
+        for await (const chunk of iterTrackDownload(groupId, trackId, 0, signal)) {
             chunks.push(chunk);
         }
+        if (signal?.aborted) throw new Error('aborted');
         if (chunks.length === 0) throw new Error('Empty download');
         const blob = new Blob(chunks, { type: mime });
         await cacheTrack(groupId, trackId, {
@@ -982,6 +989,7 @@ export async function prefetchTrack(groupId, trackId, context = {}) {
         await runDownload();
         return 'cached';
     } catch (e) {
+        if (signal?.aborted) throw e;
         const m = String(e?.message || e);
         if (m.includes('FILE_REFERENCE')) {
             console.warn('[prefetch] file ref expired, refreshing', trackId);

@@ -1150,6 +1150,12 @@ async function playTrack(index) {
         try { _currentStreamCleanup(); } catch {}
         _currentStreamCleanup = null;
     }
+    // Cancel any in-flight prefetch from the previous track so its
+    // iterDownload stops consuming the MTProto sender.
+    if (_prefetchAbort) {
+        try { _prefetchAbort.abort(); } catch {}
+        _prefetchAbort = null;
+    }
 
     // Bump generation so any in-flight fetches for the previous track are ignored
     const gen = ++_playGeneration;
@@ -1683,9 +1689,14 @@ async function _pickShuffleIndex() {
 // when the user (or MediaSession) fires nextTrack() — even if the screen is
 // locked and GramJS throttled. Called from onPlaying after the current track
 // actually starts decoding.
+let _prefetchAbort = null;
 async function _prefetchNextTrack(gen) {
-    if (_playGeneration !== gen) return;
-    if (playerTracks.length < 2 && !shuffleOn) return;
+    // Abort any prefetch left over from the previous track. Without this,
+    // rapid track changes leave abandoned iterDownloads consuming the
+    // MTProto sender and burn through Chrome's per-host WebSocket budget.
+    if (_prefetchAbort) { try { _prefetchAbort.abort(); } catch {} }
+    if (_playGeneration !== gen) { _prefetchAbort = null; return; }
+    if (playerTracks.length < 2 && !shuffleOn) { _prefetchAbort = null; return; }
 
     let nextIdx;
     if (shuffleOn) {
@@ -1693,14 +1704,20 @@ async function _prefetchNextTrack(gen) {
     } else {
         nextIdx = (currentTrackIndex + 1) % playerTracks.length;
     }
-    if (_playGeneration !== gen) return;
+    if (_playGeneration !== gen) { _prefetchAbort = null; return; }
     _committedNextIndex = nextIdx;
 
     const nextT = playerTracks[nextIdx];
-    if (!nextT) return;
+    if (!nextT) { _prefetchAbort = null; return; }
+
+    const ctrl = new AbortController();
+    _prefetchAbort = ctrl;
     try {
-        await tg.prefetchTrack(playerGroupId, nextT.id);
-    } catch { /* best effort */ }
+        await tg.prefetchTrack(playerGroupId, nextT.id, {}, ctrl.signal);
+    } catch { /* best effort, includes aborted */ }
+    finally {
+        if (_prefetchAbort === ctrl) _prefetchAbort = null;
+    }
 }
 
 function prevTrack() {
