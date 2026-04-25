@@ -1558,17 +1558,12 @@ html, body {
        status-bar safe area so the page background (blurred artwork)
        extends edge-to-edge behind the notch while the buttons stay
        at a tappable y-position. Requires viewport-fit=cover in the
-       viewport meta. */
+       viewport meta. Bottom is intentionally untouched — the artwork
+       fills behind the home indicator naturally. */
     #top-bar {
         position: relative;
         z-index: 4;
         padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
-    }
-
-    /* Same idea for the bottom: keep controls clear of the home
-       indicator on iOS while letting the artwork/halo fill behind. */
-    #controls {
-        padding-bottom: calc(16px + env(safe-area-inset-bottom));
     }
 
     #now-playing-label { color: rgba(255,255,255,0.7); }
