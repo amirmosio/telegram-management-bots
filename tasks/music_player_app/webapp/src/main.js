@@ -2192,6 +2192,23 @@ function _applyHalo(colors) {
     player.style.setProperty('--halo-1', colors[0] || 'transparent');
     player.style.setProperty('--halo-2', colors[1] || colors[0] || 'transparent');
     player.style.setProperty('--halo-3', colors[2] || colors[0] || 'transparent');
+    // Tint body + theme-color to a dim version of the dominant artwork
+    // color. iOS standalone PWA paints the safe-area zones (status bar
+    // and home indicator) with the body bg / theme-color rather than
+    // letting the page draw there, so this makes those reserved strips
+    // appear as a tinted continuation of the artwork instead of dead
+    // black. brightness ~0.4 roughly matches the on-screen artwork
+    // (which has filter: brightness(0.45) on mobile).
+    const m = (colors[0] || '').match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (m) {
+        const r = Math.round(parseInt(m[1], 10) * 0.4);
+        const g = Math.round(parseInt(m[2], 10) * 0.4);
+        const b = Math.round(parseInt(m[3], 10) * 0.4);
+        const tinted = `rgb(${r}, ${g}, ${b})`;
+        document.body.style.backgroundColor = tinted;
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) themeMeta.setAttribute('content', tinted);
+    }
 }
 
 function _resetHalo() {
@@ -2200,6 +2217,9 @@ function _resetHalo() {
     player.style.removeProperty('--halo-1');
     player.style.removeProperty('--halo-2');
     player.style.removeProperty('--halo-3');
+    document.body.style.backgroundColor = '';
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', '#0a0a0a');
 }
 
 async function fetchArtworkForTrack(track, gen) {

@@ -74538,6 +74538,16 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         player.style.setProperty("--halo-1", colors[0] || "transparent");
         player.style.setProperty("--halo-2", colors[1] || colors[0] || "transparent");
         player.style.setProperty("--halo-3", colors[2] || colors[0] || "transparent");
+        const m = (colors[0] || "").match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+        if (m) {
+          const r = Math.round(parseInt(m[1], 10) * 0.4);
+          const g = Math.round(parseInt(m[2], 10) * 0.4);
+          const b = Math.round(parseInt(m[3], 10) * 0.4);
+          const tinted = `rgb(${r}, ${g}, ${b})`;
+          document.body.style.backgroundColor = tinted;
+          const themeMeta = document.querySelector('meta[name="theme-color"]');
+          if (themeMeta) themeMeta.setAttribute("content", tinted);
+        }
       }
       function _resetHalo() {
         const player = $("player");
@@ -74545,6 +74555,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         player.style.removeProperty("--halo-1");
         player.style.removeProperty("--halo-2");
         player.style.removeProperty("--halo-3");
+        document.body.style.backgroundColor = "";
+        const themeMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeMeta) themeMeta.setAttribute("content", "#0a0a0a");
       }
       async function fetchArtworkForTrack(track, gen) {
         if (track.has_thumb) {
