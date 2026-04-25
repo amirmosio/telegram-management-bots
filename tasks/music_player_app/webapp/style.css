@@ -1557,13 +1557,10 @@ html, body {
 
     #artwork-icon { opacity: 0.3; }
 
-    /* Overlay moves to bottom, above controls. Bottom offset includes
-       env(safe-area-inset-bottom) so the overlay rises with the
-       controls to avoid overlapping them on devices with a home
-       indicator. */
+    /* Overlay moves to bottom, above controls */
     #artwork-overlay {
         position: fixed;
-        bottom: calc(110px + env(safe-area-inset-bottom));
+        bottom: 110px;
         left: 0; right: 0;
         top: auto;
         padding: 12px 20px;
@@ -1665,10 +1662,7 @@ html, body {
     #controls {
         position: relative;
         z-index: 4;
-        /* Keep the play/skip buttons clear of the iOS home indicator
-           while the fullscreen artwork (position: fixed) continues to
-           render behind this padded zone. */
-        padding-bottom: calc(16px + env(safe-area-inset-bottom));
+        padding-bottom: 16px;
     }
 
     .control-btn { color: rgba(255,255,255,0.9); }
