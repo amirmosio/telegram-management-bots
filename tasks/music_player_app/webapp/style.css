@@ -1618,6 +1618,24 @@ html, body {
         margin-bottom: 8px;
     }
 
+    /* Mobile seek ergonomics: keep the visual bar slim, but extend the
+       hit target above and below so a thumb can grab it. The ::before
+       is part of the parent for event dispatch, so the existing
+       touchstart handlers on #progress-bar receive events from
+       anywhere in this extended box. Always show the handle so users
+       can see where they'll grab. */
+    #progress-bar { height: 4px; }
+    #progress-bar::before {
+        content: '';
+        position: absolute;
+        left: 0; right: 0;
+        top: -14px; bottom: -14px;
+    }
+    #progress-handle {
+        width: 18px; height: 18px;
+        opacity: 1;
+    }
+
     #time-current, #time-total { color: rgba(255,255,255,0.6); }
 
     #controls {
