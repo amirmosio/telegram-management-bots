@@ -1670,55 +1670,147 @@ export async function renameGeneralToSearch(groupId) {
     localStorage.setItem('general_renamed', '1');
 }
 
-// Send the query to both bots in parallel and merge their replies.
-//   moozikestan_bot triggers on the leading "/" (Telegram command)
-//   MusicArmenian_Bot triggers on the plain-text mini-app input
-// Each bot replies to its own message, so they don't collide.
+// Run both bots in parallel:
+//   moozikestan_bot — chat-based: send "/<query>" in the Search topic and
+//                     poll for a text reply listing /dl_<id> commands.
+//   MusicArmenian_Bot — INLINE: a single getInlineBotResults call, no
+//                     chat message needed. This sidesteps Telegram's
+//                     bot-privacy rules (the chat-message variant we
+//                     tried first didn't work because the bot couldn't
+//                     see plain text in the group) and is much faster
+//                     than the polling round-trip.
 export async function searchMusic(groupId, query) {
     await _ensureConnected();
     const entity = await _getEntity(groupId);
 
-    // Send both queries in the Search topic (General renamed, id=1).
-    const [sentOld, sentNew] = await Promise.all([
-        client.sendMessage(entity, { message: '/' + query, replyTo: 1 }),
-        client.sendMessage(entity, { message: query, replyTo: 1 }),
+    const [oldResults, newResults] = await Promise.all([
+        _searchMoozikestan(entity, query),
+        _searchMusicArmenianInline(entity, query),
     ]);
-    const minSentId = Math.min(sentOld.id, sentNew.id);
+    return _mergeSearchResults(oldResults, newResults);
+}
 
-    let oldResults = null;  // moozikestan: text with /dl_ commands
-    let newResults = null;  // MusicArmenian: inline-keyboard buttons
+// Chat-based search via @moozikestan_bot.
+async function _searchMoozikestan(entity, query) {
+    let sent;
+    try {
+        sent = await client.sendMessage(entity, { message: '/' + query, replyTo: 1 });
+    } catch (e) {
+        console.warn('moozikestan send:', e.message);
+        return [];
+    }
+    const sentId = sent.id;
     const startTime = Date.now();
     const delays = [1500, 2000, 2500, 3000, 3000, 3000, 3000];
     let attempt = 0;
 
     while (Date.now() - startTime < 25000) {
-        if (oldResults !== null && newResults !== null) break;
         const delay = delays[Math.min(attempt, delays.length - 1)];
         await new Promise(r => setTimeout(r, delay));
         attempt++;
-
         try {
             for await (const msg of client.iterMessages(entity, { limit: 30 })) {
-                if (msg.id <= minSentId) break;
+                if (msg.id <= sentId) break;
                 const text = msg.message || '';
-                if (oldResults === null && (text.includes('/dl_') || text.includes('/dlc_'))) {
-                    console.log('[search] moozikestan reply, parsing...');
-                    oldResults = _parseSearchResults(text);
-                }
-                if (newResults === null && msg.replyMarkup?.className === 'ReplyInlineMarkup') {
-                    const parsed = _parseMusicArmenianButtons(msg);
-                    if (parsed.length > 0) {
-                        console.log('[search] MusicArmenian reply, parsing...');
-                        newResults = parsed;
-                    }
+                if (text.includes('/dl_') || text.includes('/dlc_')) {
+                    return _parseSearchResults(text);
                 }
             }
         } catch (e) {
-            console.warn('Search poll error:', e.message);
+            console.warn('moozikestan poll:', e.message);
         }
     }
+    return [];
+}
 
-    return _mergeSearchResults(oldResults || [], newResults || []);
+// Inline-mode search via @MusicArmenian_Bot. Each result includes the
+// (queryId, resultId) pair the user-side needs to send the result
+// back into the chat to receive the actual audio.
+async function _searchMusicArmenianInline(entity, query) {
+    try {
+        const bot = await client.getEntity('MusicArmenian_Bot');
+        const resp = await client.invoke(new Api.messages.GetInlineBotResults({
+            bot,
+            peer: entity,
+            query,
+            offset: '',
+        }));
+        if (!resp?.results?.length) return [];
+        return _parseInlineResults(resp);
+    } catch (e) {
+        console.warn('MusicArmenian inline:', e.message);
+        return [];
+    }
+}
+
+function _parseInlineResults(resp) {
+    const results = [];
+    const queryId = resp.queryId;
+    let rank = 0;
+    for (const r of resp.results) {
+        const id = r.id;
+        if (!id) continue;
+
+        // Title and description vary by bot. Common shapes:
+        //   title:"Shadows — Lunios House"  description:"3:56"
+        //   title:"Shadows"  description:"Lunios House • 3:56"
+        const title = (r.title || '').trim();
+        const description = (r.description || '').trim();
+        if (!title) continue;
+
+        let cleanTitle = title;
+        let artist = '';
+        for (const sep of [' — ', ' – ', ' - ']) {
+            if (title.includes(sep)) {
+                const parts = title.split(sep);
+                cleanTitle = parts[0].trim();
+                artist = parts.slice(1).join(sep).trim();
+                break;
+            }
+        }
+        if (!artist && description) {
+            for (const sep of [' — ', ' – ', ' - ', ' • ']) {
+                if (description.includes(sep)) {
+                    const parts = description.split(sep);
+                    artist = parts[0].trim();
+                    break;
+                }
+            }
+            if (!artist && !/\d/.test(description)) artist = description;
+        }
+
+        let duration = 0;
+        const durMatch = (title + ' ' + description).match(/(\d{1,2}):(\d{2})/);
+        if (durMatch) duration = parseInt(durMatch[1], 10) * 60 + parseInt(durMatch[2], 10);
+
+        // If the inline result already carries the audio document, capture
+        // its size and bitrate for nicer rendering.
+        let sizeMB = 0;
+        let bitrate = 0;
+        const doc = r.document;
+        if (doc?.size) sizeMB = Number((Number(doc.size) / (1024 * 1024)).toFixed(1));
+        if (doc?.attributes) {
+            for (const a of doc.attributes) {
+                if (a.className === 'DocumentAttributeAudio' && a.duration && !duration) {
+                    duration = a.duration;
+                }
+            }
+        }
+
+        rank++;
+        results.push({
+            rank,
+            title: cleanTitle,
+            artist,
+            duration,
+            sizeMB,
+            bitrate,
+            source: 'music-armenian',
+            inlineQueryId: queryId,
+            inlineResultId: id,
+        });
+    }
+    return results;
 }
 
 // Merge results from both bots. Dedupe by lower-cased "artist|title"
@@ -1740,65 +1832,6 @@ function _mergeSearchResults(oldResults, newResults) {
         if (newResults[i]) push(newResults[i]);
     }
     return out;
-}
-
-// Parse the inline keyboard from a MusicArmenian_Bot reply into result
-// items. Each button looks like one of:
-//   "• 3:56 • Title — Artist"
-//   "Title — Artist"
-// Utility buttons ("More tracks", "Add to group", search-emoji) and any
-// non-callback buttons (URL buttons) are filtered out.
-function _parseMusicArmenianButtons(msg) {
-    const results = [];
-    const rows = msg.replyMarkup?.rows;
-    if (!Array.isArray(rows)) return results;
-
-    let rank = 0;
-    for (const row of rows) {
-        for (const btn of row.buttons || []) {
-            // Only callback buttons can be invoked to fetch the audio.
-            if (btn.className !== 'KeyboardButtonCallback') continue;
-            const text = (btn.text || '').trim();
-            if (!text) continue;
-            // Must look like a track (contains a dash separator).
-            const hasDash = text.includes('—') || text.includes(' – ') || text.includes(' - ');
-            if (!hasDash) continue;
-            // Drop obvious utility labels.
-            if (/^(more|add to|create|powered)/i.test(text)) continue;
-
-            let duration = 0;
-            const durMatch = text.match(/(\d{1,2}):(\d{2})/);
-            if (durMatch) duration = parseInt(durMatch[1], 10) * 60 + parseInt(durMatch[2], 10);
-
-            // Strip leading "• 3:56 •" decoration if present.
-            const cleaned = text.replace(/^\s*•?\s*\d{1,2}:\d{2}\s*•?\s*/, '').trim();
-
-            let title = cleaned;
-            let artist = '';
-            for (const sep of [' — ', ' – ', ' - ']) {
-                if (cleaned.includes(sep)) {
-                    const parts = cleaned.split(sep);
-                    title = parts[0].trim();
-                    artist = parts.slice(1).join(sep).trim();
-                    break;
-                }
-            }
-
-            rank++;
-            results.push({
-                rank,
-                title,
-                artist,
-                duration,
-                sizeMB: 0,    // not exposed by this bot
-                bitrate: 0,
-                source: 'music-armenian',
-                callbackMsgId: msg.id,
-                callbackData: btn.data,
-            });
-        }
-    }
-    return results;
 }
 
 // Parse the bot's result list text into structured items
@@ -1921,42 +1954,58 @@ async function _downloadFromMoozikestan(groupId, dlCmd) {
     return null;
 }
 
-// Download via @MusicArmenian_Bot: invoke the inline-keyboard callback
-// on the bot's reply, then poll for the audio message it sends back.
+// Download via @MusicArmenian_Bot: send the chosen inline result into
+// the Search topic. Telegram delivers the audio as a "via @bot" message
+// that includes the document, so we just poll for the new message.
 async function _downloadFromMusicArmenian(groupId, item) {
-    const cacheKey = `ma:${item.callbackMsgId}:${
-        item.callbackData?.length || 0
-    }:${item.title}:${item.artist}`;
+    const cacheKey = `ma:${item.inlineQueryId}:${item.inlineResultId}`;
     if (_dlCache[cacheKey]) return _dlCache[cacheKey];
 
     await _ensureConnected();
     const entity = await _getEntity(groupId);
 
-    // Capture the latest message id BEFORE invoking so we can detect the
-    // bot's audio response as the next new message.
-    let latestId = item.callbackMsgId;
+    // Capture the latest message id BEFORE sending so we can pick out
+    // the new "via @bot" message in the next poll.
+    let latestId = 0;
     try {
         for await (const msg of client.iterMessages(entity, { limit: 1 })) {
-            latestId = Math.max(latestId, msg.id);
+            latestId = msg.id;
             break;
         }
     } catch {}
 
+    const randomId = bigInt(String(Date.now())).multiply(1000)
+        .add(Math.floor(Math.random() * 1000));
     try {
-        await client.invoke(new Api.messages.GetBotCallbackAnswer({
+        await client.invoke(new Api.messages.SendInlineBotResult({
             peer: entity,
-            msgId: item.callbackMsgId,
-            data: item.callbackData,
+            queryId: item.inlineQueryId,
+            id: item.inlineResultId,
+            replyTo: new Api.InputReplyToMessage({ replyToMsgId: 1 }),
+            randomId,
         }));
     } catch (e) {
-        console.warn('Callback invoke:', e.message);
+        // Older GramJS schemas accept a flat replyToMsgId instead of
+        // an InputReplyToMessage object — retry that shape on failure.
+        try {
+            await client.invoke(new Api.messages.SendInlineBotResult({
+                peer: entity,
+                queryId: item.inlineQueryId,
+                id: item.inlineResultId,
+                replyToMsgId: 1,
+                randomId,
+            }));
+        } catch (e2) {
+            console.warn('SendInlineBotResult:', e.message, '/', e2.message);
+            return null;
+        }
     }
 
     const startTime = Date.now();
-    const delays = [1500, 2000, 2500, 3000, 3000, 3000];
+    const delays = [800, 1200, 1800, 2500, 3000, 3000];
     let attempt = 0;
 
-    while (Date.now() - startTime < 30000) {
+    while (Date.now() - startTime < 20000) {
         const delay = delays[Math.min(attempt, delays.length - 1)];
         await new Promise(r => setTimeout(r, delay));
         attempt++;

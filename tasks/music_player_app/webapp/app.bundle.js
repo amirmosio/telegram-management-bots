@@ -71935,42 +71935,116 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   async function searchMusic(groupId, query) {
     await _ensureConnected();
     const entity = await _getEntity(groupId);
-    const [sentOld, sentNew] = await Promise.all([
-      client.sendMessage(entity, { message: "/" + query, replyTo: 1 }),
-      client.sendMessage(entity, { message: query, replyTo: 1 })
+    const [oldResults, newResults] = await Promise.all([
+      _searchMoozikestan(entity, query),
+      _searchMusicArmenianInline(entity, query)
     ]);
-    const minSentId = Math.min(sentOld.id, sentNew.id);
-    let oldResults = null;
-    let newResults = null;
+    return _mergeSearchResults(oldResults, newResults);
+  }
+  async function _searchMoozikestan(entity, query) {
+    let sent;
+    try {
+      sent = await client.sendMessage(entity, { message: "/" + query, replyTo: 1 });
+    } catch (e) {
+      console.warn("moozikestan send:", e.message);
+      return [];
+    }
+    const sentId = sent.id;
     const startTime = Date.now();
     const delays = [1500, 2e3, 2500, 3e3, 3e3, 3e3, 3e3];
     let attempt = 0;
     while (Date.now() - startTime < 25e3) {
-      if (oldResults !== null && newResults !== null) break;
       const delay = delays[Math.min(attempt, delays.length - 1)];
       await new Promise((r) => setTimeout(r, delay));
       attempt++;
       try {
         for await (const msg of client.iterMessages(entity, { limit: 30 })) {
-          if (msg.id <= minSentId) break;
+          if (msg.id <= sentId) break;
           const text = msg.message || "";
-          if (oldResults === null && (text.includes("/dl_") || text.includes("/dlc_"))) {
-            console.log("[search] moozikestan reply, parsing...");
-            oldResults = _parseSearchResults(text);
-          }
-          if (newResults === null && msg.replyMarkup?.className === "ReplyInlineMarkup") {
-            const parsed = _parseMusicArmenianButtons(msg);
-            if (parsed.length > 0) {
-              console.log("[search] MusicArmenian reply, parsing...");
-              newResults = parsed;
-            }
+          if (text.includes("/dl_") || text.includes("/dlc_")) {
+            return _parseSearchResults(text);
           }
         }
       } catch (e) {
-        console.warn("Search poll error:", e.message);
+        console.warn("moozikestan poll:", e.message);
       }
     }
-    return _mergeSearchResults(oldResults || [], newResults || []);
+    return [];
+  }
+  async function _searchMusicArmenianInline(entity, query) {
+    try {
+      const bot = await client.getEntity("MusicArmenian_Bot");
+      const resp = await client.invoke(new import_tl.Api.messages.GetInlineBotResults({
+        bot,
+        peer: entity,
+        query,
+        offset: ""
+      }));
+      if (!resp?.results?.length) return [];
+      return _parseInlineResults(resp);
+    } catch (e) {
+      console.warn("MusicArmenian inline:", e.message);
+      return [];
+    }
+  }
+  function _parseInlineResults(resp) {
+    const results = [];
+    const queryId = resp.queryId;
+    let rank = 0;
+    for (const r of resp.results) {
+      const id = r.id;
+      if (!id) continue;
+      const title = (r.title || "").trim();
+      const description = (r.description || "").trim();
+      if (!title) continue;
+      let cleanTitle2 = title;
+      let artist = "";
+      for (const sep of [" \u2014 ", " \u2013 ", " - "]) {
+        if (title.includes(sep)) {
+          const parts = title.split(sep);
+          cleanTitle2 = parts[0].trim();
+          artist = parts.slice(1).join(sep).trim();
+          break;
+        }
+      }
+      if (!artist && description) {
+        for (const sep of [" \u2014 ", " \u2013 ", " - ", " \u2022 "]) {
+          if (description.includes(sep)) {
+            const parts = description.split(sep);
+            artist = parts[0].trim();
+            break;
+          }
+        }
+        if (!artist && !/\d/.test(description)) artist = description;
+      }
+      let duration = 0;
+      const durMatch = (title + " " + description).match(/(\d{1,2}):(\d{2})/);
+      if (durMatch) duration = parseInt(durMatch[1], 10) * 60 + parseInt(durMatch[2], 10);
+      let sizeMB = 0;
+      let bitrate = 0;
+      const doc = r.document;
+      if (doc?.size) sizeMB = Number((Number(doc.size) / (1024 * 1024)).toFixed(1));
+      if (doc?.attributes) {
+        for (const a of doc.attributes) {
+          if (a.className === "DocumentAttributeAudio" && a.duration && !duration) {
+            duration = a.duration;
+          }
+        }
+      }
+      rank++;
+      results.push({
+        rank,
+        title: cleanTitle2,
+        artist,
+        duration,
+        sizeMB,
+        bitrate,
+        source: "music-armenian",
+        inlineQueryId: queryId,
+        inlineResultId: id
+      });
+    }
+    return results;
   }
   function _mergeSearchResults(oldResults, newResults) {
     const out = [];
@@ -71987,50 +72061,6 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       if (newResults[i]) push(newResults[i]);
     }
     return out;
-  }
-  function _parseMusicArmenianButtons(msg) {
-    const results = [];
-    const rows = msg.replyMarkup?.rows;
-    if (!Array.isArray(rows)) return results;
-    let rank = 0;
-    for (const row of rows) {
-      for (const btn of row.buttons || []) {
-        if (btn.className !== "KeyboardButtonCallback") continue;
-        const text = (btn.text || "").trim();
-        if (!text) continue;
-        const hasDash = text.includes("\u2014") || text.includes(" \u2013 ") || text.includes(" - ");
-        if (!hasDash) continue;
-        if (/^(more|add to|create|powered)/i.test(text)) continue;
-        let duration = 0;
-        const durMatch = text.match(/(\d{1,2}):(\d{2})/);
-        if (durMatch) duration = parseInt(durMatch[1], 10) * 60 + parseInt(durMatch[2], 10);
-        const cleaned = text.replace(/^\s*•?\s*\d{1,2}:\d{2}\s*•?\s*/, "").trim();
-        let title = cleaned;
-        let artist = "";
-        for (const sep of [" \u2014 ", " \u2013 ", " - "]) {
-          if (cleaned.includes(sep)) {
-            const parts = cleaned.split(sep);
-            title = parts[0].trim();
-            artist = parts.slice(1).join(sep).trim();
-            break;
-          }
-        }
-        rank++;
-        results.push({
-          rank,
-          title,
-          artist,
-          duration,
-          sizeMB: 0,
-          // not exposed by this bot
-          bitrate: 0,
-          source: "music-armenian",
-          callbackMsgId: msg.id,
-          callbackData: btn.data
-        });
-      }
-    }
-    return results;
   }
   function _parseSearchResults(text) {
     const results = [];
@@ -72120,31 +72150,45 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     return null;
   }
   async function _downloadFromMusicArmenian(groupId, item) {
-    const cacheKey = `ma:${item.callbackMsgId}:${item.callbackData?.length || 0}:${item.title}:${item.artist}`;
+    const cacheKey = `ma:${item.inlineQueryId}:${item.inlineResultId}`;
     if (_dlCache[cacheKey]) return _dlCache[cacheKey];
     await _ensureConnected();
     const entity = await _getEntity(groupId);
-    let latestId = item.callbackMsgId;
+    let latestId = 0;
     try {
       for await (const msg of client.iterMessages(entity, { limit: 1 })) {
-        latestId = Math.max(latestId, msg.id);
+        latestId = msg.id;
         break;
       }
     } catch {
     }
+    const randomId = (0, import_big_integer.default)(String(Date.now())).multiply(1e3).add(Math.floor(Math.random() * 1e3));
     try {
-      await client.invoke(new import_tl.Api.messages.GetBotCallbackAnswer({
+      await client.invoke(new import_tl.Api.messages.SendInlineBotResult({
         peer: entity,
-        msgId: item.callbackMsgId,
-        data: item.callbackData
+        queryId: item.inlineQueryId,
+        id: item.inlineResultId,
+        replyTo: new import_tl.Api.InputReplyToMessage({ replyToMsgId: 1 }),
+        randomId
       }));
     } catch (e) {
-      console.warn("Callback invoke:", e.message);
+      try {
+        await client.invoke(new import_tl.Api.messages.SendInlineBotResult({
+          peer: entity,
+          queryId: item.inlineQueryId,
+          id: item.inlineResultId,
+          replyToMsgId: 1,
+          randomId
+        }));
+      } catch (e2) {
+        console.warn("SendInlineBotResult:", e.message, "/", e2.message);
+        return null;
+      }
     }
     const startTime = Date.now();
-    const delays = [1500, 2e3, 2500, 3e3, 3e3, 3e3];
+    const delays = [800, 1200, 1800, 2500, 3e3, 3e3];
     let attempt = 0;
-    while (Date.now() - startTime < 3e4) {
+    while (Date.now() - startTime < 2e4) {
       const delay = delays[Math.min(attempt, delays.length - 1)];
       await new Promise((r) => setTimeout(r, delay));
       attempt++;
