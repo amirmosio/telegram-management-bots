@@ -795,11 +795,12 @@ async function performSearch() {
     searchResultsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
 
     try {
-        // Ensure bot is in the group (once)
-        // Ensure bot is invited and General topic is renamed (once each)
-        if (!localStorage.getItem('bot_invited')) {
+        // Ensure search bots are in the group. The localStorage key is
+        // versioned so existing installs (which only added moozikestan_bot)
+        // re-run the invite to pull in MusicArmenian_Bot too.
+        if (!localStorage.getItem('bots_invited_v2')) {
             await tg.ensureBotInGroup(playlistGroupId);
-            localStorage.setItem('bot_invited', '1');
+            localStorage.setItem('bots_invited_v2', '1');
         }
         if (thisSearch.cancelled) return;
 
@@ -810,10 +811,13 @@ async function performSearch() {
         const rawResults = await tg.searchMusic(playlistGroupId, query);
         if (thisSearch.cancelled) return;
 
-        // The bot emits a line per track with a file size (💾 X MB). Some
-        // entries in the response don't include a size — drop those so the
-        // user only sees tracks with a known, downloadable file size.
-        const results = rawResults.filter(r => r.sizeMB && r.sizeMB > 0);
+        // moozikestan emits a line per track with a file size (💾 X MB) —
+        // entries without a size aren't downloadable, so drop those. The
+        // MusicArmenian bot doesn't expose size at all (its results all
+        // come as inline-keyboard buttons), so let those through unfiltered.
+        const results = rawResults.filter(r =>
+            r.source === 'music-armenian' || (r.sizeMB && r.sizeMB > 0)
+        );
 
         if (results.length === 0) {
             const msg = rawResults.length > 0
@@ -864,7 +868,7 @@ async function downloadAndPlay(item, searchRef) {
     }
 
     try {
-        const track = await tg.downloadSearchResult(playlistGroupId, item.dlCmd);
+        const track = await tg.downloadSearchResult(playlistGroupId, item);
         if (searchRef?.cancelled) return;
 
         if (!track) {

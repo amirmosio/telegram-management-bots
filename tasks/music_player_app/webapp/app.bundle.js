@@ -71903,15 +71903,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   async function ensureBotInGroup(groupId) {
     await _ensureConnected();
     const entity = await _getEntity(groupId);
-    try {
-      const bot = await client.getEntity("moozikestan_bot");
-      await client.invoke(new import_tl.Api.channels.InviteToChannel({
-        channel: entity,
-        users: [bot]
-      }));
-    } catch (e) {
-      if (!e.message?.includes("USER_ALREADY_PARTICIPANT")) {
-        console.warn("Bot invite:", e.message);
+    for (const username of SEARCH_BOTS) {
+      try {
+        const bot = await client.getEntity(username);
+        await client.invoke(new import_tl.Api.channels.InviteToChannel({
+          channel: entity,
+          users: [bot]
+        }));
+      } catch (e) {
+        if (!e.message?.includes("USER_ALREADY_PARTICIPANT")) {
+          console.warn(`Bot invite (${username}):`, e.message);
+        }
       }
     }
   }
@@ -71933,33 +71935,102 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   async function searchMusic(groupId, query) {
     await _ensureConnected();
     const entity = await _getEntity(groupId);
-    const sent = await client.sendMessage(entity, {
-      message: "/" + query,
-      replyTo: 1
-    });
-    const sentId = sent.id;
+    const [sentOld, sentNew] = await Promise.all([
+      client.sendMessage(entity, { message: "/" + query, replyTo: 1 }),
+      client.sendMessage(entity, { message: query, replyTo: 1 })
+    ]);
+    const minSentId = Math.min(sentOld.id, sentNew.id);
+    let oldResults = null;
+    let newResults = null;
     const startTime = Date.now();
     const delays = [1500, 2e3, 2500, 3e3, 3e3, 3e3, 3e3];
     let attempt = 0;
     while (Date.now() - startTime < 25e3) {
+      if (oldResults !== null && newResults !== null) break;
       const delay = delays[Math.min(attempt, delays.length - 1)];
       await new Promise((r) => setTimeout(r, delay));
       attempt++;
       try {
         for await (const msg of client.iterMessages(entity, { limit: 30 })) {
-          if (msg.id <= sentId) break;
+          if (msg.id <= minSentId) break;
           const text = msg.message || "";
-          console.log(`[search] poll msg #${msg.id}: ${text.substring(0, 80)}...`);
-          if (text.includes("/dl_") || text.includes("/dlc_")) {
-            console.log("[search] Found bot response, parsing...");
-            return _parseSearchResults(text);
+          if (oldResults === null && (text.includes("/dl_") || text.includes("/dlc_"))) {
+            console.log("[search] moozikestan reply, parsing...");
+            oldResults = _parseSearchResults(text);
+          }
+          if (newResults === null && msg.replyMarkup?.className === "ReplyInlineMarkup") {
+            const parsed = _parseMusicArmenianButtons(msg);
+            if (parsed.length > 0) {
+              console.log("[search] MusicArmenian reply, parsing...");
+              newResults = parsed;
+            }
           }
         }
       } catch (e) {
         console.warn("Search poll error:", e.message);
       }
     }
-    return [];
+    return _mergeSearchResults(oldResults || [], newResults || []);
+  }
+  function _mergeSearchResults(oldResults, newResults) {
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const push = (r) => {
+      const key = `${(r.artist || "").toLowerCase()}|${(r.title || "").toLowerCase()}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(r);
+    };
+    const maxLen = Math.max(oldResults.length, newResults.length);
+    for (let i = 0; i < maxLen; i++) {
+      if (oldResults[i]) push(oldResults[i]);
+      if (newResults[i]) push(newResults[i]);
+    }
+    return out;
+  }
+  function _parseMusicArmenianButtons(msg) {
+    const results = [];
+    const rows = msg.replyMarkup?.rows;
+    if (!Array.isArray(rows)) return results;
+    let rank = 0;
+    for (const row of rows) {
+      for (const btn of row.buttons || []) {
+        if (btn.className !== "KeyboardButtonCallback") continue;
+        const text = (btn.text || "").trim();
+        if (!text) continue;
+        const hasDash = text.includes("\u2014") || text.includes(" \u2013 ") || text.includes(" - ");
+        if (!hasDash) continue;
+        if (/^(more|add to|create|powered)/i.test(text)) continue;
+        let duration = 0;
+        const durMatch = text.match(/(\d{1,2}):(\d{2})/);
+        if (durMatch) duration = parseInt(durMatch[1], 10) * 60 + parseInt(durMatch[2], 10);
+        const cleaned = text.replace(/^\s*•?\s*\d{1,2}:\d{2}\s*•?\s*/, "").trim();
+        let title = cleaned;
+        let artist = "";
+        for (const sep of [" \u2014 ", " \u2013 ", " - "]) {
+          if (cleaned.includes(sep)) {
+            const parts = cleaned.split(sep);
+            title = parts[0].trim();
+            artist = parts.slice(1).join(sep).trim();
+            break;
+          }
+        }
+        rank++;
+        results.push({
+          rank,
+          title,
+          artist,
+          duration,
+          sizeMB: 0,
+          // not exposed by this bot
+          bitrate: 0,
+          source: "music-armenian",
+          callbackMsgId: msg.id,
+          callbackData: btn.data
+        });
+      }
+    }
+    return results;
   }
   function _parseSearchResults(text) {
     const results = [];
@@ -71988,12 +72059,22 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           break;
         }
       }
-      results.push({ rank, title, artist, duration, sizeMB, bitrate, dlCmd });
+      results.push({ rank, title, artist, duration, sizeMB, bitrate, dlCmd, source: "moozikestan" });
     }
     results.sort((a, b) => a.rank - b.rank);
     return results;
   }
-  async function downloadSearchResult(groupId, dlCmd) {
+  async function downloadSearchResult(groupId, item) {
+    if (typeof item === "string") {
+      return _downloadFromMoozikestan(groupId, item);
+    }
+    if (item?.source === "music-armenian") {
+      return _downloadFromMusicArmenian(groupId, item);
+    }
+    return _downloadFromMoozikestan(groupId, item?.dlCmd);
+  }
+  async function _downloadFromMoozikestan(groupId, dlCmd) {
+    if (!dlCmd) return null;
     if (_dlCache[dlCmd]) return _dlCache[dlCmd];
     await _ensureConnected();
     const entity = await _getEntity(groupId);
@@ -72013,10 +72094,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     } catch (e) {
       console.warn("Scan existing failed:", e.message);
     }
-    const sent = await client.sendMessage(entity, {
-      message: dlCmd,
-      replyTo: 1
-    });
+    const sent = await client.sendMessage(entity, { message: dlCmd, replyTo: 1 });
     const sentId = sent.id;
     const startTime = Date.now();
     const delays = [2e3, 2500, 3e3, 3e3, 3e3, 3e3, 3e3];
@@ -72032,6 +72110,51 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           if (meta) {
             _msgCache[`${groupId}:${msg.id}`] = msg;
             _dlCache[dlCmd] = meta;
+            return meta;
+          }
+        }
+      } catch (e) {
+        console.warn("Download poll error:", e.message);
+      }
+    }
+    return null;
+  }
+  async function _downloadFromMusicArmenian(groupId, item) {
+    const cacheKey = `ma:${item.callbackMsgId}:${item.callbackData?.length || 0}:${item.title}:${item.artist}`;
+    if (_dlCache[cacheKey]) return _dlCache[cacheKey];
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+    let latestId = item.callbackMsgId;
+    try {
+      for await (const msg of client.iterMessages(entity, { limit: 1 })) {
+        latestId = Math.max(latestId, msg.id);
+        break;
+      }
+    } catch {
+    }
+    try {
+      await client.invoke(new import_tl.Api.messages.GetBotCallbackAnswer({
+        peer: entity,
+        msgId: item.callbackMsgId,
+        data: item.callbackData
+      }));
+    } catch (e) {
+      console.warn("Callback invoke:", e.message);
+    }
+    const startTime = Date.now();
+    const delays = [1500, 2e3, 2500, 3e3, 3e3, 3e3];
+    let attempt = 0;
+    while (Date.now() - startTime < 3e4) {
+      const delay = delays[Math.min(attempt, delays.length - 1)];
+      await new Promise((r) => setTimeout(r, delay));
+      attempt++;
+      try {
+        for await (const msg of client.iterMessages(entity, { limit: 10 })) {
+          if (msg.id <= latestId) break;
+          const meta = _extractAudioMeta(msg);
+          if (meta) {
+            _msgCache[`${groupId}:${msg.id}`] = msg;
+            _dlCache[cacheKey] = meta;
             return meta;
           }
         }
@@ -72164,7 +72287,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -72218,6 +72341,7 @@ ${JSON.stringify(state)}`;
       _totalCountCache = /* @__PURE__ */ new Map();
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
       SHARE_CHANNEL_TITLE = "TG Music Player Shared";
+      SEARCH_BOTS = ["moozikestan_bot", "MusicArmenian_Bot"];
       _dlCache = {};
       SYNC_MSG_KEY = "sync_msg_id";
       NP_TOKEN_KEY = "np_token";
@@ -73316,16 +73440,18 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         searchTracks = [];
         searchResultsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
         try {
-          if (!localStorage.getItem("bot_invited")) {
+          if (!localStorage.getItem("bots_invited_v2")) {
             await ensureBotInGroup(playlistGroupId);
-            localStorage.setItem("bot_invited", "1");
+            localStorage.setItem("bots_invited_v2", "1");
           }
           if (thisSearch.cancelled) return;
           await renameGeneralToSearch(playlistGroupId);
           if (thisSearch.cancelled) return;
           const rawResults = await searchMusic(playlistGroupId, query);
           if (thisSearch.cancelled) return;
-          const results = rawResults.filter((r) => r.sizeMB && r.sizeMB > 0);
+          const results = rawResults.filter(
+            (r) => r.source === "music-armenian" || r.sizeMB && r.sizeMB > 0
+          );
           if (results.length === 0) {
             const msg = rawResults.length > 0 ? "No results with a listed size" : "No results found";
             searchResultsContainer.innerHTML = `<div class="lyrics-placeholder">${msg}</div>`;
@@ -73366,7 +73492,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           items[idx].querySelector(".track-placeholder").innerHTML = '<div class="loading"></div>';
         }
         try {
-          const track = await downloadSearchResult(playlistGroupId, item.dlCmd);
+          const track = await downloadSearchResult(playlistGroupId, item);
           if (searchRef?.cancelled) return;
           if (!track) {
             showToast("Download failed");

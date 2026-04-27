@@ -1624,21 +1624,31 @@ export async function resolveShareLink(msgId) {
 }
 
 // ════════════════════════════════════
-//  MUSIC SEARCH (via @moozikestan_bot)
+//  MUSIC SEARCH (via @moozikestan_bot + @MusicArmenian_Bot)
 // ════════════════════════════════════
+
+// Bots that fulfil track requests in the Search topic. Both get the same
+// query in parallel and their results are merged. They have completely
+// different protocols:
+//   moozikestan_bot   → text reply with /dl_<id> commands per track
+//   MusicArmenian_Bot → inline keyboard whose buttons are tracks; tapping
+//                       a button delivers the audio
+const SEARCH_BOTS = ['moozikestan_bot', 'MusicArmenian_Bot'];
 
 export async function ensureBotInGroup(groupId) {
     await _ensureConnected();
     const entity = await _getEntity(groupId);
-    try {
-        const bot = await client.getEntity('moozikestan_bot');
-        await client.invoke(new Api.channels.InviteToChannel({
-            channel: entity,
-            users: [bot],
-        }));
-    } catch (e) {
-        if (!e.message?.includes('USER_ALREADY_PARTICIPANT')) {
-            console.warn('Bot invite:', e.message);
+    for (const username of SEARCH_BOTS) {
+        try {
+            const bot = await client.getEntity(username);
+            await client.invoke(new Api.channels.InviteToChannel({
+                channel: entity,
+                users: [bot],
+            }));
+        } catch (e) {
+            if (!e.message?.includes('USER_ALREADY_PARTICIPANT')) {
+                console.warn(`Bot invite (${username}):`, e.message);
+            }
         }
     }
 }
@@ -1660,38 +1670,47 @@ export async function renameGeneralToSearch(groupId) {
     localStorage.setItem('general_renamed', '1');
 }
 
-// Send search query, poll for the bot's text response, parse the result list
+// Send the query to both bots in parallel and merge their replies.
+//   moozikestan_bot triggers on the leading "/" (Telegram command)
+//   MusicArmenian_Bot triggers on the plain-text mini-app input
+// Each bot replies to its own message, so they don't collide.
 export async function searchMusic(groupId, query) {
     await _ensureConnected();
     const entity = await _getEntity(groupId);
 
-    // Send in the Search topic (General renamed, id=1)
-    const sent = await client.sendMessage(entity, {
-        message: '/' + query,
-        replyTo: 1,
-    });
+    // Send both queries in the Search topic (General renamed, id=1).
+    const [sentOld, sentNew] = await Promise.all([
+        client.sendMessage(entity, { message: '/' + query, replyTo: 1 }),
+        client.sendMessage(entity, { message: query, replyTo: 1 }),
+    ]);
+    const minSentId = Math.min(sentOld.id, sentNew.id);
 
-    // Poll for the bot's text reply (contains the result list)
-    const sentId = sent.id;
+    let oldResults = null;  // moozikestan: text with /dl_ commands
+    let newResults = null;  // MusicArmenian: inline-keyboard buttons
     const startTime = Date.now();
     const delays = [1500, 2000, 2500, 3000, 3000, 3000, 3000];
     let attempt = 0;
 
     while (Date.now() - startTime < 25000) {
+        if (oldResults !== null && newResults !== null) break;
         const delay = delays[Math.min(attempt, delays.length - 1)];
         await new Promise(r => setTimeout(r, delay));
         attempt++;
 
         try {
-            // Fetch recent messages — try both with and without replyTo
-            // (some GramJS builds don't filter by replyTo correctly)
             for await (const msg of client.iterMessages(entity, { limit: 30 })) {
-                if (msg.id <= sentId) break;
+                if (msg.id <= minSentId) break;
                 const text = msg.message || '';
-                console.log(`[search] poll msg #${msg.id}: ${text.substring(0, 80)}...`);
-                if (text.includes('/dl_') || text.includes('/dlc_')) {
-                    console.log('[search] Found bot response, parsing...');
-                    return _parseSearchResults(text);
+                if (oldResults === null && (text.includes('/dl_') || text.includes('/dlc_'))) {
+                    console.log('[search] moozikestan reply, parsing...');
+                    oldResults = _parseSearchResults(text);
+                }
+                if (newResults === null && msg.replyMarkup?.className === 'ReplyInlineMarkup') {
+                    const parsed = _parseMusicArmenianButtons(msg);
+                    if (parsed.length > 0) {
+                        console.log('[search] MusicArmenian reply, parsing...');
+                        newResults = parsed;
+                    }
                 }
             }
         } catch (e) {
@@ -1699,7 +1718,87 @@ export async function searchMusic(groupId, query) {
         }
     }
 
-    return [];
+    return _mergeSearchResults(oldResults || [], newResults || []);
+}
+
+// Merge results from both bots. Dedupe by lower-cased "artist|title"
+// and keep the first occurrence (so rank-1 from either bot stays at the
+// top of its slice). Concatenate so both lists are fully visible.
+function _mergeSearchResults(oldResults, newResults) {
+    const out = [];
+    const seen = new Set();
+    const push = (r) => {
+        const key = `${(r.artist || '').toLowerCase()}|${(r.title || '').toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(r);
+    };
+    // Interleave so the user sees results from both bots near the top.
+    const maxLen = Math.max(oldResults.length, newResults.length);
+    for (let i = 0; i < maxLen; i++) {
+        if (oldResults[i]) push(oldResults[i]);
+        if (newResults[i]) push(newResults[i]);
+    }
+    return out;
+}
+
+// Parse the inline keyboard from a MusicArmenian_Bot reply into result
+// items. Each button looks like one of:
+//   "• 3:56 • Title — Artist"
+//   "Title — Artist"
+// Utility buttons ("More tracks", "Add to group", search-emoji) and any
+// non-callback buttons (URL buttons) are filtered out.
+function _parseMusicArmenianButtons(msg) {
+    const results = [];
+    const rows = msg.replyMarkup?.rows;
+    if (!Array.isArray(rows)) return results;
+
+    let rank = 0;
+    for (const row of rows) {
+        for (const btn of row.buttons || []) {
+            // Only callback buttons can be invoked to fetch the audio.
+            if (btn.className !== 'KeyboardButtonCallback') continue;
+            const text = (btn.text || '').trim();
+            if (!text) continue;
+            // Must look like a track (contains a dash separator).
+            const hasDash = text.includes('—') || text.includes(' – ') || text.includes(' - ');
+            if (!hasDash) continue;
+            // Drop obvious utility labels.
+            if (/^(more|add to|create|powered)/i.test(text)) continue;
+
+            let duration = 0;
+            const durMatch = text.match(/(\d{1,2}):(\d{2})/);
+            if (durMatch) duration = parseInt(durMatch[1], 10) * 60 + parseInt(durMatch[2], 10);
+
+            // Strip leading "• 3:56 •" decoration if present.
+            const cleaned = text.replace(/^\s*•?\s*\d{1,2}:\d{2}\s*•?\s*/, '').trim();
+
+            let title = cleaned;
+            let artist = '';
+            for (const sep of [' — ', ' – ', ' - ']) {
+                if (cleaned.includes(sep)) {
+                    const parts = cleaned.split(sep);
+                    title = parts[0].trim();
+                    artist = parts.slice(1).join(sep).trim();
+                    break;
+                }
+            }
+
+            rank++;
+            results.push({
+                rank,
+                title,
+                artist,
+                duration,
+                sizeMB: 0,    // not exposed by this bot
+                bitrate: 0,
+                source: 'music-armenian',
+                callbackMsgId: msg.id,
+                callbackData: btn.data,
+            });
+        }
+    }
+    return results;
 }
 
 // Parse the bot's result list text into structured items
@@ -1745,7 +1844,7 @@ function _parseSearchResults(text) {
             }
         }
 
-        results.push({ rank, title, artist, duration, sizeMB, bitrate, dlCmd });
+        results.push({ rank, title, artist, duration, sizeMB, bitrate, dlCmd, source: 'moozikestan' });
     }
 
     // Sort by rank (1 = best)
@@ -1753,13 +1852,25 @@ function _parseSearchResults(text) {
     return results;
 }
 
-// Cache of dlCmd -> track meta (so we don't re-request)
+// Cache of dlCmd / callback-key -> track meta (so we don't re-request)
 const _dlCache = {};
 
-// Download a specific track by sending /dl_XXX command, wait for audio
-// If the track was already downloaded before, return cached result
-export async function downloadSearchResult(groupId, dlCmd) {
-    // Check if we already have this track
+// Dispatcher: route to the right downloader based on which bot the result
+// came from. The legacy two-arg signature (groupId, dlCmd string) still
+// works so old callers and persisted results don't break.
+export async function downloadSearchResult(groupId, item) {
+    if (typeof item === 'string') {
+        return _downloadFromMoozikestan(groupId, item);
+    }
+    if (item?.source === 'music-armenian') {
+        return _downloadFromMusicArmenian(groupId, item);
+    }
+    return _downloadFromMoozikestan(groupId, item?.dlCmd);
+}
+
+// Download via @moozikestan_bot: send /dl_XXX, wait for audio reply.
+async function _downloadFromMoozikestan(groupId, dlCmd) {
+    if (!dlCmd) return null;
     if (_dlCache[dlCmd]) return _dlCache[dlCmd];
 
     await _ensureConnected();
@@ -1768,10 +1879,8 @@ export async function downloadSearchResult(groupId, dlCmd) {
     // First scan recent messages in search topic for an existing audio matching this dlCmd
     try {
         for await (const msg of client.iterMessages(entity, { limit: 50 })) {
-            // Check if this message was a reply to our dlCmd
             const meta = _extractAudioMeta(msg);
             if (meta) {
-                // Check if the previous message is the dlCmd text
                 const prevMsgs = await client.getMessages(entity, { ids: [msg.id - 1] });
                 const prev = prevMsgs?.[0];
                 if (prev && (prev.message || '').trim() === dlCmd) {
@@ -1785,13 +1894,7 @@ export async function downloadSearchResult(groupId, dlCmd) {
         console.warn('Scan existing failed:', e.message);
     }
 
-    // Not found — send the download command
-    const sent = await client.sendMessage(entity, {
-        message: dlCmd,
-        replyTo: 1,
-    });
-
-    // Poll for the audio file response
+    const sent = await client.sendMessage(entity, { message: dlCmd, replyTo: 1 });
     const sentId = sent.id;
     const startTime = Date.now();
     const delays = [2000, 2500, 3000, 3000, 3000, 3000, 3000];
@@ -1801,7 +1904,6 @@ export async function downloadSearchResult(groupId, dlCmd) {
         const delay = delays[Math.min(attempt, delays.length - 1)];
         await new Promise(r => setTimeout(r, delay));
         attempt++;
-
         try {
             for await (const msg of client.iterMessages(entity, { limit: 10 })) {
                 if (msg.id <= sentId) break;
@@ -1816,7 +1918,62 @@ export async function downloadSearchResult(groupId, dlCmd) {
             console.warn('Download poll error:', e.message);
         }
     }
+    return null;
+}
 
+// Download via @MusicArmenian_Bot: invoke the inline-keyboard callback
+// on the bot's reply, then poll for the audio message it sends back.
+async function _downloadFromMusicArmenian(groupId, item) {
+    const cacheKey = `ma:${item.callbackMsgId}:${
+        item.callbackData?.length || 0
+    }:${item.title}:${item.artist}`;
+    if (_dlCache[cacheKey]) return _dlCache[cacheKey];
+
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+
+    // Capture the latest message id BEFORE invoking so we can detect the
+    // bot's audio response as the next new message.
+    let latestId = item.callbackMsgId;
+    try {
+        for await (const msg of client.iterMessages(entity, { limit: 1 })) {
+            latestId = Math.max(latestId, msg.id);
+            break;
+        }
+    } catch {}
+
+    try {
+        await client.invoke(new Api.messages.GetBotCallbackAnswer({
+            peer: entity,
+            msgId: item.callbackMsgId,
+            data: item.callbackData,
+        }));
+    } catch (e) {
+        console.warn('Callback invoke:', e.message);
+    }
+
+    const startTime = Date.now();
+    const delays = [1500, 2000, 2500, 3000, 3000, 3000];
+    let attempt = 0;
+
+    while (Date.now() - startTime < 30000) {
+        const delay = delays[Math.min(attempt, delays.length - 1)];
+        await new Promise(r => setTimeout(r, delay));
+        attempt++;
+        try {
+            for await (const msg of client.iterMessages(entity, { limit: 10 })) {
+                if (msg.id <= latestId) break;
+                const meta = _extractAudioMeta(msg);
+                if (meta) {
+                    _msgCache[`${groupId}:${msg.id}`] = msg;
+                    _dlCache[cacheKey] = meta;
+                    return meta;
+                }
+            }
+        } catch (e) {
+            console.warn('Download poll error:', e.message);
+        }
+    }
     return null;
 }
 
