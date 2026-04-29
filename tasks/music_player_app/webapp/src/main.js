@@ -272,7 +272,7 @@ function renderPlaylists() {
         playlistsContainer.innerHTML = '<div class="lyrics-placeholder">No playlists yet</div>';
         return;
     }
-    playlists.forEach(p => {
+    playlists.filter(p => p.id !== 1).forEach(p => {
         const el = document.createElement('div');
         el.className = 'playlist-item';
         const iconHtml = p.icon
