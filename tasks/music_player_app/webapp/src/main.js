@@ -2314,16 +2314,33 @@ $('btn-delete-playing').addEventListener('click', async () => {
     }
 });
 
-function showPlaylistPicker(mode) {
+async function showPlaylistPicker(mode) {
     pickerMode = mode === 'move' ? 'move' : 'add';
-    playlistModalTitle.textContent = pickerMode === 'move' ? 'Move to playlist' : 'Add to playlist';
-    modalPlaylists.innerHTML = '';
     // Exclude the synthetic "All" entry and the General/Search topic (id=1)
     // from the picker — neither is a real destination playlist.
     const pickable = playlists.filter(p => !p.isAll && p.id !== 1);
+
+    // No playlists yet — skip the empty picker and prompt to create one,
+    // then add/move the pending track straight into it.
     if (pickable.length === 0) {
-        modalPlaylists.innerHTML = '<div class="lyrics-placeholder">No playlists yet.</div>';
+        if (!playlistGroupId) { showToast('Playlist group not ready'); pendingAddTrack = null; return; }
+        const name = await showPromptModal('Create your first playlist', { placeholder: 'Playlist name' });
+        if (!name?.trim()) { pendingAddTrack = null; return; }
+        try {
+            const topic = await tg.createTopic(playlistGroupId, name.trim());
+            await loadPlaylists();
+            if (!topic) { showToast('Failed to create playlist'); pendingAddTrack = null; return; }
+            if (pickerMode === 'move') moveTrackToPlaylist(topic.id);
+            else addTrackToPlaylist(topic.id);
+        } catch (e) {
+            showToast('Failed to create playlist');
+            pendingAddTrack = null;
+        }
+        return;
     }
+
+    playlistModalTitle.textContent = pickerMode === 'move' ? 'Move to playlist' : 'Add to playlist';
+    modalPlaylists.innerHTML = '';
     pickable.forEach(p => {
         const el = document.createElement('div');
         el.className = 'modal-playlist-item';
