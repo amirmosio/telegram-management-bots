@@ -2454,10 +2454,8 @@ let _shareCurrentLink = null;
 let _shareCurrentTrack = null;
 let _shareChatsCache = [];
 
-function _shareCaption(track) {
-    const title = track.title || 'Music';
-    const artist = track.artist ? ' — ' + track.artist : '';
-    return `${title}${artist}\n${_shareCurrentLink}`;
+function _shareCaption() {
+    return `<a href="${escapeHtml(_shareCurrentLink)}">Listen on Telemusic app</a>`;
 }
 
 function _renderShareChats(filter) {
@@ -2504,8 +2502,7 @@ async function _sendShareToChat(chat, rowEl) {
     const track = _shareCurrentTrack;
     rowEl.classList.add('sending');
     try {
-        await tg.forwardTrackToChat(chat.id, playerGroupId, track.id);
-        await tg.sendTextToChat(chat.id, _shareCaption(track));
+        await tg.sendTrackToChat(chat.id, playerGroupId, track.id, _shareCaption());
         showToast(`Sent to ${chat.title}`);
         _closeShareDialog();
     } catch (e) {

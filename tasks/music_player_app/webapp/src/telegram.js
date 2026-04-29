@@ -1595,17 +1595,21 @@ export async function sendTextToChat(chatId, text) {
     await client.sendMessage(entity, { message: text });
 }
 
-// Forward an audio track from its source group to a destination chat.
-export async function forwardTrackToChat(chatId, sourceGroupId, trackId) {
+// Send an audio track (referenced by source message) to a destination chat
+// with a custom HTML caption. Reuses the existing document — no re-upload.
+export async function sendTrackToChat(chatId, sourceGroupId, trackId, htmlCaption) {
     await _ensureConnected();
     const toEntity = await _getEntity(chatId);
     const fromEntity = await _getEntity(sourceGroupId);
-    await client.invoke(new Api.messages.ForwardMessages({
-        fromPeer: fromEntity,
-        toPeer: toEntity,
-        id: [trackId],
-        randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))],
-    }));
+    const msgs = await client.getMessages(fromEntity, { ids: [trackId] });
+    const msg = msgs[0];
+    if (!msg || !msg.media) throw new Error('Track not found');
+    await client.sendFile(toEntity, {
+        file: msg.media,
+        caption: htmlCaption,
+        parseMode: 'html',
+        forceDocument: false,
+    });
 }
 
 export async function resolveShareLink(msgId) {

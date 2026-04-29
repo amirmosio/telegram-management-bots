@@ -71878,21 +71878,19 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return chats;
   }
-  async function sendTextToChat(chatId, text) {
-    await _ensureConnected();
-    const entity = await _getEntity(chatId);
-    await client.sendMessage(entity, { message: text });
-  }
-  async function forwardTrackToChat(chatId, sourceGroupId, trackId) {
+  async function sendTrackToChat(chatId, sourceGroupId, trackId, htmlCaption) {
     await _ensureConnected();
     const toEntity = await _getEntity(chatId);
     const fromEntity = await _getEntity(sourceGroupId);
-    await client.invoke(new import_tl.Api.messages.ForwardMessages({
-      fromPeer: fromEntity,
-      toPeer: toEntity,
-      id: [trackId],
-      randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))]
-    }));
+    const msgs = await client.getMessages(fromEntity, { ids: [trackId] });
+    const msg = msgs[0];
+    if (!msg || !msg.media) throw new Error("Track not found");
+    await client.sendFile(toEntity, {
+      file: msg.media,
+      caption: htmlCaption,
+      parseMode: "html",
+      forceDocument: false
+    });
   }
   async function resolveShareLink(msgId) {
     await _ensureConnected();
@@ -74952,11 +74950,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _shareCurrentLink = null;
       var _shareCurrentTrack = null;
       var _shareChatsCache = [];
-      function _shareCaption(track) {
-        const title = track.title || "Music";
-        const artist = track.artist ? " \u2014 " + track.artist : "";
-        return `${title}${artist}
-${_shareCurrentLink}`;
+      function _shareCaption() {
+        return `<a href="${escapeHtml(_shareCurrentLink)}">Listen on Telemusic app</a>`;
       }
       function _renderShareChats(filter) {
         const q = (filter || "").trim().toLowerCase();
@@ -74995,8 +74990,7 @@ ${_shareCurrentLink}`;
         const track = _shareCurrentTrack;
         rowEl.classList.add("sending");
         try {
-          await forwardTrackToChat(chat.id, playerGroupId, track.id);
-          await sendTextToChat(chat.id, _shareCaption(track));
+          await sendTrackToChat(chat.id, playerGroupId, track.id, _shareCaption());
           showToast(`Sent to ${chat.title}`);
           _closeShareDialog();
         } catch (e) {
