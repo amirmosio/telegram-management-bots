@@ -75546,7 +75546,11 @@ ${_shareCurrentLink}`;
         showToast("Token copied");
       });
       $("btn-logout").addEventListener("click", async () => {
-        if (!confirm("Log out of Telegram? Downloaded tracks on this device will be cleared.")) return;
+        const ok = await showConfirmModal(
+          "Log out of Telegram?",
+          "Downloaded tracks on this device will be cleared."
+        );
+        if (!ok) return;
         const btn = $("btn-logout");
         btn.disabled = true;
         try {
