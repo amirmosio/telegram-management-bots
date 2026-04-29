@@ -71883,6 +71883,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     const entity = await _getEntity(chatId);
     await client.sendMessage(entity, { message: text });
   }
+  async function forwardTrackToChat(chatId, sourceGroupId, trackId) {
+    await _ensureConnected();
+    const toEntity = await _getEntity(chatId);
+    const fromEntity = await _getEntity(sourceGroupId);
+    await client.invoke(new import_tl.Api.messages.ForwardMessages({
+      fromPeer: fromEntity,
+      toPeer: toEntity,
+      id: [trackId],
+      randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))]
+    }));
+  }
   async function resolveShareLink(msgId) {
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
@@ -74974,9 +74985,18 @@ ${_shareCurrentLink}`;
           showToast("Link not ready yet");
           return;
         }
+        if (chat.kind === "user") {
+          const ok = await showConfirmModal(
+            `Send to ${chat.title}?`,
+            "The track and link will be sent to this contact."
+          );
+          if (!ok) return;
+        }
+        const track = _shareCurrentTrack;
         rowEl.classList.add("sending");
         try {
-          await sendTextToChat(chat.id, _shareCaption(_shareCurrentTrack));
+          await forwardTrackToChat(chat.id, playerGroupId, track.id);
+          await sendTextToChat(chat.id, _shareCaption(track));
           showToast(`Sent to ${chat.title}`);
           _closeShareDialog();
         } catch (e) {

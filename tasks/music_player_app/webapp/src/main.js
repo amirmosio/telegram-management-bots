@@ -2494,9 +2494,18 @@ async function _sendShareToChat(chat, rowEl) {
         showToast('Link not ready yet');
         return;
     }
+    if (chat.kind === 'user') {
+        const ok = await showConfirmModal(
+            `Send to ${chat.title}?`,
+            'The track and link will be sent to this contact.'
+        );
+        if (!ok) return;
+    }
+    const track = _shareCurrentTrack;
     rowEl.classList.add('sending');
     try {
-        await tg.sendTextToChat(chat.id, _shareCaption(_shareCurrentTrack));
+        await tg.forwardTrackToChat(chat.id, playerGroupId, track.id);
+        await tg.sendTextToChat(chat.id, _shareCaption(track));
         showToast(`Sent to ${chat.title}`);
         _closeShareDialog();
     } catch (e) {

@@ -1595,6 +1595,19 @@ export async function sendTextToChat(chatId, text) {
     await client.sendMessage(entity, { message: text });
 }
 
+// Forward an audio track from its source group to a destination chat.
+export async function forwardTrackToChat(chatId, sourceGroupId, trackId) {
+    await _ensureConnected();
+    const toEntity = await _getEntity(chatId);
+    const fromEntity = await _getEntity(sourceGroupId);
+    await client.invoke(new Api.messages.ForwardMessages({
+        fromPeer: fromEntity,
+        toPeer: toEntity,
+        id: [trackId],
+        randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))],
+    }));
+}
+
 export async function resolveShareLink(msgId) {
     await _ensureConnected();
 
