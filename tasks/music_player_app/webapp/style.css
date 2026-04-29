@@ -613,10 +613,37 @@ html, body {
 /* ── Modal ── */
 #playlist-modal,
 #confirm-modal,
+#prompt-modal,
 #share-modal,
 #watch-modal {
     position: fixed; inset: 0; z-index: 100;
     display: flex; align-items: center; justify-content: center;
+}
+
+#prompt-modal-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 16px;
+    box-sizing: border-box;
+}
+
+#prompt-modal-input:focus { border-color: var(--accent); }
+
+#prompt-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+#prompt-modal-actions .text-btn.accent {
+    color: var(--accent);
+    font-weight: 600;
 }
 
 #share-modal .modal-content {

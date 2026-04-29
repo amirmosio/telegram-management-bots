@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=117">
+    <link rel="manifest" href="/manifest.json?v=118">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=117">
+    <link rel="stylesheet" href="style.css?v=118">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -280,6 +280,19 @@
         </div>
     </div>
 
+    <!-- Generic prompt modal (in-app replacement for window.prompt()) -->
+    <div id="prompt-modal" style="display:none">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3 id="prompt-modal-title"></h3>
+            <input id="prompt-modal-input" type="text" autocomplete="off">
+            <div id="prompt-modal-actions">
+                <button id="prompt-modal-cancel" class="text-btn">Cancel</button>
+                <button id="prompt-modal-ok" class="text-btn accent">OK</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Watch setup modal: shows the per-account token to paste into the Amazfit app -->
     <div id="watch-modal" style="display:none">
         <div class="modal-backdrop"></div>
@@ -367,6 +380,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=117"></script>
+    <script src="app.bundle.js?v=118"></script>
 </body>
 </html>

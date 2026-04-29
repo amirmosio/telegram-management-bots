@@ -544,13 +544,13 @@ btnDownloadAll.addEventListener('click', async () => {
 
 btnNewPlaylist.addEventListener('click', async () => {
     if (!playlistGroupId) { showToast('Playlist group not ready'); return; }
-    const name = prompt('Playlist name:');
+    const name = await showPromptModal('New playlist', { placeholder: 'Playlist name' });
     if (!name?.trim()) return;
     try {
         await tg.createTopic(playlistGroupId, name.trim());
         await loadPlaylists();
     } catch (e) {
-        alert('Failed to create playlist');
+        showToast('Failed to create playlist');
     }
 });
 
@@ -2348,6 +2348,42 @@ playlistModal.querySelector('.modal-backdrop')?.addEventListener('click', hidePl
 // iOS Safari (especially in standalone PWAs) silently drops window.confirm()
 // calls after an `await`, because the user-activation token is consumed
 // by the async boundary. Use a DOM modal instead.
+function showPromptModal(title, { placeholder = '', initial = '' } = {}) {
+    return new Promise((resolve) => {
+        const modal = $('prompt-modal');
+        const titleEl = $('prompt-modal-title');
+        const inputEl = $('prompt-modal-input');
+        const okBtn = $('prompt-modal-ok');
+        const cancelBtn = $('prompt-modal-cancel');
+        const backdrop = modal.querySelector('.modal-backdrop');
+
+        titleEl.textContent = title;
+        inputEl.placeholder = placeholder;
+        inputEl.value = initial;
+        modal.style.display = 'flex';
+        setTimeout(() => { inputEl.focus(); inputEl.select(); }, 0);
+
+        const finish = (result) => {
+            modal.style.display = 'none';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            backdrop.removeEventListener('click', onCancel);
+            inputEl.removeEventListener('keydown', onKey);
+            resolve(result);
+        };
+        const onOk = () => finish(inputEl.value);
+        const onCancel = () => finish(null);
+        const onKey = (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); onOk(); }
+            else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        };
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        backdrop.addEventListener('click', onCancel);
+        inputEl.addEventListener('keydown', onKey);
+    });
+}
+
 function showConfirmModal(title, message) {
     return new Promise((resolve) => {
         const modal = $('confirm-modal');
