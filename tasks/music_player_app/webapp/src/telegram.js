@@ -248,15 +248,31 @@ export async function initClient() {
     _initPromise = (async () => {
         const savedSession = localStorage.getItem(SESSION_KEY) || '';
         const session = new StringSession(savedSession);
+        // Connection management: we own reconnects, not GramJS.
+        //
+        // GramJS's autoReconnect was the source of the ERR_INSUFFICIENT_RESOURCES
+        // cascade. When ANY socket dropped, MTProtoSender.reconnect() would
+        // fan out to every exported file-DC sender (even healthy ones), and
+        // _recvLoop + _sendLoop both call reconnect() independently — a single
+        // vesta-1 drop turned into 9+ parallel sockets × connectionRetries.
+        // _borrowExportedSender → _connectSender also has an unbounded
+        // while(true) retry that has no online check.
+        //
+        // Telegram Web (Web-A / Web-K) uses one managed socket per DC with
+        // a single deduped retry queue, online/offline teardown, and no
+        // cross-DC reconnect fan-out. We mirror that within GramJS by:
+        //   - autoReconnect:false       → no fan-out, no double-loop reconnects
+        //   - connectionRetries:1       → no internal multi-attempt bursts
+        //   - app-level _ensureConnected → single deduped reconnect path
+        //   - online/offline listeners  → proactive disconnect when offline
         client = new TelegramClient(session, API_ID, API_HASH, {
-            connectionRetries: 3,      // was 10 — too aggressive; fed the cascade
+            connectionRetries: 1,
             useWSS: true,
-            autoReconnect: true,
-            retryDelay: 2000,          // was 1000 — slower backoff
+            autoReconnect: false,
+            retryDelay: 2000,
         });
-        // Silence GramJS's internal reconnect chatter ("Connection closed
-        // while receiving data" + stack dumps). autoReconnect:true handles
-        // these transparently; the log spam is just noise.
+        // Silence GramJS's internal reconnect chatter — with autoReconnect
+        // off it's quieter, but disconnect events still log.
         try { client.setLogLevel?.('error'); } catch {}
         try { client._log?.setLevel?.('none'); } catch {}
         // If the browser reports it's offline, don't even attempt a connect —
@@ -276,10 +292,47 @@ export async function initClient() {
             console.warn('[telegram] connect failed:', e?.message || e);
             // Leave client object around so future ops can retry via _ensureConnected.
         }
+        _installNetworkLifecycle();
         return client;
     })();
     try { return await _initPromise; }
     finally { _initPromise = null; }
+}
+
+// Network lifecycle: tear down the client when the browser goes offline so
+// no zombie sockets / reconnect loops survive, and reconnect (once) when
+// it comes back. visibilitychange isn't enough on its own — Chrome on
+// mobile may keep the tab "visible" while the radio is off.
+let _lifecycleInstalled = false;
+function _installNetworkLifecycle() {
+    if (_lifecycleInstalled || typeof window === 'undefined') return;
+    _lifecycleInstalled = true;
+    window.addEventListener('offline', async () => {
+        console.log('[telegram] offline → disconnecting');
+        try { await client?.disconnect(); } catch {}
+    });
+    window.addEventListener('online', () => {
+        console.log('[telegram] online → reconnecting');
+        // Fire-and-forget; _ensureConnected dedupes if anything else is racing.
+        _ensureConnected().catch(() => {});
+    });
+}
+
+// True for errors where retrying after a fresh reconnect makes sense:
+// dropped WebSocket, transport closed mid-request, GramJS sender disposal.
+function _isTransientConnError(e) {
+    const m = String(e?.message || e || '').toLowerCase();
+    return (
+        m.includes('not-connected') ||
+        m.includes('not connected') ||
+        m.includes('disconnect') ||
+        m.includes('websocket was closed') ||
+        m.includes('connection closed') ||
+        m.includes('reconnect') ||
+        m.includes('timeout') ||
+        m.includes('econnreset') ||
+        m.includes('insufficient_resources')
+    );
 }
 
 // Ensure client is connected before any operation.
@@ -993,21 +1046,34 @@ export async function prefetchTrack(groupId, trackId, context = {}, signal = nul
         });
     };
 
-    try {
-        await runDownload();
-        return 'cached';
-    } catch (e) {
-        if (signal?.aborted) throw e;
-        const m = String(e?.message || e);
-        if (m.includes('FILE_REFERENCE')) {
-            console.warn('[prefetch] file ref expired, refreshing', trackId);
-            const refreshed = await _refreshTrackMsg(groupId, trackId);
-            if (refreshed) {
-                await runDownload();
-                return 'cached';
+    // Retry transient connection failures (dropped sockets, sender churn).
+    // With autoReconnect:false we own the recovery: reconnect once via the
+    // deduped path, then retry the download. Cap at 3 attempts so a truly
+    // dead network gives up instead of looping.
+    const MAX_ATTEMPTS = 3;
+    let attempt = 0;
+    while (true) {
+        try {
+            await runDownload();
+            return 'cached';
+        } catch (e) {
+            if (signal?.aborted) throw e;
+            const m = String(e?.message || e);
+            if (m.includes('FILE_REFERENCE')) {
+                console.warn('[prefetch] file ref expired, refreshing', trackId);
+                const refreshed = await _refreshTrackMsg(groupId, trackId);
+                if (refreshed) { msg = refreshed; continue; }
+                throw e;
             }
+            attempt++;
+            if (attempt >= MAX_ATTEMPTS || !_isTransientConnError(e)) throw e;
+            console.warn('[prefetch] transient error, retrying', trackId, attempt, '—', m);
+            // Backoff before the reconnect attempt; gives Chrome's socket pool
+            // a moment to drain so we don't hit ERR_INSUFFICIENT_RESOURCES on
+            // the very next attempt.
+            await new Promise(r => setTimeout(r, 500 * attempt));
+            try { await _ensureConnected(); } catch {}
         }
-        throw e;
     }
 }
 

@@ -70636,12 +70636,10 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       const savedSession = localStorage.getItem(SESSION_KEY) || "";
       const session = new import_sessions.StringSession(savedSession);
       client = new import_telegram.TelegramClient(session, API_ID, API_HASH, {
-        connectionRetries: 3,
-        // was 10 — too aggressive; fed the cascade
+        connectionRetries: 1,
         useWSS: true,
-        autoReconnect: true,
+        autoReconnect: false,
         retryDelay: 2e3
-        // was 1000 — slower backoff
       });
       try {
         client.setLogLevel?.("error");
@@ -70663,6 +70661,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       } catch (e) {
         console.warn("[telegram] connect failed:", e?.message || e);
       }
+      _installNetworkLifecycle();
       return client;
     })();
     try {
@@ -70670,6 +70669,26 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     } finally {
       _initPromise = null;
     }
+  }
+  function _installNetworkLifecycle() {
+    if (_lifecycleInstalled || typeof window === "undefined") return;
+    _lifecycleInstalled = true;
+    window.addEventListener("offline", async () => {
+      console.log("[telegram] offline \u2192 disconnecting");
+      try {
+        await client?.disconnect();
+      } catch {
+      }
+    });
+    window.addEventListener("online", () => {
+      console.log("[telegram] online \u2192 reconnecting");
+      _ensureConnected().catch(() => {
+      });
+    });
+  }
+  function _isTransientConnError(e) {
+    const m = String(e?.message || e || "").toLowerCase();
+    return m.includes("not-connected") || m.includes("not connected") || m.includes("disconnect") || m.includes("websocket was closed") || m.includes("connection closed") || m.includes("reconnect") || m.includes("timeout") || m.includes("econnreset") || m.includes("insufficient_resources");
   }
   async function _ensureConnected() {
     if (!client) await initClient();
@@ -71263,21 +71282,33 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         topicTitle: context.topicTitle
       });
     };
-    try {
-      await runDownload();
-      return "cached";
-    } catch (e) {
-      if (signal?.aborted) throw e;
-      const m = String(e?.message || e);
-      if (m.includes("FILE_REFERENCE")) {
-        console.warn("[prefetch] file ref expired, refreshing", trackId);
-        const refreshed = await _refreshTrackMsg(groupId, trackId);
-        if (refreshed) {
-          await runDownload();
-          return "cached";
+    const MAX_ATTEMPTS = 3;
+    let attempt = 0;
+    while (true) {
+      try {
+        await runDownload();
+        return "cached";
+      } catch (e) {
+        if (signal?.aborted) throw e;
+        const m = String(e?.message || e);
+        if (m.includes("FILE_REFERENCE")) {
+          console.warn("[prefetch] file ref expired, refreshing", trackId);
+          const refreshed = await _refreshTrackMsg(groupId, trackId);
+          if (refreshed) {
+            msg = refreshed;
+            continue;
+          }
+          throw e;
+        }
+        attempt++;
+        if (attempt >= MAX_ATTEMPTS || !_isTransientConnError(e)) throw e;
+        console.warn("[prefetch] transient error, retrying", trackId, attempt, "\u2014", m);
+        await new Promise((r) => setTimeout(r, 500 * attempt));
+        try {
+          await _ensureConnected();
+        } catch {
         }
       }
-      throw e;
     }
   }
   async function searchTracksInChat(groupId, topicId = null, query = "") {
@@ -72340,7 +72371,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _lifecycleInstalled, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -72387,6 +72418,7 @@ ${JSON.stringify(state)}`;
         }
       })();
       _initPromise = null;
+      _lifecycleInstalled = false;
       _reconnectPromise = null;
       CACHED_USER_KEY = "cached_user";
       _phoneCodeHash = null;
