@@ -75115,13 +75115,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           showToast("Link not ready yet");
           return;
         }
-        if (chat.kind === "user") {
-          const ok = await showConfirmModal(
-            `Send to ${chat.title}?`,
-            "The track and link will be sent to this contact."
-          );
-          if (!ok) return;
-        }
+        const destLabel = chat.kind === "user" ? "this contact" : chat.kind === "bot" ? "this bot" : chat.kind === "channel" ? "this channel" : "this group";
+        const ok = await showConfirmModal(
+          `Send to ${chat.title}?`,
+          `The track and link will be sent to ${destLabel}.`
+        );
+        if (!ok) return;
         const track = _shareCurrentTrack;
         rowEl.classList.add("sending");
         try {

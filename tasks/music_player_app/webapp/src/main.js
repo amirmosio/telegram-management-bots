@@ -2557,13 +2557,18 @@ async function _sendShareToChat(chat, rowEl) {
         showToast('Link not ready yet');
         return;
     }
-    if (chat.kind === 'user') {
-        const ok = await showConfirmModal(
-            `Send to ${chat.title}?`,
-            'The track and link will be sent to this contact.'
-        );
-        if (!ok) return;
-    }
+    // Always confirm before sending — regardless of destination kind.
+    // Tap-on-row was sending immediately for groups/channels/bots and
+    // people were posting tracks by accident.
+    const destLabel = chat.kind === 'user' ? 'this contact'
+        : chat.kind === 'bot' ? 'this bot'
+        : chat.kind === 'channel' ? 'this channel'
+        : 'this group';
+    const ok = await showConfirmModal(
+        `Send to ${chat.title}?`,
+        `The track and link will be sent to ${destLabel}.`
+    );
+    if (!ok) return;
     const track = _shareCurrentTrack;
     rowEl.classList.add('sending');
     try {
