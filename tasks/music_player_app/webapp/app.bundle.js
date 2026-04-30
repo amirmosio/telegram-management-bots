@@ -71332,27 +71332,60 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   async function translateLines(lines, toLang = "en") {
     if (!Array.isArray(lines) || lines.length === 0) return [];
     await _ensureConnected();
+    const out = lines.map(() => "");
     const idxs = [];
-    const items = [];
     for (let i = 0; i < lines.length; i++) {
-      const t = (lines[i] || "").trim();
-      if (t) {
-        idxs.push(i);
-        items.push(new import_tl.Api.TextWithEntities({ text: lines[i], entities: [] }));
+      if ((lines[i] || "").trim()) idxs.push(i);
+    }
+    if (idxs.length === 0) return out;
+    let anyOk = false;
+    let lastErr = null;
+    for (let s = 0; s < idxs.length; s += TRANSLATE_CHUNK) {
+      const chunkIdxs = idxs.slice(s, s + TRANSLATE_CHUNK);
+      try {
+        const results = await _translateBatch(chunkIdxs.map((i) => lines[i]), toLang);
+        for (let k = 0; k < chunkIdxs.length; k++) out[chunkIdxs[k]] = results[k] || "";
+        anyOk = true;
+      } catch (e) {
+        lastErr = e;
+        console.warn("[translate] chunk failed, retrying line-by-line:", e?.message || e);
+        for (const i of chunkIdxs) {
+          try {
+            const r = await _translateBatch([lines[i]], toLang);
+            out[i] = r[0] || "";
+            anyOk = true;
+          } catch (perLineErr) {
+            lastErr = perLineErr;
+          }
+        }
       }
     }
-    const out = lines.map(() => "");
-    if (items.length === 0) return out;
+    if (!anyOk && lastErr) throw lastErr;
+    return out;
+  }
+  async function _translateBatch(rawLines, toLang) {
+    const items = rawLines.map((t) => new import_tl.Api.TextWithEntities({ text: t, entities: [] }));
     const resp = await client.invoke(new import_tl.Api.messages.TranslateText({
       text: items,
       toLang
     }));
-    if (resp?.result) {
-      for (let i = 0; i < idxs.length; i++) {
-        out[idxs[i]] = resp.result[i]?.text || "";
+    const result = resp?.result || [];
+    return rawLines.map((_, i) => result[i]?.text || "");
+  }
+  function isLikelyEnglish(lines) {
+    if (!Array.isArray(lines)) return false;
+    let latin = 0;
+    let other = 0;
+    for (const line of lines) {
+      if (!line) continue;
+      for (const ch of line) {
+        const code = ch.codePointAt(0);
+        if (code >= 65 && code <= 90 || code >= 97 && code <= 122) latin++;
+        else if (code >= 880 && code !== 8203 && code !== 65279 && /\p{L}/u.test(ch)) other++;
       }
     }
-    return out;
+    if (latin + other < 30) return false;
+    return latin / (latin + other) >= 0.9;
   }
   function getCachedTracks(groupId, topicId = null) {
     return _tracksCache[_trackCacheKey(groupId, topicId)] || [];
@@ -72371,7 +72404,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _lifecycleInstalled, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _lifecycleInstalled, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, TRANSLATE_CHUNK, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -72424,6 +72457,7 @@ ${JSON.stringify(state)}`;
       _phoneCodeHash = null;
       PAGE_SIZE = 100;
       _totalCountCache = /* @__PURE__ */ new Map();
+      TRANSLATE_CHUNK = 20;
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
       SHARE_CHANNEL_TITLE = "TG Music Player Shared";
       SEARCH_BOTS = ["moozikestan_bot", "MusicArmenian_Bot"];
@@ -74513,7 +74547,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       function _updateTranslateButtonVisibility() {
         if (!btnTranslate) return;
         const hasLyrics = !!(_currentLyricsPayload.synced || _currentLyricsPayload.plain);
-        btnTranslate.style.display = hasLyrics ? "" : "none";
+        const lines = _currentLyricsPayload.synced ? _currentLyricsPayload.synced.map((l) => l.text || "") : _currentLyricsPayload.plain ? _currentLyricsPayload.plain.split("\n") : [];
+        const sourceIsEnglish = hasLyrics && isLikelyEnglish(lines);
+        btnTranslate.style.display = hasLyrics && !sourceIsEnglish ? "" : "none";
         btnTranslate.classList.toggle("active", translateOn);
       }
       function _rerenderLyrics() {
@@ -74530,6 +74566,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const trackId = currentTrackId;
         const groupId = playerGroupId;
         if (!trackId || !groupId) return;
+        const sourceLines = _currentLyricsPayload.synced ? _currentLyricsPayload.synced.map((l) => l.text || "") : _currentLyricsPayload.plain.split("\n");
+        if (sourceLines.length === 0) return;
+        if (isLikelyEnglish(sourceLines)) return;
         try {
           const row = await getCachedTrackRecord(groupId, trackId);
           if (currentTrackId !== trackId) return;
@@ -74541,8 +74580,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
         } catch {
         }
-        const sourceLines = _currentLyricsPayload.synced ? _currentLyricsPayload.synced.map((l) => l.text || "") : _currentLyricsPayload.plain.split("\n");
-        if (sourceLines.length === 0) return;
         _translationFetching = true;
         btnTranslate?.classList.add("loading");
         try {
@@ -74553,6 +74590,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           updateTrackTranslation(groupId, trackId, "en", lines).catch(() => {
           });
         } catch (e) {
+          console.warn("[translate] failed:", e?.message || e);
           if (currentTrackId === trackId) showToast("Translation failed");
         } finally {
           _translationFetching = false;

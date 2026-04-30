@@ -1104,32 +1104,86 @@ export async function searchTracksInChat(groupId, topicId = null, query = '') {
 // Translate an array of strings via Telegram's MTProto translate.
 // Source language is auto-detected. Returns a parallel array of
 // translations; empty input lines short-circuit to '' without round-trip.
+//
+// Telegram's messages.TranslateText is all-or-nothing per call: one bad
+// line, or a batch that's too large, throws and we'd lose every other
+// line in the request. Arabic / RTL lyrics in particular tripped this —
+// long lyric files exceeded Telegram's per-call size budget. We split
+// into chunks and on chunk failure retry that chunk one line at a time
+// so a single rejected line doesn't kill the rest of the lyrics.
+const TRANSLATE_CHUNK = 20;
 export async function translateLines(lines, toLang = 'en') {
     if (!Array.isArray(lines) || lines.length === 0) return [];
     await _ensureConnected();
 
+    const out = lines.map(() => '');
     const idxs = [];
-    const items = [];
     for (let i = 0; i < lines.length; i++) {
-        const t = (lines[i] || '').trim();
-        if (t) {
-            idxs.push(i);
-            items.push(new Api.TextWithEntities({ text: lines[i], entities: [] }));
+        if ((lines[i] || '').trim()) idxs.push(i);
+    }
+    if (idxs.length === 0) return out;
+
+    let anyOk = false;
+    let lastErr = null;
+    for (let s = 0; s < idxs.length; s += TRANSLATE_CHUNK) {
+        const chunkIdxs = idxs.slice(s, s + TRANSLATE_CHUNK);
+        try {
+            const results = await _translateBatch(chunkIdxs.map(i => lines[i]), toLang);
+            for (let k = 0; k < chunkIdxs.length; k++) out[chunkIdxs[k]] = results[k] || '';
+            anyOk = true;
+        } catch (e) {
+            lastErr = e;
+            console.warn('[translate] chunk failed, retrying line-by-line:', e?.message || e);
+            // Per-line fallback so one bad line doesn't void the batch.
+            for (const i of chunkIdxs) {
+                try {
+                    const r = await _translateBatch([lines[i]], toLang);
+                    out[i] = r[0] || '';
+                    anyOk = true;
+                } catch (perLineErr) {
+                    lastErr = perLineErr;
+                    // Leave out[i] = '' — line skipped.
+                }
+            }
         }
     }
-    const out = lines.map(() => '');
-    if (items.length === 0) return out;
+    if (!anyOk && lastErr) throw lastErr;
+    return out;
+}
 
+async function _translateBatch(rawLines, toLang) {
+    const items = rawLines.map(t => new Api.TextWithEntities({ text: t, entities: [] }));
     const resp = await client.invoke(new Api.messages.TranslateText({
         text: items,
         toLang,
     }));
-    if (resp?.result) {
-        for (let i = 0; i < idxs.length; i++) {
-            out[idxs[i]] = resp.result[i]?.text || '';
+    const result = resp?.result || [];
+    return rawLines.map((_, i) => result[i]?.text || '');
+}
+
+// Heuristic: lyrics are "already English" when the alphabetic characters
+// are overwhelmingly Latin. Counts ASCII letters vs other-script letters
+// across all lines and returns true when Latin >= 90% (with at least 30
+// alphabetic chars sampled, otherwise we don't know).
+//
+// Used by the translate button to no-op on English source instead of
+// burning an MTProto round-trip + showing a loader for nothing.
+export function isLikelyEnglish(lines) {
+    if (!Array.isArray(lines)) return false;
+    let latin = 0;
+    let other = 0;
+    for (const line of lines) {
+        if (!line) continue;
+        for (const ch of line) {
+            const code = ch.codePointAt(0);
+            if ((code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A)) latin++;
+            // Anything else that's a letter in another script: rough range
+            // covering Cyrillic, Greek, Arabic, Hebrew, CJK, Devanagari, etc.
+            else if (code >= 0x0370 && code !== 0x200B && code !== 0xFEFF && /\p{L}/u.test(ch)) other++;
         }
     }
-    return out;
+    if (latin + other < 30) return false;
+    return latin / (latin + other) >= 0.9;
 }
 
 export function getCachedTracks(groupId, topicId = null) {

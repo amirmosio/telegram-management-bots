@@ -1935,7 +1935,14 @@ function _renderLyricsResult(result) {
 function _updateTranslateButtonVisibility() {
     if (!btnTranslate) return;
     const hasLyrics = !!(_currentLyricsPayload.synced || _currentLyricsPayload.plain);
-    btnTranslate.style.display = hasLyrics ? '' : 'none';
+    // Hide the button when source is already English — there's nothing
+    // to translate to (we only translate to en) and the user shouldn't
+    // see a no-op control.
+    const lines = _currentLyricsPayload.synced
+        ? _currentLyricsPayload.synced.map(l => l.text || '')
+        : (_currentLyricsPayload.plain ? _currentLyricsPayload.plain.split('\n') : []);
+    const sourceIsEnglish = hasLyrics && tg.isLikelyEnglish(lines);
+    btnTranslate.style.display = (hasLyrics && !sourceIsEnglish) ? '' : 'none';
     btnTranslate.classList.toggle('active', translateOn);
 }
 
@@ -1956,6 +1963,16 @@ async function _ensureTranslation() {
     const groupId = playerGroupId;
     if (!trackId || !groupId) return;
 
+    const sourceLines = _currentLyricsPayload.synced
+        ? _currentLyricsPayload.synced.map(l => l.text || '')
+        : _currentLyricsPayload.plain.split('\n');
+    if (sourceLines.length === 0) return;
+
+    // Source already in English → no-op. The button is hidden in this
+    // case but we guard here too in case translateOn is sticky from a
+    // previous track.
+    if (tg.isLikelyEnglish(sourceLines)) return;
+
     // Cache hit?
     try {
         const row = await tg.getCachedTrackRecord(groupId, trackId);
@@ -1968,12 +1985,6 @@ async function _ensureTranslation() {
         }
     } catch {}
 
-    // Fetch fresh
-    const sourceLines = _currentLyricsPayload.synced
-        ? _currentLyricsPayload.synced.map(l => l.text || '')
-        : _currentLyricsPayload.plain.split('\n');
-    if (sourceLines.length === 0) return;
-
     _translationFetching = true;
     btnTranslate?.classList.add('loading');
     try {
@@ -1983,6 +1994,7 @@ async function _ensureTranslation() {
         _rerenderLyrics();
         tg.updateTrackTranslation(groupId, trackId, 'en', lines).catch(() => {});
     } catch (e) {
+        console.warn('[translate] failed:', e?.message || e);
         if (currentTrackId === trackId) showToast('Translation failed');
     } finally {
         _translationFetching = false;
