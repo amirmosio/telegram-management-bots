@@ -1176,11 +1176,19 @@ async function playTrack(index) {
     const track = playerTracks[index];
     currentTrackId = track.id;
 
+    // Consume the iOS sync-fast-path flag set by _advanceToNextSync. When
+    // true, audio.src and audio.play() were already kicked off in the same
+    // tick as the `ended` event — pausing and re-setting them here would
+    // kill the in-flight playback and lose the iOS audio-session privilege
+    // we just preserved.
+    const preloaded = _audioPreloaded;
+    _audioPreloaded = false;
+
     // ── Stop previous track ──
     // IMPORTANT: Do NOT clear audio.src here. Clearing it destroys the browser
     // audio session, which prevents play() from working when the screen is locked
     // or the app is in the background. The new src assignment below replaces it.
-    audio.pause();
+    if (!preloaded) audio.pause();
 
     // ── Instant UI reset ──
     updateSidebarHighlight();
@@ -1247,18 +1255,25 @@ async function playTrack(index) {
     _broadcastState('state');
 
     try {
-        // 1. Check memory + IDB cache (instant playback)
-        const cachedUrl = await tg.getCachedTrackUrl(playerGroupId, track.id);
-        if (_playGeneration !== gen) return;
-
-        if (cachedUrl) {
-            console.log('[player] cached →', track.title);
-            audio.src = cachedUrl;
-            await _playWithRetry(gen);
+        if (preloaded) {
+            // Already kicked off in onTrackEnded's sync fast-path — do not
+            // touch audio.src or call play() again, just let the existing
+            // 'playing' listener handle the rest.
+            console.log('[player] preloaded →', track.title);
         } else {
-            // 2. Try streaming via SW, with fallback to full download
-            console.log('[player] downloading →', track.title);
-            await _downloadAndPlay(track, gen);
+            // 1. Check memory + IDB cache (instant playback)
+            const cachedUrl = await tg.getCachedTrackUrl(playerGroupId, track.id);
+            if (_playGeneration !== gen) return;
+
+            if (cachedUrl) {
+                console.log('[player] cached →', track.title);
+                audio.src = cachedUrl;
+                await _playWithRetry(gen);
+            } else {
+                // 2. Try streaming via SW, with fallback to full download
+                console.log('[player] downloading →', track.title);
+                await _downloadAndPlay(track, gen);
+            }
         }
     } catch (e) {
         if (_playGeneration !== gen) return;
@@ -1767,8 +1782,43 @@ function onTrackEnded() {
         iconPause.style.display = 'none';
         return;
     }
-    if (repeatOn) { audio.currentTime = 0; audio.play().catch(() => {}); }
-    else nextTrack();
+    if (repeatOn) { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+
+    // iOS-friendly sync fast-path. iOS revokes the audio-session privilege
+    // the moment we `await` anything between the `ended` event and the next
+    // `audio.play()`, so when the phone is locked auto-advance silently
+    // stalls. If the next track's blob URL is already in memory (the
+    // prefetch from onPlaying already finished), set src and play()
+    // synchronously, then run the rest of the playTrack flow on the next
+    // tick — playTrack sees the preloaded flag and skips the redundant
+    // pause/src-reset/play.
+    if (_advanceToNextSync()) return;
+
+    nextTrack();
+}
+
+let _audioPreloaded = false;
+function _advanceToNextSync() {
+    const idx = _committedNextIndex;
+    if (idx < 0 || idx >= playerTracks.length) return false;
+    const trk = playerTracks[idx];
+    if (!trk) return false;
+    const url = tg.getCachedTrackUrlSync && tg.getCachedTrackUrlSync(playerGroupId, trk.id);
+    if (!url) return false;
+
+    // Sync: keep iOS audio session alive across the track boundary.
+    audio.src = url;
+    const p = audio.play();
+    if (p && p.catch) p.catch(() => {});
+
+    // Async: catch up the rest of the state. _audioPreloaded tells playTrack
+    // not to pause/re-set audio.src — which would kill the playback we just
+    // started and lose the iOS audio-session privilege.
+    if (shuffleOn) shuffleHistory.push(currentTrackIndex);
+    _committedNextIndex = -1;
+    _audioPreloaded = true;
+    playTrack(idx);
+    return true;
 }
 
 function togglePlay() {
@@ -1851,29 +1901,59 @@ audio.addEventListener('play', () => {
     iconPlay.style.display = 'none'; iconPause.style.display = 'block';
     updateMediaSession();
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+    updateMediaPositionState();
     _requestWakeLock();
 });
 audio.addEventListener('pause', () => {
     iconPlay.style.display = 'block'; iconPause.style.display = 'none';
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+    updateMediaPositionState();
     // Release wake lock only if user explicitly paused (not during track transitions)
     if (!_isLoadingAudio) _releaseWakeLock();
 });
+// Push the new duration to the OS as soon as it's known so the lock-screen
+// scrubber picks up the right range; iOS hides the scrubber until it has
+// duration + position state.
+audio.addEventListener('loadedmetadata', () => updateMediaPositionState());
+audio.addEventListener('seeked', () => updateMediaPositionState());
 audio.addEventListener('ended', onTrackEnded);
 
 // ══════════════════════════════════════
 //  MEDIA SESSION API (OS controls)
 // ══════════════════════════════════════
-// Register action handlers once at startup (iOS needs early registration)
-if ('mediaSession' in navigator) {
-    navigator.mediaSession.setActionHandler('play', () => { audio.play().catch(() => {}); });
-    navigator.mediaSession.setActionHandler('pause', () => { audio.pause(); });
-    navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
-    navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
-    try { navigator.mediaSession.setActionHandler('seekto', (d) => { if (d.seekTime != null && audio.duration) audio.currentTime = d.seekTime; }); } catch (e) {}
-    try { navigator.mediaSession.setActionHandler('seekbackward', (d) => { audio.currentTime = Math.max(0, audio.currentTime - (d.seekOffset || 10)); }); } catch (e) {}
-    try { navigator.mediaSession.setActionHandler('seekforward', (d) => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d.seekOffset || 10)); }); } catch (e) {}
+// All handlers are registered through _registerMediaSessionHandlers, which
+// is called once at startup AND on every metadata update. iOS drops handlers
+// across track changes / metadata refreshes — re-registering only nexttrack
+// and previoustrack (the previous behaviour) left seekto/seekforward/
+// seekbackward/play/pause unregistered after the first track change, which
+// is why dragging the lock-screen scrubber stopped working.
+function _registerMediaSessionHandlers() {
+    if (!('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    const set = (name, handler) => {
+        try { ms.setActionHandler(name, handler); } catch {}
+    };
+    set('play', () => { audio.play().catch(() => {}); });
+    set('pause', () => { audio.pause(); });
+    set('nexttrack', () => nextTrack());
+    set('previoustrack', () => prevTrack());
+    set('seekto', (d) => {
+        if (d == null || d.seekTime == null || !audio.duration) return;
+        const t = Math.max(0, Math.min(audio.duration, d.seekTime));
+        if (d.fastSeek && typeof audio.fastSeek === 'function') audio.fastSeek(t);
+        else audio.currentTime = t;
+        updateMediaPositionState();
+    });
+    set('seekbackward', (d) => {
+        audio.currentTime = Math.max(0, audio.currentTime - ((d && d.seekOffset) || 10));
+        updateMediaPositionState();
+    });
+    set('seekforward', (d) => {
+        audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + ((d && d.seekOffset) || 10));
+        updateMediaPositionState();
+    });
 }
+_registerMediaSessionHandlers();
 
 function updateMediaSession() {
     if (!('mediaSession' in navigator)) return;
@@ -1893,9 +1973,8 @@ function updateMediaSession() {
         artwork: artworkList,
     });
 
-    // Re-register handlers on each metadata update (iOS requires this)
-    navigator.mediaSession.setActionHandler('nexttrack', () => nextTrack());
-    navigator.mediaSession.setActionHandler('previoustrack', () => prevTrack());
+    // Re-register every handler. iOS requires this after metadata changes.
+    _registerMediaSessionHandlers();
 }
 
 function updateMediaPositionState() {

@@ -71410,6 +71410,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return null;
   }
+  function getCachedTrackUrlSync(groupId, trackId) {
+    return _blobCache[_trackKey(groupId, trackId)] || null;
+  }
   async function* iterTrackDownload(groupId, trackId, offset = 0, signal = null) {
     const msg = _msgCache[`${groupId}:${trackId}`];
     if (!msg) throw new Error("Track not in cache");
@@ -73881,7 +73884,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         currentTrackIndex = index;
         const track = playerTracks[index];
         currentTrackId = track.id;
-        audio.pause();
+        const preloaded = _audioPreloaded;
+        _audioPreloaded = false;
+        if (!preloaded) audio.pause();
         updateSidebarHighlight();
         scrollActiveTrackIntoView();
         _updateAddButton();
@@ -73926,15 +73931,19 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         fetchArtworkForTrack(track, gen);
         _broadcastState("state");
         try {
-          const cachedUrl = await getCachedTrackUrl(playerGroupId, track.id);
-          if (_playGeneration !== gen) return;
-          if (cachedUrl) {
-            console.log("[player] cached \u2192", track.title);
-            audio.src = cachedUrl;
-            await _playWithRetry(gen);
+          if (preloaded) {
+            console.log("[player] preloaded \u2192", track.title);
           } else {
-            console.log("[player] downloading \u2192", track.title);
-            await _downloadAndPlay(track, gen);
+            const cachedUrl = await getCachedTrackUrl(playerGroupId, track.id);
+            if (_playGeneration !== gen) return;
+            if (cachedUrl) {
+              console.log("[player] cached \u2192", track.title);
+              audio.src = cachedUrl;
+              await _playWithRetry(gen);
+            } else {
+              console.log("[player] downloading \u2192", track.title);
+              await _downloadAndPlay(track, gen);
+            }
           }
         } catch (e) {
           if (_playGeneration !== gen) return;
@@ -74379,7 +74388,28 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           audio.currentTime = 0;
           audio.play().catch(() => {
           });
-        } else nextTrack();
+          return;
+        }
+        if (_advanceToNextSync()) return;
+        nextTrack();
+      }
+      var _audioPreloaded = false;
+      function _advanceToNextSync() {
+        const idx = _committedNextIndex;
+        if (idx < 0 || idx >= playerTracks.length) return false;
+        const trk = playerTracks[idx];
+        if (!trk) return false;
+        const url = getCachedTrackUrlSync && getCachedTrackUrlSync(playerGroupId, trk.id);
+        if (!url) return false;
+        audio.src = url;
+        const p = audio.play();
+        if (p && p.catch) p.catch(() => {
+        });
+        if (shuffleOn) shuffleHistory.push(currentTrackIndex);
+        _committedNextIndex = -1;
+        _audioPreloaded = true;
+        playTrack(idx);
+        return true;
       }
       function togglePlay() {
         if (_isLoadingAudio) return;
@@ -74458,44 +74488,54 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         iconPause.style.display = "block";
         updateMediaSession();
         if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+        updateMediaPositionState();
         _requestWakeLock();
       });
       audio.addEventListener("pause", () => {
         iconPlay.style.display = "block";
         iconPause.style.display = "none";
         if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
+        updateMediaPositionState();
         if (!_isLoadingAudio) _releaseWakeLock();
       });
+      audio.addEventListener("loadedmetadata", () => updateMediaPositionState());
+      audio.addEventListener("seeked", () => updateMediaPositionState());
       audio.addEventListener("ended", onTrackEnded);
-      if ("mediaSession" in navigator) {
-        navigator.mediaSession.setActionHandler("play", () => {
+      function _registerMediaSessionHandlers() {
+        if (!("mediaSession" in navigator)) return;
+        const ms = navigator.mediaSession;
+        const set = (name, handler) => {
+          try {
+            ms.setActionHandler(name, handler);
+          } catch {
+          }
+        };
+        set("play", () => {
           audio.play().catch(() => {
           });
         });
-        navigator.mediaSession.setActionHandler("pause", () => {
+        set("pause", () => {
           audio.pause();
         });
-        navigator.mediaSession.setActionHandler("nexttrack", () => nextTrack());
-        navigator.mediaSession.setActionHandler("previoustrack", () => prevTrack());
-        try {
-          navigator.mediaSession.setActionHandler("seekto", (d) => {
-            if (d.seekTime != null && audio.duration) audio.currentTime = d.seekTime;
-          });
-        } catch (e) {
-        }
-        try {
-          navigator.mediaSession.setActionHandler("seekbackward", (d) => {
-            audio.currentTime = Math.max(0, audio.currentTime - (d.seekOffset || 10));
-          });
-        } catch (e) {
-        }
-        try {
-          navigator.mediaSession.setActionHandler("seekforward", (d) => {
-            audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d.seekOffset || 10));
-          });
-        } catch (e) {
-        }
+        set("nexttrack", () => nextTrack());
+        set("previoustrack", () => prevTrack());
+        set("seekto", (d) => {
+          if (d == null || d.seekTime == null || !audio.duration) return;
+          const t = Math.max(0, Math.min(audio.duration, d.seekTime));
+          if (d.fastSeek && typeof audio.fastSeek === "function") audio.fastSeek(t);
+          else audio.currentTime = t;
+          updateMediaPositionState();
+        });
+        set("seekbackward", (d) => {
+          audio.currentTime = Math.max(0, audio.currentTime - (d && d.seekOffset || 10));
+          updateMediaPositionState();
+        });
+        set("seekforward", (d) => {
+          audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d && d.seekOffset || 10));
+          updateMediaPositionState();
+        });
       }
+      _registerMediaSessionHandlers();
       function updateMediaSession() {
         if (!("mediaSession" in navigator)) return;
         const track = playerTracks[currentTrackIndex];
@@ -74511,8 +74551,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           album: browseGroupTitle || playlistGroupTitle || "Music",
           artwork: artworkList
         });
-        navigator.mediaSession.setActionHandler("nexttrack", () => nextTrack());
-        navigator.mediaSession.setActionHandler("previoustrack", () => prevTrack());
+        _registerMediaSessionHandlers();
       }
       function updateMediaPositionState() {
         if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;

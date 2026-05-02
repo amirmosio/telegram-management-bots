@@ -1218,6 +1218,16 @@ export async function getCachedTrackUrl(groupId, trackId) {
     return null;
 }
 
+// Synchronous in-memory lookup. Returns the blob URL only if the next-track
+// prefetch has already populated _blobCache; never touches IDB. Used by the
+// onTrackEnded sync fast-path: iOS revokes the audio-session privilege the
+// moment we await anything between `ended` and the next audio.play(), so we
+// must read the URL synchronously to keep auto-advance working when the
+// phone is locked.
+export function getCachedTrackUrlSync(groupId, trackId) {
+    return _blobCache[_trackKey(groupId, trackId)] || null;
+}
+
 // Async generator: yields Uint8Array chunks for a track via iterDownload.
 // `offset` is in bytes and must be 512 KiB-aligned (caller's responsibility).
 // Pass an AbortSignal to stop mid-download — critical when the caller is
