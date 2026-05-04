@@ -1944,14 +1944,15 @@ function _registerMediaSessionHandlers() {
         else audio.currentTime = t;
         updateMediaPositionState();
     });
-    set('seekbackward', (d) => {
-        audio.currentTime = Math.max(0, audio.currentTime - ((d && d.seekOffset) || 10));
-        updateMediaPositionState();
-    });
-    set('seekforward', (d) => {
-        audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + ((d && d.seekOffset) || 10));
-        updateMediaPositionState();
-    });
+    // Deliberately NOT registering seekforward / seekbackward. When they are
+    // registered alongside nexttrack/previoustrack, iOS replaces the prev/
+    // next-track lock-screen buttons with ±15 s skip buttons. The scrubber's
+    // seekto handler already covers fine-grained seeking, so dropping these
+    // keeps prev/next visible as the primary controls. Explicitly null out
+    // in case a previous bundle (v=123) registered them and the page state
+    // still remembers it after the SW serves the new bundle.
+    set('seekbackward', null);
+    set('seekforward', null);
 }
 _registerMediaSessionHandlers();
 

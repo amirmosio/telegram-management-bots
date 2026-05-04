@@ -74526,14 +74526,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           else audio.currentTime = t;
           updateMediaPositionState();
         });
-        set("seekbackward", (d) => {
-          audio.currentTime = Math.max(0, audio.currentTime - (d && d.seekOffset || 10));
-          updateMediaPositionState();
-        });
-        set("seekforward", (d) => {
-          audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + (d && d.seekOffset || 10));
-          updateMediaPositionState();
-        });
+        set("seekbackward", null);
+        set("seekforward", null);
       }
       _registerMediaSessionHandlers();
       function updateMediaSession() {
