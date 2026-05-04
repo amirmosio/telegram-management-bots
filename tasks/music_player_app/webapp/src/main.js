@@ -668,10 +668,36 @@ async function _recStartRecording() {
     recognizeResult.innerHTML = '';
     recognizeStatus.textContent = 'Listening…';
     btnRecognizeRecord.classList.add('recording');
+
+    // Fast-path: if the browser already has a persisted "deny" decision for
+    // this origin, getUserMedia will reject silently without showing a
+    // prompt. Detect that up-front via the Permissions API so we can skip
+    // the doomed call and show actionable steps instead.
+    let permState = null;
+    try {
+        const status = await navigator.permissions.query({ name: 'microphone' });
+        permState = status.state; // 'granted' | 'denied' | 'prompt'
+    } catch { /* not supported (Safari < 16, some Android WebViews) — fall through */ }
+
+    if (permState === 'denied') {
+        _showMicBlockedHelp();
+        btnRecognizeRecord.classList.remove('recording');
+        return;
+    }
+
     try {
         _recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-        recognizeStatus.textContent = 'Microphone access denied';
+        const name = e && e.name;
+        if (name === 'NotAllowedError' || name === 'SecurityError') {
+            // User just blocked it, or the browser had a persisted deny we
+            // couldn't detect (Permissions API not available).
+            _showMicBlockedHelp();
+        } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
+            recognizeStatus.textContent = 'No microphone found on this device.';
+        } else {
+            recognizeStatus.textContent = 'Could not access microphone. Tap to try again.';
+        }
         btnRecognizeRecord.classList.remove('recording');
         return;
     }
@@ -688,6 +714,42 @@ async function _recStartRecording() {
     _recAutoStopTimer = setTimeout(() => {
         if (_recMediaRec?.state === 'recording') _recMediaRec.stop();
     }, 7000);
+}
+
+// Render platform-tailored steps for clearing a persisted mic block. There
+// is no API to programmatically re-prompt: once the user picks "Block",
+// every subsequent getUserMedia rejects silently. So the best we can do is
+// tell them exactly where to click + give them a Try again button so the
+// moment they fix it, one tap reconnects without reloading.
+function _showMicBlockedHelp() {
+    const ua = navigator.userAgent || '';
+    const standalone = window.matchMedia('(display-mode: standalone)').matches
+        || window.navigator.standalone === true;
+    let steps;
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+        steps = standalone
+            ? 'iOS Settings &rarr; <b>Music Player</b> &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>.'
+            : 'Safari &rarr; tap <b>aA</b> in the address bar &rarr; <b>Website Settings</b> &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.';
+    } else if (/Android/i.test(ua)) {
+        steps = standalone
+            ? 'Android Settings &rarr; Apps &rarr; <b>Music Player</b> &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>.'
+            : 'Chrome &rarr; tap the <b>lock icon</b> next to the URL &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.';
+    } else {
+        steps = 'Click the <b>lock icon</b> in the address bar &rarr; Site settings &rarr; Microphone &rarr; <b>Allow</b>, then click <b>Try again</b>.';
+    }
+    recognizeStatus.innerHTML = '';
+    recognizeResult.innerHTML = `
+        <div class="mic-blocked">
+            <div class="mic-blocked-title">Microphone is blocked</div>
+            <div class="mic-blocked-steps">${steps}</div>
+            <button id="mic-blocked-retry" class="text-btn accent">Try again</button>
+        </div>
+    `;
+    const btn = document.getElementById('mic-blocked-retry');
+    if (btn) btn.addEventListener('click', () => {
+        recognizeResult.innerHTML = '';
+        _recStartRecording();
+    });
 }
 
 function _recStopRecording(silent = false) {

@@ -73448,10 +73448,28 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         recognizeResult.innerHTML = "";
         recognizeStatus.textContent = "Listening\u2026";
         btnRecognizeRecord.classList.add("recording");
+        let permState = null;
+        try {
+          const status = await navigator.permissions.query({ name: "microphone" });
+          permState = status.state;
+        } catch {
+        }
+        if (permState === "denied") {
+          _showMicBlockedHelp();
+          btnRecognizeRecord.classList.remove("recording");
+          return;
+        }
         try {
           _recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         } catch (e) {
-          recognizeStatus.textContent = "Microphone access denied";
+          const name = e && e.name;
+          if (name === "NotAllowedError" || name === "SecurityError") {
+            _showMicBlockedHelp();
+          } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+            recognizeStatus.textContent = "No microphone found on this device.";
+          } else {
+            recognizeStatus.textContent = "Could not access microphone. Tap to try again.";
+          }
           btnRecognizeRecord.classList.remove("recording");
           return;
         }
@@ -73467,6 +73485,31 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _recAutoStopTimer = setTimeout(() => {
           if (_recMediaRec?.state === "recording") _recMediaRec.stop();
         }, 7e3);
+      }
+      function _showMicBlockedHelp() {
+        const ua = navigator.userAgent || "";
+        const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+        let steps;
+        if (/iPhone|iPad|iPod/i.test(ua)) {
+          steps = standalone ? "iOS Settings &rarr; <b>Music Player</b> &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>." : "Safari &rarr; tap <b>aA</b> in the address bar &rarr; <b>Website Settings</b> &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.";
+        } else if (/Android/i.test(ua)) {
+          steps = standalone ? "Android Settings &rarr; Apps &rarr; <b>Music Player</b> &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>." : "Chrome &rarr; tap the <b>lock icon</b> next to the URL &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.";
+        } else {
+          steps = "Click the <b>lock icon</b> in the address bar &rarr; Site settings &rarr; Microphone &rarr; <b>Allow</b>, then click <b>Try again</b>.";
+        }
+        recognizeStatus.innerHTML = "";
+        recognizeResult.innerHTML = `
+        <div class="mic-blocked">
+            <div class="mic-blocked-title">Microphone is blocked</div>
+            <div class="mic-blocked-steps">${steps}</div>
+            <button id="mic-blocked-retry" class="text-btn accent">Try again</button>
+        </div>
+    `;
+        const btn = document.getElementById("mic-blocked-retry");
+        if (btn) btn.addEventListener("click", () => {
+          recognizeResult.innerHTML = "";
+          _recStartRecording();
+        });
       }
       function _recStopRecording(silent = false) {
         clearTimeout(_recAutoStopTimer);
