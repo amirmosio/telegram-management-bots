@@ -12,6 +12,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "aubiojs": "^0.2.1",
     "browser-id3-writer": "^6.3.1",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",

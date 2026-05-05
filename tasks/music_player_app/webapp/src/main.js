@@ -5,6 +5,7 @@
 import * as tg from './telegram.js';
 import { searchLyrics, parseTrackInfo } from './lyrics.js';
 import { searchArtwork } from './artwork.js';
+import aubio from 'aubiojs';
 
 // ══════════════════════════════════════
 //  STATE
@@ -3602,75 +3603,52 @@ async function _hypAnalyzeCurrentTrack() {
     }
 }
 
-// Onset detector: rectified energy-flux peak picking with adaptive threshold.
-// Yields actual note-attack times (s), not a constant BPM, so flash density
-// follows the music — handles classical / rubato / dynamic passages naturally.
+// Onset detector backed by aubio (WASM). aubio's HFC algorithm is the
+// reference implementation in libaubio — battle-tested across percussion
+// and tonal music. We feed mono hopSize-sample chunks; aubio handles
+// windowing, FFT, peak picking, silence gating internally.
+let _aubioMod = null;
+async function _hypGetAubio() {
+    if (_aubioMod) return _aubioMod;
+    _aubioMod = await aubio();
+    return _aubioMod;
+}
+
 async function _hypDetectOnsets(audioBuffer, stillValid) {
     const sr = audioBuffer.sampleRate;
+    const Aubio = await _hypGetAubio();
+    if (stillValid && !stillValid()) return [];
+
+    const bufferSize = 1024;
+    const hopSize = 512;
+
+    const onset = new Aubio.Onset(bufferSize, hopSize, sr);
+    onset.setThreshold(0.25);   // 0 = most sensitive, 1 = strict; 0.25 = good balance for mixed genres
+    onset.setSilence(-55);      // dB; ignore peaks in near-silence
+
     const ch0 = audioBuffer.getChannelData(0);
     const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
     const N = ch0.length;
 
-    const frameSize = 1024;
-    const hopSize = 512;
-    const numFrames = Math.max(0, Math.floor((N - frameSize) / hopSize) + 1);
-    if (numFrames < 4) return [];
-
-    // Frame energy (RMS). Yield to the event loop periodically so the
-    // analysis doesn't stall the UI on long tracks.
-    const energy = new Float32Array(numFrames);
+    const onsets = [];
+    const chunk = new Float32Array(hopSize);
+    let hopCount = 0;
     const yieldEvery = 2048;
-    for (let f = 0; f < numFrames; f++) {
-        const start = f * hopSize;
-        let sum = 0;
+
+    for (let pos = 0; pos + hopSize <= N; pos += hopSize) {
         if (ch1) {
-            for (let i = 0; i < frameSize; i++) {
-                const s = (ch0[start + i] + ch1[start + i]) * 0.5;
-                sum += s * s;
-            }
+            for (let i = 0; i < hopSize; i++) chunk[i] = (ch0[pos + i] + ch1[pos + i]) * 0.5;
         } else {
-            for (let i = 0; i < frameSize; i++) {
-                const s = ch0[start + i];
-                sum += s * s;
-            }
+            for (let i = 0; i < hopSize; i++) chunk[i] = ch0[pos + i];
         }
-        energy[f] = Math.sqrt(sum / frameSize);
-        if ((f & (yieldEvery - 1)) === yieldEvery - 1) {
+        if (onset.do(chunk)) onsets.push(onset.getLastS());
+
+        if ((++hopCount & (yieldEvery - 1)) === 0) {
             await new Promise(r => setTimeout(r, 0));
             if (stillValid && !stillValid()) return [];
         }
     }
 
-    // Onset detection function: half-wave rectified energy difference.
-    const odf = new Float32Array(numFrames);
-    for (let f = 1; f < numFrames; f++) {
-        const d = energy[f] - energy[f - 1];
-        if (d > 0) odf[f] = d;
-    }
-
-    // Adaptive peak picking over a ~1-second window.
-    const halfWin = Math.max(1, Math.round(0.5 * sr / hopSize));
-    const minGap = Math.max(1, Math.round(0.05 * sr / hopSize)); // 50 ms minimum spacing
-    const onsets = [];
-    let lastPeak = -minGap;
-
-    for (let f = 1; f < numFrames - 1; f++) {
-        if (odf[f] < odf[f - 1] || odf[f] < odf[f + 1]) continue;
-        const a = Math.max(0, f - halfWin);
-        const b = Math.min(numFrames, f + halfWin);
-        let mean = 0;
-        for (let i = a; i < b; i++) mean += odf[i];
-        mean /= (b - a);
-        let varSum = 0;
-        for (let i = a; i < b; i++) { const d = odf[i] - mean; varSum += d * d; }
-        const stddev = Math.sqrt(varSum / (b - a));
-        if (odf[f] > mean + 1.6 * stddev && odf[f] > 0.0015) {
-            if (f - lastPeak >= minGap) {
-                onsets.push((f * hopSize) / sr);
-                lastPeak = f;
-            }
-        }
-    }
     return onsets;
 }
 
@@ -3698,7 +3676,11 @@ function _hypTick() {
 
         // ── Onset-driven flash spikes (once analysis is ready) ──
         if (_hypBeats) {
-            const t = audio.currentTime + _HYP_LATENCY_OFFSET;
+            // audio.currentTime is the decoder position; the speaker is
+            // outputLatency seconds behind that. Subtract so flashes line
+            // up with what the user actually hears, not what's about to play.
+            const outLat = (_hypAudioCtx && _hypAudioCtx.outputLatency) || 0;
+            const t = audio.currentTime - outLat + _HYP_LATENCY_OFFSET;
             const beats = _hypBeats.beatTimes;
             if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
             while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
