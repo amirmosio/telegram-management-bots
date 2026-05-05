@@ -3579,6 +3579,19 @@ let _hypNextBeatIdx = 0;
 // Web Audio anymore (see comment block at top), so use a typical default.
 const _HYP_LATENCY_OFFSET = 0.06;
 const _HYP_BEAT_DECAY = 0.18;
+// WCAG 2.3.1: no more than three flashes per second. 333 ms gap caps the
+// onset stream at 3 Hz so dense drum tracks can't strobe into the seizure-
+// risk band (commonly cited as 3–60 Hz, peak risk around 15–25 Hz).
+const _HYP_MIN_BEAT_GAP_S = 0.333;
+
+function _hypThinOnsets(times, minGapS) {
+    if (!times || times.length === 0) return times;
+    const out = [times[0]];
+    for (let i = 1; i < times.length; i++) {
+        if (times[i] - out[out.length - 1] >= minGapS) out.push(times[i]);
+    }
+    return out;
+}
 
 // Hold-to-exit gesture state
 let _hypHoldTimer = null;
@@ -3621,9 +3634,15 @@ async function _hypAnalyzeCurrentTrack() {
         const audioBuffer = await ctx.decodeAudioData(buf);
         if (myToken !== _hypAnalysisToken) return;
 
-        const beatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
+        const rawBeatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
         if (myToken !== _hypAnalysisToken) return;
 
+        // Thin onsets to <=3 Hz: faster strobing risks photosensitive
+        // seizures (WCAG 2.3.1 caps at 3 flashes/second). Greedy keep-then-
+        // skip preserves the FIRST onset of any tight cluster, dropping the
+        // rest, which keeps the visual on the strong beats and discards the
+        // sub-beat fills.
+        const beatTimes = _hypThinOnsets(rawBeatTimes, _HYP_MIN_BEAT_GAP_S);
         const envelope = _hypComputeEnvelope(audioBuffer);
 
         const dur = audioBuffer.duration;
@@ -3631,7 +3650,7 @@ async function _hypAnalyzeCurrentTrack() {
         const data = { beatTimes, envelope, beatRate };
         _hypBeatCache.set(trackId, data);
         if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
-        console.log('[hypnotise] analyzed track', trackId, '→', beatTimes.length, 'onsets over', dur.toFixed(1), 's (avg', beatRate.toFixed(2), '/s)');
+        console.log('[hypnotise] analyzed track', trackId, '→', rawBeatTimes.length, 'onsets,', beatTimes.length, 'after thinning over', dur.toFixed(1), 's (avg', beatRate.toFixed(2), '/s)');
     } catch (e) {
         console.warn('[hypnotise] analysis failed for track', trackId, e);
     } finally {

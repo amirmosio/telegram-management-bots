@@ -78473,6 +78473,15 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _hypNextBeatIdx = 0;
       var _HYP_LATENCY_OFFSET = 0.06;
       var _HYP_BEAT_DECAY = 0.18;
+      var _HYP_MIN_BEAT_GAP_S = 0.333;
+      function _hypThinOnsets(times, minGapS) {
+        if (!times || times.length === 0) return times;
+        const out = [times[0]];
+        for (let i = 1; i < times.length; i++) {
+          if (times[i] - out[out.length - 1] >= minGapS) out.push(times[i]);
+        }
+        return out;
+      }
       var _hypHoldTimer = null;
       var _hypHoldStart = null;
       var _HYP_HOLD_MS = 600;
@@ -78508,15 +78517,16 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           ctx = new (window.AudioContext || window.webkitAudioContext)();
           const audioBuffer = await ctx.decodeAudioData(buf);
           if (myToken !== _hypAnalysisToken) return;
-          const beatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
+          const rawBeatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
           if (myToken !== _hypAnalysisToken) return;
+          const beatTimes = _hypThinOnsets(rawBeatTimes, _HYP_MIN_BEAT_GAP_S);
           const envelope = _hypComputeEnvelope(audioBuffer);
           const dur = audioBuffer.duration;
           const beatRate = beatTimes.length / Math.max(1, dur);
           const data = { beatTimes, envelope, beatRate };
           _hypBeatCache.set(trackId, data);
           if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
-          console.log("[hypnotise] analyzed track", trackId, "\u2192", beatTimes.length, "onsets over", dur.toFixed(1), "s (avg", beatRate.toFixed(2), "/s)");
+          console.log("[hypnotise] analyzed track", trackId, "\u2192", rawBeatTimes.length, "onsets,", beatTimes.length, "after thinning over", dur.toFixed(1), "s (avg", beatRate.toFixed(2), "/s)");
         } catch (e) {
           console.warn("[hypnotise] analysis failed for track", trackId, e);
         } finally {
