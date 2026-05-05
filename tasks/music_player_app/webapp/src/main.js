@@ -3528,46 +3528,26 @@ const btnHypnotise = $('btn-hypnotise');
 const hypnotiseOverlay = $('hypnotise-overlay');
 const hypnotiseFlashEl = $('hypnotise-flash');
 
-let _hypAudioCtx = null;
-let _hypAnalyser = null;
-let _hypSrcNode = null;
-let _hypFreqData = null;
 let _hypRafId = null;
 let _hypFlash = 0;
 
 // Pre-analysed onset schedule for the currently playing track.
-const _hypBeatCache = new Map(); // trackId → { beatTimes: number[] }
+const _hypBeatCache = new Map(); // trackId → { beatTimes: number[], envelope: { samples, hz } }
 let _hypAnalysisToken = 0;       // bumps to invalidate stale in-flight analyses
 let _hypBeats = null;            // active schedule, or null = not ready
 let _hypNextBeatIdx = 0;
-const _HYP_LATENCY_OFFSET = 0;   // seconds; positive = flash later (tune per device if needed)
-const _HYP_BEAT_DECAY = 0.18;    // seconds for flash to decay 1→0
+// Audio output adds a small lag between audio.currentTime (decoder position)
+// and what the speaker actually emits. Used to be read from
+// AudioContext.outputLatency, but we deliberately don't route audio through
+// Web Audio anymore (see comment block at top), so use a typical default.
+const _HYP_LATENCY_OFFSET = 0.06;
+const _HYP_BEAT_DECAY = 0.18;
 
 // Hold-to-exit gesture state
 let _hypHoldTimer = null;
 let _hypHoldStart = null;
 const _HYP_HOLD_MS = 600;
 const _HYP_HOLD_MOVE_PX = 10;
-
-function _hypBuildAudioGraph() {
-    if (_hypAudioCtx) return true;
-    const Ctor = window.AudioContext || window.webkitAudioContext;
-    if (!Ctor) return false;
-    try {
-        _hypAudioCtx = new Ctor();
-        _hypSrcNode = _hypAudioCtx.createMediaElementSource(audio);
-        _hypAnalyser = _hypAudioCtx.createAnalyser();
-        _hypAnalyser.fftSize = 1024;
-        _hypAnalyser.smoothingTimeConstant = 0.6;
-        _hypSrcNode.connect(_hypAnalyser);
-        _hypAnalyser.connect(_hypAudioCtx.destination);
-        _hypFreqData = new Uint8Array(_hypAnalyser.frequencyBinCount);
-        return true;
-    } catch (e) {
-        _hypAudioCtx = null; _hypAnalyser = null; _hypSrcNode = null;
-        return false;
-    }
-}
 
 async function _hypAnalyzeCurrentTrack() {
     const trackId = currentTrackId;
@@ -3580,27 +3560,72 @@ async function _hypAnalyzeCurrentTrack() {
     const src = audio.currentSrc || audio.src;
     if (!src) return;
 
+    // Throwaway AudioContext used ONLY for decodeAudioData. We never connect
+    // anything to its destination and close it as soon as we have the buffer,
+    // so the `<audio>` element keeps playing through the browser's native
+    // audio path (which survives backgrounding; Web Audio doesn't on mobile).
+    let ctx = null;
     try {
         const res = await fetch(src);
         if (!res.ok) throw new Error('fetch ' + res.status);
         const buf = await res.arrayBuffer();
         if (myToken !== _hypAnalysisToken) return;
 
-        const ctx = _hypAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
         const audioBuffer = await ctx.decodeAudioData(buf);
         if (myToken !== _hypAnalysisToken) return;
 
         const beatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
         if (myToken !== _hypAnalysisToken) return;
 
-        const data = { beatTimes };
+        const envelope = _hypComputeEnvelope(audioBuffer);
+
+        const data = { beatTimes, envelope };
         _hypBeatCache.set(trackId, data);
         if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
         const dur = audioBuffer.duration;
         console.log('[hypnotise] analyzed track', trackId, '→', beatTimes.length, 'onsets over', dur.toFixed(1), 's (avg', (beatTimes.length / dur).toFixed(2), '/s)');
     } catch (e) {
         console.warn('[hypnotise] analysis failed for track', trackId, e);
+    } finally {
+        if (ctx && ctx.close) ctx.close().catch(() => {});
     }
+}
+
+// Loudness envelope sampled at ~30 Hz. Drives the continuous amplitude pulse
+// at audio.currentTime, replacing the live AnalyserNode so we don't need to
+// route the audio element through Web Audio.
+function _hypComputeEnvelope(audioBuffer) {
+    const ENV_HZ = 30;
+    const sr = audioBuffer.sampleRate;
+    const stride = Math.max(1, Math.floor(sr / ENV_HZ));
+    const ch0 = audioBuffer.getChannelData(0);
+    const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+    const N = ch0.length;
+    const numSamples = Math.max(1, Math.floor(N / stride));
+    const samples = new Float32Array(numSamples);
+    let max = 0.0001;
+    for (let i = 0; i < numSamples; i++) {
+        const start = i * stride;
+        let sum = 0;
+        if (ch1) {
+            for (let j = 0; j < stride; j++) {
+                const s = (ch0[start + j] + ch1[start + j]) * 0.5;
+                sum += s * s;
+            }
+        } else {
+            for (let j = 0; j < stride; j++) {
+                const s = ch0[start + j];
+                sum += s * s;
+            }
+        }
+        const rms = Math.sqrt(sum / stride);
+        samples[i] = rms;
+        if (rms > max) max = rms;
+    }
+    // Normalise so the loudest passage maps to 1.0.
+    for (let i = 0; i < numSamples; i++) samples[i] /= max;
+    return { samples, hz: ENV_HZ };
 }
 
 // Onset detector backed by aubio (WASM). aubio's HFC algorithm is the
@@ -3662,40 +3687,33 @@ function _hypTick() {
     _hypRafId = requestAnimationFrame(_hypTick);
 
     let target = 0;
-    if (!audio.paused && audio.readyState >= 2) {
-        // ── Continuous amplitude pulse (always on while playing) ──
-        // Tracks loudness so sustained notes / sparse passages still breathe.
-        if (_hypAnalyser) {
-            _hypAnalyser.getByteFrequencyData(_hypFreqData);
-            let sum = 0;
-            const n = Math.min(32, _hypFreqData.length);
-            for (let i = 1; i < n; i++) sum += _hypFreqData[i];
-            const avg = sum / ((n - 1) * 255);
-            target = 0.03 + 0.35 * avg;
+    if (!audio.paused && audio.readyState >= 2 && _hypBeats) {
+        // Compensate for the small lag between audio.currentTime and the
+        // sound actually reaching the speaker.
+        const t = audio.currentTime - _HYP_LATENCY_OFFSET;
+
+        // ── Continuous amplitude pulse from precomputed envelope ──
+        const env = _hypBeats.envelope;
+        if (env && env.samples.length) {
+            const idx = Math.max(0, Math.min(env.samples.length - 1, Math.floor(t * env.hz)));
+            target = 0.03 + 0.4 * env.samples[idx];
         }
 
-        // ── Onset-driven flash spikes (once analysis is ready) ──
-        if (_hypBeats) {
-            // audio.currentTime is the decoder position; the speaker is
-            // outputLatency seconds behind that. Subtract so flashes line
-            // up with what the user actually hears, not what's about to play.
-            const outLat = (_hypAudioCtx && _hypAudioCtx.outputLatency) || 0;
-            const t = audio.currentTime - outLat + _HYP_LATENCY_OFFSET;
-            const beats = _hypBeats.beatTimes;
-            if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
-            while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
+        // ── Onset-driven flash spikes ──
+        const beats = _hypBeats.beatTimes;
+        if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
+        while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
 
-            if (_hypNextBeatIdx > 0) {
-                const since = t - beats[_hypNextBeatIdx - 1];
-                if (since >= 0 && since < _HYP_BEAT_DECAY) {
-                    target = Math.max(target, 1 - since / _HYP_BEAT_DECAY);
-                }
+        if (_hypNextBeatIdx > 0) {
+            const since = t - beats[_hypNextBeatIdx - 1];
+            if (since >= 0 && since < _HYP_BEAT_DECAY) {
+                target = Math.max(target, 1 - since / _HYP_BEAT_DECAY);
             }
-            if (_hypNextBeatIdx < beats.length) {
-                const until = beats[_hypNextBeatIdx] - t;
-                if (until >= 0 && until < 0.07) {
-                    target = Math.max(target, 0.2 * (1 - until / 0.07));
-                }
+        }
+        if (_hypNextBeatIdx < beats.length) {
+            const until = beats[_hypNextBeatIdx] - t;
+            if (until >= 0 && until < 0.07) {
+                target = Math.max(target, 0.2 * (1 - until / 0.07));
             }
         }
     }
@@ -3707,16 +3725,6 @@ function _hypTick() {
 
 async function enterHypnotise() {
     if (hypnotiseOverlay.classList.contains('open')) return;
-
-    const ok = _hypBuildAudioGraph();
-    if (!ok) {
-        hypnotiseOverlay.classList.add('open');
-        hypnotiseFlashEl.style.setProperty('--flash', '0.05');
-        _attachHypGestures();
-        return;
-    }
-
-    try { await _hypAudioCtx.resume(); } catch (_) {}
 
     _hypFlash = 0;
     _hypBeats = null;

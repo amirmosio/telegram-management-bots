@@ -78000,43 +78000,18 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var btnHypnotise = $("btn-hypnotise");
       var hypnotiseOverlay = $("hypnotise-overlay");
       var hypnotiseFlashEl = $("hypnotise-flash");
-      var _hypAudioCtx = null;
-      var _hypAnalyser = null;
-      var _hypSrcNode = null;
-      var _hypFreqData = null;
       var _hypRafId = null;
       var _hypFlash = 0;
       var _hypBeatCache = /* @__PURE__ */ new Map();
       var _hypAnalysisToken = 0;
       var _hypBeats = null;
       var _hypNextBeatIdx = 0;
-      var _HYP_LATENCY_OFFSET = 0;
+      var _HYP_LATENCY_OFFSET = 0.06;
       var _HYP_BEAT_DECAY = 0.18;
       var _hypHoldTimer = null;
       var _hypHoldStart = null;
       var _HYP_HOLD_MS = 600;
       var _HYP_HOLD_MOVE_PX = 10;
-      function _hypBuildAudioGraph() {
-        if (_hypAudioCtx) return true;
-        const Ctor = window.AudioContext || window.webkitAudioContext;
-        if (!Ctor) return false;
-        try {
-          _hypAudioCtx = new Ctor();
-          _hypSrcNode = _hypAudioCtx.createMediaElementSource(audio);
-          _hypAnalyser = _hypAudioCtx.createAnalyser();
-          _hypAnalyser.fftSize = 1024;
-          _hypAnalyser.smoothingTimeConstant = 0.6;
-          _hypSrcNode.connect(_hypAnalyser);
-          _hypAnalyser.connect(_hypAudioCtx.destination);
-          _hypFreqData = new Uint8Array(_hypAnalyser.frequencyBinCount);
-          return true;
-        } catch (e) {
-          _hypAudioCtx = null;
-          _hypAnalyser = null;
-          _hypSrcNode = null;
-          return false;
-        }
-      }
       async function _hypAnalyzeCurrentTrack() {
         const trackId = currentTrackId;
         if (trackId == null) return;
@@ -78048,24 +78023,60 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const myToken = ++_hypAnalysisToken;
         const src = audio.currentSrc || audio.src;
         if (!src) return;
+        let ctx = null;
         try {
           const res = await fetch(src);
           if (!res.ok) throw new Error("fetch " + res.status);
           const buf = await res.arrayBuffer();
           if (myToken !== _hypAnalysisToken) return;
-          const ctx = _hypAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+          ctx = new (window.AudioContext || window.webkitAudioContext)();
           const audioBuffer = await ctx.decodeAudioData(buf);
           if (myToken !== _hypAnalysisToken) return;
           const beatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
           if (myToken !== _hypAnalysisToken) return;
-          const data = { beatTimes };
+          const envelope = _hypComputeEnvelope(audioBuffer);
+          const data = { beatTimes, envelope };
           _hypBeatCache.set(trackId, data);
           if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
           const dur = audioBuffer.duration;
           console.log("[hypnotise] analyzed track", trackId, "\u2192", beatTimes.length, "onsets over", dur.toFixed(1), "s (avg", (beatTimes.length / dur).toFixed(2), "/s)");
         } catch (e) {
           console.warn("[hypnotise] analysis failed for track", trackId, e);
+        } finally {
+          if (ctx && ctx.close) ctx.close().catch(() => {
+          });
         }
+      }
+      function _hypComputeEnvelope(audioBuffer) {
+        const ENV_HZ = 30;
+        const sr = audioBuffer.sampleRate;
+        const stride = Math.max(1, Math.floor(sr / ENV_HZ));
+        const ch0 = audioBuffer.getChannelData(0);
+        const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+        const N = ch0.length;
+        const numSamples = Math.max(1, Math.floor(N / stride));
+        const samples = new Float32Array(numSamples);
+        let max = 1e-4;
+        for (let i = 0; i < numSamples; i++) {
+          const start = i * stride;
+          let sum = 0;
+          if (ch1) {
+            for (let j = 0; j < stride; j++) {
+              const s = (ch0[start + j] + ch1[start + j]) * 0.5;
+              sum += s * s;
+            }
+          } else {
+            for (let j = 0; j < stride; j++) {
+              const s = ch0[start + j];
+              sum += s * s;
+            }
+          }
+          const rms = Math.sqrt(sum / stride);
+          samples[i] = rms;
+          if (rms > max) max = rms;
+        }
+        for (let i = 0; i < numSamples; i++) samples[i] /= max;
+        return { samples, hz: ENV_HZ };
       }
       var _aubioMod = null;
       async function _hypGetAubio() {
@@ -78111,32 +78122,26 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       function _hypTick() {
         _hypRafId = requestAnimationFrame(_hypTick);
         let target = 0;
-        if (!audio.paused && audio.readyState >= 2) {
-          if (_hypAnalyser) {
-            _hypAnalyser.getByteFrequencyData(_hypFreqData);
-            let sum = 0;
-            const n = Math.min(32, _hypFreqData.length);
-            for (let i = 1; i < n; i++) sum += _hypFreqData[i];
-            const avg = sum / ((n - 1) * 255);
-            target = 0.03 + 0.35 * avg;
+        if (!audio.paused && audio.readyState >= 2 && _hypBeats) {
+          const t = audio.currentTime - _HYP_LATENCY_OFFSET;
+          const env = _hypBeats.envelope;
+          if (env && env.samples.length) {
+            const idx = Math.max(0, Math.min(env.samples.length - 1, Math.floor(t * env.hz)));
+            target = 0.03 + 0.4 * env.samples[idx];
           }
-          if (_hypBeats) {
-            const outLat = _hypAudioCtx && _hypAudioCtx.outputLatency || 0;
-            const t = audio.currentTime - outLat + _HYP_LATENCY_OFFSET;
-            const beats = _hypBeats.beatTimes;
-            if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
-            while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
-            if (_hypNextBeatIdx > 0) {
-              const since = t - beats[_hypNextBeatIdx - 1];
-              if (since >= 0 && since < _HYP_BEAT_DECAY) {
-                target = Math.max(target, 1 - since / _HYP_BEAT_DECAY);
-              }
+          const beats = _hypBeats.beatTimes;
+          if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
+          while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
+          if (_hypNextBeatIdx > 0) {
+            const since = t - beats[_hypNextBeatIdx - 1];
+            if (since >= 0 && since < _HYP_BEAT_DECAY) {
+              target = Math.max(target, 1 - since / _HYP_BEAT_DECAY);
             }
-            if (_hypNextBeatIdx < beats.length) {
-              const until = beats[_hypNextBeatIdx] - t;
-              if (until >= 0 && until < 0.07) {
-                target = Math.max(target, 0.2 * (1 - until / 0.07));
-              }
+          }
+          if (_hypNextBeatIdx < beats.length) {
+            const until = beats[_hypNextBeatIdx] - t;
+            if (until >= 0 && until < 0.07) {
+              target = Math.max(target, 0.2 * (1 - until / 0.07));
             }
           }
         }
@@ -78146,17 +78151,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       }
       async function enterHypnotise() {
         if (hypnotiseOverlay.classList.contains("open")) return;
-        const ok = _hypBuildAudioGraph();
-        if (!ok) {
-          hypnotiseOverlay.classList.add("open");
-          hypnotiseFlashEl.style.setProperty("--flash", "0.05");
-          _attachHypGestures();
-          return;
-        }
-        try {
-          await _hypAudioCtx.resume();
-        } catch (_) {
-        }
         _hypFlash = 0;
         _hypBeats = null;
         _hypNextBeatIdx = 0;
