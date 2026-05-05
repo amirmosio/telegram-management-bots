@@ -515,10 +515,11 @@ html, body {
    the All view's right-side meta column. */
 .track-item-topic {
     display: inline-block;
-    padding: 1px 7px;
+    padding: 1px 6px;
     border: 1px solid var(--border);
     border-radius: 999px;
-    font-size: 11px;
+    font-size: 10px;
+    line-height: 1.4;
     color: var(--text-dim);
     max-width: 140px;
     overflow: hidden;
