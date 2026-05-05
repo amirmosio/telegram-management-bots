@@ -78090,7 +78090,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (stillValid && !stillValid()) return [];
         const bufferSize = 1024;
         const hopSize = 512;
-        const onset = new Aubio.Onset(bufferSize, hopSize, sr);
+        const onset = new Aubio.Onset("specflux", bufferSize, hopSize, sr);
         onset.setThreshold(0.25);
         onset.setSilence(-55);
         const ch0 = audioBuffer.getChannelData(0);

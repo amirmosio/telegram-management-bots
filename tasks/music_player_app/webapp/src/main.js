@@ -3647,8 +3647,13 @@ async function _hypDetectOnsets(audioBuffer, stillValid) {
     const bufferSize = 1024;
     const hopSize = 512;
 
-    const onset = new Aubio.Onset(bufferSize, hopSize, sr);
-    onset.setThreshold(0.25);   // 0 = most sensitive, 1 = strict; 0.25 = good balance for mixed genres
+    // Method: 'specflux' (spectral flux) is libaubio's most robust
+    // general-purpose detector — works for both percussive (electronic,
+    // drums) and tonal (piano, strings) attacks. Other options: 'hfc',
+    // 'complex', 'energy', 'phase', 'mkl', 'kl', 'specdiff'.
+    // Note: index.d.ts (3-arg) is wrong; the C binding takes 4 args.
+    const onset = new Aubio.Onset('specflux', bufferSize, hopSize, sr);
+    onset.setThreshold(0.25);   // 0 = most sensitive, 1 = strict
     onset.setSilence(-55);      // dB; ignore peaks in near-silence
 
     const ch0 = audioBuffer.getChannelData(0);
