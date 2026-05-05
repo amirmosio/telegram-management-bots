@@ -5,7 +5,6 @@
 import * as tg from './telegram.js';
 import { searchLyrics, parseTrackInfo } from './lyrics.js';
 import { searchArtwork } from './artwork.js';
-import { guess as guessBeats } from 'web-audio-beat-detector';
 
 // ══════════════════════════════════════
 //  STATE
@@ -2346,11 +2345,12 @@ function _extractPalette(img) {
 }
 
 function _applyHalo(colors) {
-    const player = $('player');
-    if (!player) return;
-    player.style.setProperty('--halo-1', colors[0] || 'transparent');
-    player.style.setProperty('--halo-2', colors[1] || colors[0] || 'transparent');
-    player.style.setProperty('--halo-3', colors[2] || colors[0] || 'transparent');
+    // Set on the document root so anything outside the #player subtree
+    // (e.g. #side-panel) can also pick up the artwork-derived tint.
+    const root = document.documentElement;
+    root.style.setProperty('--halo-1', colors[0] || 'transparent');
+    root.style.setProperty('--halo-2', colors[1] || colors[0] || 'transparent');
+    root.style.setProperty('--halo-3', colors[2] || colors[0] || 'transparent');
     // Tint body + theme-color to a dim version of the dominant artwork
     // color. iOS standalone PWA paints the safe-area zones (status bar
     // and home indicator) with the body bg / theme-color rather than
@@ -2371,11 +2371,10 @@ function _applyHalo(colors) {
 }
 
 function _resetHalo() {
-    const player = $('player');
-    if (!player) return;
-    player.style.removeProperty('--halo-1');
-    player.style.removeProperty('--halo-2');
-    player.style.removeProperty('--halo-3');
+    const root = document.documentElement;
+    root.style.removeProperty('--halo-1');
+    root.style.removeProperty('--halo-2');
+    root.style.removeProperty('--halo-3');
     document.body.style.backgroundColor = '';
     const themeMeta = document.querySelector('meta[name="theme-color"]');
     if (themeMeta) themeMeta.setAttribute('content', '#0a0a0a');
@@ -3511,22 +3510,19 @@ function _maybeShowInstallBanner() {
 }
 
 // ══════════════════════════════════════
-//  HYPNOTISE MODE — beat-synced fullscreen flash
+//  HYPNOTISE MODE — onset-synced fullscreen flash
 // ══════════════════════════════════════
 //
-// Two-stage sync:
+// We don't assume constant tempo (would be wrong for classical / rubato).
+// Instead, on entry / track change we run an offline onset detector over
+// the decoded AudioBuffer and produce a list of *actual* note-attack times.
+// Flashes fire at those times, so density follows the music's dynamics —
+// dense passages → rapid flashes, sustained / sparse passages → calmer.
 //
-//   1. On entry / track change, kick off offline analysis: fetch the
-//      track bytes, decodeAudioData → AudioBuffer, then web-audio-beat-detector
-//      `guess()` returns BPM + first-beat offset. We expand that into an
-//      array of beat timestamps in seconds.
-//
-//   2. The rAF loop drives flashes from `audio.currentTime` against that
-//      array — sample-accurate sync, no audio-visual lag.
-//
-// While analysis is in flight, we show a soft amplitude-driven pulse from
-// the live AnalyserNode (no beat thresholding, so no false positives).
-// Results are cached per trackId so repeat entries are instant.
+// Layered on top of the discrete flashes is a continuous amplitude pulse
+// from the live AnalyserNode, so even silent gaps and sustained tones still
+// breathe with the loudness curve. Cached per trackId; live pulse alone
+// runs while the offline analysis is in flight.
 const btnHypnotise = $('btn-hypnotise');
 const hypnotiseOverlay = $('hypnotise-overlay');
 const hypnotiseFlashEl = $('hypnotise-flash');
@@ -3538,13 +3534,13 @@ let _hypFreqData = null;
 let _hypRafId = null;
 let _hypFlash = 0;
 
-// Pre-analysed beat schedule for the currently playing track.
-const _hypBeatCache = new Map(); // trackId → { bpm, offset, beatTimes: number[] }
+// Pre-analysed onset schedule for the currently playing track.
+const _hypBeatCache = new Map(); // trackId → { beatTimes: number[] }
 let _hypAnalysisToken = 0;       // bumps to invalidate stale in-flight analyses
 let _hypBeats = null;            // active schedule, or null = not ready
 let _hypNextBeatIdx = 0;
 const _HYP_LATENCY_OFFSET = 0;   // seconds; positive = flash later (tune per device if needed)
-const _HYP_BEAT_DECAY = 0.16;    // seconds for flash to decay 1→0
+const _HYP_BEAT_DECAY = 0.18;    // seconds for flash to decay 1→0
 
 // Hold-to-exit gesture state
 let _hypHoldTimer = null;
@@ -3576,7 +3572,6 @@ async function _hypAnalyzeCurrentTrack() {
     const trackId = currentTrackId;
     if (trackId == null) return;
 
-    // Cached → install immediately.
     const cached = _hypBeatCache.get(trackId);
     if (cached) { _hypInstallSchedule(trackId, cached); return; }
 
@@ -3594,21 +3589,89 @@ async function _hypAnalyzeCurrentTrack() {
         const audioBuffer = await ctx.decodeAudioData(buf);
         if (myToken !== _hypAnalysisToken) return;
 
-        const { bpm, offset } = await guessBeats(audioBuffer);
+        const beatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
         if (myToken !== _hypAnalysisToken) return;
 
-        const period = 60 / bpm;
-        const duration = audioBuffer.duration;
-        const beatTimes = [];
-        for (let t = offset; t < duration; t += period) beatTimes.push(t);
-
-        const data = { bpm, offset, beatTimes };
+        const data = { beatTimes };
         _hypBeatCache.set(trackId, data);
         if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
-        console.log('[hypnotise] analyzed track', trackId, '→', bpm.toFixed(1), 'BPM, offset', offset.toFixed(3), 's,', beatTimes.length, 'beats');
+        const dur = audioBuffer.duration;
+        console.log('[hypnotise] analyzed track', trackId, '→', beatTimes.length, 'onsets over', dur.toFixed(1), 's (avg', (beatTimes.length / dur).toFixed(2), '/s)');
     } catch (e) {
         console.warn('[hypnotise] analysis failed for track', trackId, e);
     }
+}
+
+// Onset detector: rectified energy-flux peak picking with adaptive threshold.
+// Yields actual note-attack times (s), not a constant BPM, so flash density
+// follows the music — handles classical / rubato / dynamic passages naturally.
+async function _hypDetectOnsets(audioBuffer, stillValid) {
+    const sr = audioBuffer.sampleRate;
+    const ch0 = audioBuffer.getChannelData(0);
+    const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+    const N = ch0.length;
+
+    const frameSize = 1024;
+    const hopSize = 512;
+    const numFrames = Math.max(0, Math.floor((N - frameSize) / hopSize) + 1);
+    if (numFrames < 4) return [];
+
+    // Frame energy (RMS). Yield to the event loop periodically so the
+    // analysis doesn't stall the UI on long tracks.
+    const energy = new Float32Array(numFrames);
+    const yieldEvery = 2048;
+    for (let f = 0; f < numFrames; f++) {
+        const start = f * hopSize;
+        let sum = 0;
+        if (ch1) {
+            for (let i = 0; i < frameSize; i++) {
+                const s = (ch0[start + i] + ch1[start + i]) * 0.5;
+                sum += s * s;
+            }
+        } else {
+            for (let i = 0; i < frameSize; i++) {
+                const s = ch0[start + i];
+                sum += s * s;
+            }
+        }
+        energy[f] = Math.sqrt(sum / frameSize);
+        if ((f & (yieldEvery - 1)) === yieldEvery - 1) {
+            await new Promise(r => setTimeout(r, 0));
+            if (stillValid && !stillValid()) return [];
+        }
+    }
+
+    // Onset detection function: half-wave rectified energy difference.
+    const odf = new Float32Array(numFrames);
+    for (let f = 1; f < numFrames; f++) {
+        const d = energy[f] - energy[f - 1];
+        if (d > 0) odf[f] = d;
+    }
+
+    // Adaptive peak picking over a ~1-second window.
+    const halfWin = Math.max(1, Math.round(0.5 * sr / hopSize));
+    const minGap = Math.max(1, Math.round(0.05 * sr / hopSize)); // 50 ms minimum spacing
+    const onsets = [];
+    let lastPeak = -minGap;
+
+    for (let f = 1; f < numFrames - 1; f++) {
+        if (odf[f] < odf[f - 1] || odf[f] < odf[f + 1]) continue;
+        const a = Math.max(0, f - halfWin);
+        const b = Math.min(numFrames, f + halfWin);
+        let mean = 0;
+        for (let i = a; i < b; i++) mean += odf[i];
+        mean /= (b - a);
+        let varSum = 0;
+        for (let i = a; i < b; i++) { const d = odf[i] - mean; varSum += d * d; }
+        const stddev = Math.sqrt(varSum / (b - a));
+        if (odf[f] > mean + 1.6 * stddev && odf[f] > 0.0015) {
+            if (f - lastPeak >= minGap) {
+                onsets.push((f * hopSize) / sr);
+                lastPeak = f;
+            }
+        }
+    }
+    return onsets;
 }
 
 function _hypInstallSchedule(trackId, data) {
@@ -3622,38 +3685,36 @@ function _hypTick() {
 
     let target = 0;
     if (!audio.paused && audio.readyState >= 2) {
-        if (_hypBeats) {
-            // ── Pre-analysed schedule: drive flashes from audio.currentTime ──
-            const t = audio.currentTime + _HYP_LATENCY_OFFSET;
-            const beats = _hypBeats.beatTimes;
-            // Re-find position after a seek/rewind.
-            if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
-            while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
-
-            // Decay from the most-recently-passed beat.
-            if (_hypNextBeatIdx > 0) {
-                const since = t - beats[_hypNextBeatIdx - 1];
-                if (since >= 0 && since < _HYP_BEAT_DECAY) {
-                    target = 1 - since / _HYP_BEAT_DECAY;
-                }
-            }
-            // Subtle anticipation glow ~80 ms before the next beat.
-            if (_hypNextBeatIdx < beats.length) {
-                const until = beats[_hypNextBeatIdx] - t;
-                if (until >= 0 && until < 0.08) {
-                    target = Math.max(target, 0.18 * (1 - until / 0.08));
-                }
-            }
-        } else if (_hypAnalyser) {
-            // ── "Preparing" pulse: amplitude-driven, no thresholding ──
-            // Used while the offline analysis is still running so the screen
-            // doesn't sit dead-black, but we don't fire wrong-time flashes.
+        // ── Continuous amplitude pulse (always on while playing) ──
+        // Tracks loudness so sustained notes / sparse passages still breathe.
+        if (_hypAnalyser) {
             _hypAnalyser.getByteFrequencyData(_hypFreqData);
             let sum = 0;
             const n = Math.min(32, _hypFreqData.length);
             for (let i = 1; i < n; i++) sum += _hypFreqData[i];
             const avg = sum / ((n - 1) * 255);
-            target = 0.04 + 0.55 * avg;
+            target = 0.03 + 0.35 * avg;
+        }
+
+        // ── Onset-driven flash spikes (once analysis is ready) ──
+        if (_hypBeats) {
+            const t = audio.currentTime + _HYP_LATENCY_OFFSET;
+            const beats = _hypBeats.beatTimes;
+            if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
+            while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
+
+            if (_hypNextBeatIdx > 0) {
+                const since = t - beats[_hypNextBeatIdx - 1];
+                if (since >= 0 && since < _HYP_BEAT_DECAY) {
+                    target = Math.max(target, 1 - since / _HYP_BEAT_DECAY);
+                }
+            }
+            if (_hypNextBeatIdx < beats.length) {
+                const until = beats[_hypNextBeatIdx] - t;
+                if (until >= 0 && until < 0.07) {
+                    target = Math.max(target, 0.2 * (1 - until / 0.07));
+                }
+            }
         }
     }
 
