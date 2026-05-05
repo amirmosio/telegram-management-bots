@@ -70661,7 +70661,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       } catch (e) {
         console.warn("[telegram] connect failed:", e?.message || e);
       }
+      _wrapGetSender();
+      _taintSender(client._sender);
       _installNetworkLifecycle();
+      _prewarmMediaDc().catch(() => {
+      });
       return client;
     })();
     try {
@@ -70692,6 +70696,8 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function _ensureConnected() {
     if (!client) await initClient();
+    _wrapGetSender();
+    _taintSender(client._sender);
     if (client.connected) return;
     if (!_reconnectPromise) {
       console.log("Reconnecting...");
@@ -70701,6 +70707,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
             client.connect(),
             new Promise((_, rej) => setTimeout(() => rej(new Error("reconnect-timeout")), 5e3))
           ]);
+          _taintSender(client._sender);
         } catch (e) {
         } finally {
           _reconnectPromise = null;
@@ -70708,6 +70715,51 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       })();
     }
     await _reconnectPromise;
+  }
+  function _taintSender(sender) {
+    if (!sender || sender[_TAINT]) return sender;
+    try {
+      sender[_TAINT] = true;
+      sender._autoReconnect = false;
+      const origReconnect = (sender._reconnect || (() => Promise.resolve())).bind(sender);
+      sender._safePromise = null;
+      const safeReconnect = function() {
+        if (this._safePromise) return this._safePromise;
+        if (!this._userConnected) return Promise.resolve();
+        this.isReconnecting = true;
+        this._safePromise = (async () => {
+          try {
+            await new Promise((r) => setTimeout(r, 1e3));
+            await origReconnect();
+          } catch (e) {
+          } finally {
+            this.isReconnecting = false;
+            this._safePromise = null;
+          }
+        })();
+        return this._safePromise;
+      };
+      sender.reconnect = safeReconnect;
+      sender._reconnect = safeReconnect;
+      _taintedSenders.add(sender);
+    } catch (e) {
+      console.warn("[telegram] _taintSender failed:", e?.message || e);
+    }
+    return sender;
+  }
+  function _wrapGetSender() {
+    if (!client || client._getSenderTainted) return;
+    client._getSenderTainted = true;
+    const orig = client.getSender.bind(client);
+    client.getSender = async function(dcId) {
+      const s = await orig(dcId);
+      return _taintSender(s);
+    };
+  }
+  async function getTaintedSender(dcId) {
+    await _ensureConnected();
+    const s = await client.getSender(dcId || 0);
+    return _taintSender(s);
   }
   function getCachedUser() {
     try {
@@ -71447,6 +71499,311 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       } else {
         yield new Uint8Array(chunk);
       }
+    }
+  }
+  async function _fetchPart(originSender, ctx, offset, limit, signal) {
+    if (signal?.aborted) throw new Error("aborted");
+    const sender = ctx.cdn ? ctx.cdn.sender : originSender;
+    const req = ctx.cdn ? new import_tl.Api.upload.GetCdnFile({
+      fileToken: ctx.cdn.fileToken,
+      offset: (0, import_big_integer.default)(offset),
+      limit
+    }) : new import_tl.Api.upload.GetFile({
+      location: ctx.location,
+      offset: (0, import_big_integer.default)(offset),
+      limit,
+      precise: false,
+      cdnSupported: ctx.cdnEnabled
+    });
+    let timer;
+    let result;
+    try {
+      result = await Promise.race([
+        client.invokeWithSender(req, sender),
+        new Promise((_, rej) => {
+          timer = setTimeout(() => rej(new Error("part-timeout")), _PART_TIMEOUT_MS);
+        })
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+    if (result instanceof import_tl.Api.upload.FileCdnRedirect) {
+      await _enterCdnMode(ctx, result);
+      return _fetchPart(originSender, ctx, offset, limit, signal);
+    }
+    if (ctx.cdn && result instanceof import_tl.Api.upload.CdnFileReuploadNeeded) {
+      ctx.cdn.reuploadCount = (ctx.cdn.reuploadCount || 0) + 1;
+      if (ctx.cdn.reuploadCount > 3) throw new Error("CDN reupload exhausted");
+      await client.invokeWithSender(
+        new import_tl.Api.upload.ReuploadCdnFile({
+          fileToken: ctx.cdn.fileToken,
+          requestToken: result.requestToken
+        }),
+        originSender
+      );
+      return _fetchPart(originSender, ctx, offset, limit, signal);
+    }
+    let bytes = result.bytes;
+    if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
+    if (ctx.cdn) {
+      bytes = await _decryptCdnBytes(ctx.cdn, offset, bytes);
+      await _verifyCdnHashes(ctx.cdn, offset, bytes, originSender);
+    }
+    return new Uint8Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  }
+  async function _enterCdnMode(ctx, redirect) {
+    const sender = await getTaintedSender(redirect.dcId);
+    const cdn = {
+      sender,
+      fileToken: redirect.fileToken,
+      encryptionKey: redirect.encryptionKey,
+      encryptionIv: redirect.encryptionIv,
+      cryptoKey: null,
+      hashes: /* @__PURE__ */ new Map(),
+      // offset (number) -> { limit, hash }
+      reuploadCount: 0
+    };
+    for (const h of redirect.fileHashes || []) {
+      cdn.hashes.set(Number(h.offset), { limit: h.limit, hash: h.hash });
+    }
+    cdn.cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      cdn.encryptionKey,
+      { name: "AES-CTR" },
+      false,
+      ["decrypt"]
+    );
+    ctx.cdn = cdn;
+    console.log("[telegram] CDN redirect \u2192 DC", redirect.dcId);
+  }
+  async function _decryptCdnBytes(cdn, offset, encrypted) {
+    const iv = new Uint8Array(cdn.encryptionIv);
+    const counter = Math.floor(offset / 16);
+    iv[12] = iv[12] ^ counter >>> 24 & 255;
+    iv[13] = iv[13] ^ counter >>> 16 & 255;
+    iv[14] = iv[14] ^ counter >>> 8 & 255;
+    iv[15] = iv[15] ^ counter & 255;
+    const decrypted = await crypto.subtle.decrypt(
+      { name: "AES-CTR", counter: iv, length: 64 },
+      cdn.cryptoKey,
+      encrypted.buffer.slice(encrypted.byteOffset, encrypted.byteOffset + encrypted.byteLength)
+    );
+    return new Uint8Array(decrypted);
+  }
+  async function _verifyCdnHashes(cdn, offset, bytes, originSender) {
+    let cursor = 0;
+    while (cursor < bytes.byteLength) {
+      const blockOffset = offset + cursor;
+      let h = cdn.hashes.get(blockOffset);
+      if (!h) {
+        const more = await client.invokeWithSender(
+          new import_tl.Api.upload.GetCdnFileHashes({
+            fileToken: cdn.fileToken,
+            offset: (0, import_big_integer.default)(blockOffset)
+          }),
+          originSender
+        );
+        for (const x of more || []) cdn.hashes.set(Number(x.offset), { limit: x.limit, hash: x.hash });
+        h = cdn.hashes.get(blockOffset);
+        if (!h) throw new Error("CDN hash missing for offset " + blockOffset);
+      }
+      const len = Math.min(h.limit, bytes.byteLength - cursor);
+      const block = bytes.subarray(cursor, cursor + len);
+      const got = new Uint8Array(await crypto.subtle.digest("SHA-256", block));
+      const expected = h.hash instanceof Uint8Array ? h.hash : new Uint8Array(h.hash);
+      if (got.length !== expected.length) throw new Error("CDN hash length mismatch");
+      for (let i = 0; i < got.length; i++) {
+        if (got[i] !== expected[i]) throw new Error("CDN hash mismatch at offset " + blockOffset);
+      }
+      cursor += len;
+    }
+  }
+  async function* iterTrackDownloadParallel(groupId, trackId, offset = 0, signal = null, parallelism = 4) {
+    const cdnEnabled = localStorage.getItem("tg_cdn_enabled") !== "false";
+    let msg = _msgCache[`${groupId}:${trackId}`];
+    if (!msg) throw new Error("Track not in cache");
+    let doc = msg.media?.document;
+    if (!doc) throw new Error("No document in message");
+    if (signal?.aborted) return;
+    await _ensureConnected();
+    if (signal?.aborted) return;
+    try {
+      if (doc.dcId) localStorage.setItem(_MEDIA_DC_KEY, String(doc.dcId));
+    } catch {
+    }
+    const totalSize = Number(doc.size);
+    const startOffset = Math.floor(offset / _PART) * _PART;
+    const sender = await getTaintedSender(doc.dcId);
+    const ctx = {
+      location: new import_tl.Api.InputDocumentFileLocation({
+        id: doc.id,
+        accessHash: doc.accessHash,
+        fileReference: doc.fileReference,
+        thumbSize: ""
+      }),
+      cdn: null,
+      cdnEnabled
+    };
+    const inflight = /* @__PURE__ */ new Map();
+    const completed = /* @__PURE__ */ new Map();
+    let nextIssue = startOffset;
+    let nextYield = startOffset;
+    let eofOffset = -1;
+    const issueOne = (partOffset) => {
+      const p = (async () => {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            return await _fetchPart(sender, ctx, partOffset, _PART, signal);
+          } catch (e) {
+            if (signal?.aborted) throw e;
+            const m = String(e?.message || e || "");
+            if (m.includes("FILE_REFERENCE_EXPIRED") || m.includes("FILEREF_UPGRADE_NEEDED")) {
+              const fresh = await _refreshTrackMsg(groupId, trackId);
+              const newDoc = fresh?.media?.document;
+              if (newDoc) {
+                ctx.location = new import_tl.Api.InputDocumentFileLocation({
+                  id: newDoc.id,
+                  accessHash: newDoc.accessHash,
+                  fileReference: newDoc.fileReference,
+                  thumbSize: ""
+                });
+                ctx.cdn = null;
+                continue;
+              }
+              throw e;
+            }
+            if (attempt === 0 && (_isTransientConnError(e) || m.includes("part-timeout"))) {
+              try {
+                await sender.reconnect();
+              } catch {
+              }
+              continue;
+            }
+            throw e;
+          }
+        }
+        throw new Error("part exhausted retries at offset " + partOffset);
+      })();
+      inflight.set(partOffset, p);
+    };
+    const fillWindow = () => {
+      while (inflight.size < parallelism && nextIssue < totalSize && (eofOffset < 0 || nextIssue <= eofOffset) && !signal?.aborted) {
+        issueOne(nextIssue);
+        nextIssue += _PART;
+      }
+    };
+    fillWindow();
+    try {
+      while (!signal?.aborted && nextYield < totalSize) {
+        if (completed.has(nextYield)) {
+          const u8 = completed.get(nextYield);
+          completed.delete(nextYield);
+          yield u8;
+          if (u8.byteLength < _PART) return;
+          nextYield += u8.byteLength;
+          fillWindow();
+          continue;
+        }
+        if (inflight.size === 0) return;
+        const tagged = [...inflight.entries()].map(
+          ([off, p]) => p.then((v) => ({ off, v }), (e) => ({ off, err: e }))
+        );
+        const winner = await Promise.race(tagged);
+        inflight.delete(winner.off);
+        if (winner.err) throw winner.err;
+        completed.set(winner.off, winner.v);
+        if (winner.v.byteLength < _PART && (eofOffset < 0 || winner.off < eofOffset)) {
+          eofOffset = winner.off;
+        }
+        fillWindow();
+      }
+    } finally {
+      inflight.clear();
+      completed.clear();
+    }
+  }
+  async function _pingSender(sender) {
+    if (!sender || !sender.isConnected?.()) return false;
+    const pingId = (0, import_big_integer.default)(Math.floor(Math.random() * 2147483647));
+    let timer;
+    try {
+      await Promise.race([
+        client.invokeWithSender(
+          new import_tl.Api.PingDelayDisconnect({ pingId, disconnectDelay: 75 }),
+          sender
+        ),
+        new Promise((_, rej) => {
+          timer = setTimeout(() => rej(new Error("ping-timeout")), _PING_TIMEOUT_MS);
+        })
+      ]);
+      return true;
+    } catch (e) {
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  async function _pingAllSenders() {
+    const seen = /* @__PURE__ */ new Set();
+    const targets = [];
+    if (client?._sender) {
+      targets.push(client._sender);
+      seen.add(client._sender);
+    }
+    for (const s of _taintedSenders) {
+      if (seen.has(s)) continue;
+      targets.push(s);
+      seen.add(s);
+    }
+    for (const s of targets) {
+      if (!s.isConnected?.()) {
+        _taintedSenders.delete(s);
+        continue;
+      }
+      const ok = await _pingSender(s);
+      if (!ok) {
+        console.warn("[telegram] keepalive: ping missed \u2192 disconnecting sender for clean reconnect");
+        try {
+          await s.disconnect?.();
+        } catch {
+        }
+        _taintedSenders.delete(s);
+      }
+    }
+  }
+  function startKeepalive() {
+    if (_keepaliveActive) return;
+    _keepaliveActive = true;
+    if (_keepaliveTimer) return;
+    const tick = async () => {
+      _keepaliveTimer = null;
+      if (!_keepaliveActive) return;
+      try {
+        await _pingAllSenders();
+      } catch {
+      }
+      if (!_keepaliveActive) return;
+      _keepaliveTimer = setTimeout(tick, _KEEPALIVE_MS);
+    };
+    _keepaliveTimer = setTimeout(tick, _KEEPALIVE_MS);
+  }
+  function stopKeepalive() {
+    _keepaliveActive = false;
+    if (_keepaliveTimer) {
+      clearTimeout(_keepaliveTimer);
+      _keepaliveTimer = null;
+    }
+  }
+  async function _prewarmMediaDc() {
+    if (typeof localStorage === "undefined") return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+    const dc = parseInt(localStorage.getItem(_MEDIA_DC_KEY) || "0", 10);
+    if (!dc) return;
+    try {
+      await getTaintedSender(dc);
+      console.log("[telegram] pre-warmed media DC", dc);
+    } catch (e) {
+      console.warn("[telegram] pre-warm failed:", e?.message || e);
     }
   }
   async function getTrackBlobUrl(groupId, trackId, context = {}) {
@@ -72462,7 +72819,7 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _lifecycleInstalled, _reconnectPromise, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, TRANSLATE_CHUNK, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
+  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _lifecycleInstalled, _reconnectPromise, _TAINT, _taintedSenders, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, TRANSLATE_CHUNK, _PART, _PART_TIMEOUT_MS, _CDN_HASH_BLOCK, _MEDIA_DC_KEY, _KEEPALIVE_MS, _PING_TIMEOUT_MS, _keepaliveTimer, _keepaliveActive, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -72511,11 +72868,21 @@ ${JSON.stringify(state)}`;
       _initPromise = null;
       _lifecycleInstalled = false;
       _reconnectPromise = null;
+      _TAINT = /* @__PURE__ */ Symbol.for("tg.safeReconnect");
+      _taintedSenders = /* @__PURE__ */ new Set();
       CACHED_USER_KEY = "cached_user";
       _phoneCodeHash = null;
       PAGE_SIZE = 100;
       _totalCountCache = /* @__PURE__ */ new Map();
       TRANSLATE_CHUNK = 20;
+      _PART = 512 * 1024;
+      _PART_TIMEOUT_MS = 8e3;
+      _CDN_HASH_BLOCK = 128 * 1024;
+      _MEDIA_DC_KEY = "tg_media_dc";
+      _KEEPALIVE_MS = 6e4;
+      _PING_TIMEOUT_MS = 5e3;
+      _keepaliveTimer = null;
+      _keepaliveActive = false;
       SHARE_CHANNEL_USERNAME = "tgmusicplayer_shared";
       SHARE_CHANNEL_TITLE = "TG Music Player Shared";
       SEARCH_BOTS = ["moozikestan_bot", "MusicArmenian_Bot"];
@@ -76255,7 +76622,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               const startPos = pos;
               let sawChunk = false;
               try {
-                const rawIter = iterTrackDownload(gId, track.id, pos, myCtrl.signal);
+                const useParallel = localStorage.getItem("tg_use_parallel") !== "false";
+                const rawIter = useParallel ? iterTrackDownloadParallel(gId, track.id, pos, myCtrl.signal, 4) : iterTrackDownload(gId, track.id, pos, myCtrl.signal);
                 for await (const chunk of _iterWithChunkTimeout(rawIter, STREAM_CHUNK_TIMEOUT_MS)) {
                   if (cancelled()) return;
                   sawChunk = true;
@@ -76624,6 +76992,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       btnPlay.addEventListener("click", togglePlay);
       $("btn-next").addEventListener("click", nextTrack);
       $("btn-prev").addEventListener("click", prevTrack);
+      var _keepaliveStopTimer = null;
       audio.addEventListener("play", () => {
         iconPlay.style.display = "none";
         iconPause.style.display = "block";
@@ -76631,6 +77000,14 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
         updateMediaPositionState();
         _requestWakeLock();
+        if (_keepaliveStopTimer) {
+          clearTimeout(_keepaliveStopTimer);
+          _keepaliveStopTimer = null;
+        }
+        try {
+          startKeepalive();
+        } catch {
+        }
       });
       audio.addEventListener("pause", () => {
         iconPlay.style.display = "block";
@@ -76638,6 +77015,16 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
         updateMediaPositionState();
         if (!_isLoadingAudio) _releaseWakeLock();
+        if (_keepaliveStopTimer) clearTimeout(_keepaliveStopTimer);
+        _keepaliveStopTimer = setTimeout(() => {
+          _keepaliveStopTimer = null;
+          if (audio.paused && !_streamDownloadActive) {
+            try {
+              stopKeepalive();
+            } catch {
+            }
+          }
+        }, 3e4);
       });
       audio.addEventListener("loadedmetadata", () => updateMediaPositionState());
       audio.addEventListener("seeked", () => updateMediaPositionState());

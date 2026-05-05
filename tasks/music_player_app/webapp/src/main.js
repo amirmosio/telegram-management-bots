@@ -1552,7 +1552,14 @@ async function _streamWithSeek(track, gen, sw) {
                 const startPos = pos;
                 let sawChunk = false;
                 try {
-                    const rawIter = tg.iterTrackDownload(gId, track.id, pos, myCtrl.signal);
+                    // Pipelined parallel fetcher (T1.1) — 4 in-flight upload.GetFile
+                    // requests against one tainted sender. Roughly 3–4× the throughput
+                    // of the sequential iterator on broadband, much more on cellular.
+                    // Gate via localStorage 'tg_use_parallel'='false' to fall back.
+                    const useParallel = localStorage.getItem('tg_use_parallel') !== 'false';
+                    const rawIter = useParallel
+                        ? tg.iterTrackDownloadParallel(gId, track.id, pos, myCtrl.signal, 4)
+                        : tg.iterTrackDownload(gId, track.id, pos, myCtrl.signal);
                     for await (const chunk of _iterWithChunkTimeout(rawIter, STREAM_CHUNK_TIMEOUT_MS)) {
                         if (cancelled()) return;
                         sawChunk = true;
@@ -1960,12 +1967,18 @@ btnRepeat.addEventListener('click', () => { repeatOn = !repeatOn; btnRepeat.clas
 btnPlay.addEventListener('click', togglePlay);
 $('btn-next').addEventListener('click', nextTrack);
 $('btn-prev').addEventListener('click', prevTrack);
+// Keepalive (T1.2) is only worth running while playback is active or
+// a download is in flight. _keepaliveStopTimer holds a deferred stop
+// so quick pause→play flips don't churn the ping loop.
+let _keepaliveStopTimer = null;
 audio.addEventListener('play', () => {
     iconPlay.style.display = 'none'; iconPause.style.display = 'block';
     updateMediaSession();
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
     updateMediaPositionState();
     _requestWakeLock();
+    if (_keepaliveStopTimer) { clearTimeout(_keepaliveStopTimer); _keepaliveStopTimer = null; }
+    try { tg.startKeepalive(); } catch {}
 });
 audio.addEventListener('pause', () => {
     iconPlay.style.display = 'block'; iconPause.style.display = 'none';
@@ -1973,6 +1986,13 @@ audio.addEventListener('pause', () => {
     updateMediaPositionState();
     // Release wake lock only if user explicitly paused (not during track transitions)
     if (!_isLoadingAudio) _releaseWakeLock();
+    if (_keepaliveStopTimer) clearTimeout(_keepaliveStopTimer);
+    _keepaliveStopTimer = setTimeout(() => {
+        _keepaliveStopTimer = null;
+        if (audio.paused && !_streamDownloadActive) {
+            try { tg.stopKeepalive(); } catch {}
+        }
+    }, 30_000);
 });
 // Push the new duration to the OS as soon as it's known so the lock-screen
 // scrubber picks up the right range; iOS hides the scrubber until it has

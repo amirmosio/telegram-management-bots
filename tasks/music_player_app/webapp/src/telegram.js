@@ -292,7 +292,12 @@ export async function initClient() {
             console.warn('[telegram] connect failed:', e?.message || e);
             // Leave client object around so future ops can retry via _ensureConnected.
         }
+        _wrapGetSender();
+        _taintSender(client._sender);
         _installNetworkLifecycle();
+        // Fire-and-forget: open the file-DC sender now so the first track
+        // doesn't pay the WS handshake + auth.ImportAuthorization round trip.
+        _prewarmMediaDc().catch(() => {});
         return client;
     })();
     try { return await _initPromise; }
@@ -346,6 +351,8 @@ function _isTransientConnError(e) {
 let _reconnectPromise = null;
 async function _ensureConnected() {
     if (!client) await initClient();
+    _wrapGetSender();
+    _taintSender(client._sender);
     if (client.connected) return;
     if (!_reconnectPromise) {
         console.log('Reconnecting...');
@@ -355,11 +362,82 @@ async function _ensureConnected() {
                     client.connect(),
                     new Promise((_, rej) => setTimeout(() => rej(new Error('reconnect-timeout')), 5000)),
                 ]);
+                _taintSender(client._sender);
             } catch (e) { /* callers that care should check client.connected */ }
             finally { _reconnectPromise = null; }
         })();
     }
     await _reconnectPromise;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// T1.0 — Single-flight reconnect on every MTProtoSender
+// ──────────────────────────────────────────────────────────────────
+// GramJS's MTProtoSender.reconnect() is called unconditionally from
+// _sendLoop and _recvLoop on any socket error (lines 358, 389, 420,
+// 433 in node_modules/telegram/network/MTProtoSender.js) — it does
+// NOT check _autoReconnect. So the client-level autoReconnect:false
+// option is effectively a no-op against the cascading reconnect storm
+// that empties Chrome's per-host WebSocket budget into ERR_INSUFFICIENT_
+// RESOURCES. The fix is to replace reconnect()/_reconnect() on each
+// sender with a deduped wrapper, applied to every sender the client
+// ever hands us — including the main client._sender and the exported
+// per-DC file senders that iterDownload borrows internally.
+// ══════════════════════════════════════════════════════════════════
+const _TAINT = Symbol.for('tg.safeReconnect');
+const _taintedSenders = new Set();
+
+function _taintSender(sender) {
+    if (!sender || sender[_TAINT]) return sender;
+    try {
+        sender[_TAINT] = true;
+        sender._autoReconnect = false;
+        const origReconnect = (sender._reconnect || (() => Promise.resolve())).bind(sender);
+        sender._safePromise = null;
+        const safeReconnect = function () {
+            if (this._safePromise) return this._safePromise;
+            if (!this._userConnected) return Promise.resolve();
+            this.isReconnecting = true;
+            this._safePromise = (async () => {
+                try {
+                    // Same 1s settle as GramJS's original reconnect() —
+                    // avoids hammering the server on transient drops.
+                    await new Promise(r => setTimeout(r, 1000));
+                    await origReconnect();
+                } catch (e) {
+                    /* swallow — next request will see !isConnected and re-trigger */
+                } finally {
+                    this.isReconnecting = false;
+                    this._safePromise = null;
+                }
+            })();
+            return this._safePromise;
+        };
+        sender.reconnect = safeReconnect;
+        sender._reconnect = safeReconnect;
+        _taintedSenders.add(sender);
+    } catch (e) {
+        console.warn('[telegram] _taintSender failed:', e?.message || e);
+    }
+    return sender;
+}
+
+// Wrap client.getSender so EVERY sender the client hands out — including
+// those iterDownload borrows internally — is tainted before use.
+function _wrapGetSender() {
+    if (!client || client._getSenderTainted) return;
+    client._getSenderTainted = true;
+    const orig = client.getSender.bind(client);
+    client.getSender = async function (dcId) {
+        const s = await orig(dcId);
+        return _taintSender(s);
+    };
+}
+
+async function getTaintedSender(dcId) {
+    await _ensureConnected();
+    const s = await client.getSender(dcId || 0);
+    return _taintSender(s);
 }
 
 const CACHED_USER_KEY = 'cached_user';
@@ -1275,6 +1353,373 @@ export async function* iterTrackDownload(groupId, trackId, offset = 0, signal = 
         } else {
             yield new Uint8Array(chunk);
         }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// T1.1 — Parallel chunk pipeline (4 in-flight upload.GetFile)
+// ──────────────────────────────────────────────────────────────────
+// Sequential 512 KiB-per-RTT is the throughput ceiling that makes the
+// webapp feel slow vs. the official Telegram client. Telegram Web /
+// tdlib pipeline 4–8 parts. We pipeline 4 GetFile requests against
+// the same tainted sender — the MTProto transport is fully multiplexed
+// (each request gets its own msg_id and RequestState). Yields chunks
+// in offset order so the SW's contiguous-fill protocol is unchanged.
+//
+// Also handles:
+//   • per-request 8 s timeout + retry-once on tainted reconnect (T1.2)
+//   • upload.fileCdnRedirect transparent forwarding with AES-CTR
+//     decrypt + SHA-256 hash verification (T2-CDN)
+// ══════════════════════════════════════════════════════════════════
+const _PART = 512 * 1024;
+const _PART_TIMEOUT_MS = 8000;
+const _CDN_HASH_BLOCK = 128 * 1024;
+const _MEDIA_DC_KEY = 'tg_media_dc';
+
+async function _fetchPart(originSender, ctx, offset, limit, signal) {
+    if (signal?.aborted) throw new Error('aborted');
+    const sender = ctx.cdn ? ctx.cdn.sender : originSender;
+    const req = ctx.cdn
+        ? new Api.upload.GetCdnFile({
+            fileToken: ctx.cdn.fileToken,
+            offset: bigInt(offset),
+            limit,
+        })
+        : new Api.upload.GetFile({
+            location: ctx.location,
+            offset: bigInt(offset),
+            limit,
+            precise: false,
+            cdnSupported: ctx.cdnEnabled,
+        });
+
+    let timer;
+    let result;
+    try {
+        result = await Promise.race([
+            client.invokeWithSender(req, sender),
+            new Promise((_, rej) => {
+                timer = setTimeout(() => rej(new Error('part-timeout')), _PART_TIMEOUT_MS);
+            }),
+        ]);
+    } finally {
+        clearTimeout(timer);
+    }
+
+    if (result instanceof Api.upload.FileCdnRedirect) {
+        await _enterCdnMode(ctx, result);
+        return _fetchPart(originSender, ctx, offset, limit, signal);
+    }
+
+    if (ctx.cdn && result instanceof Api.upload.CdnFileReuploadNeeded) {
+        ctx.cdn.reuploadCount = (ctx.cdn.reuploadCount || 0) + 1;
+        if (ctx.cdn.reuploadCount > 3) throw new Error('CDN reupload exhausted');
+        await client.invokeWithSender(
+            new Api.upload.ReuploadCdnFile({
+                fileToken: ctx.cdn.fileToken,
+                requestToken: result.requestToken,
+            }),
+            originSender,
+        );
+        return _fetchPart(originSender, ctx, offset, limit, signal);
+    }
+
+    let bytes = result.bytes;
+    if (!(bytes instanceof Uint8Array)) bytes = new Uint8Array(bytes);
+
+    if (ctx.cdn) {
+        bytes = await _decryptCdnBytes(ctx.cdn, offset, bytes);
+        await _verifyCdnHashes(ctx.cdn, offset, bytes, originSender);
+    }
+    // Detach from any larger backing store so we don't pin the whole TL response.
+    return new Uint8Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+}
+
+async function _enterCdnMode(ctx, redirect) {
+    const sender = await getTaintedSender(redirect.dcId);
+    const cdn = {
+        sender,
+        fileToken: redirect.fileToken,
+        encryptionKey: redirect.encryptionKey,
+        encryptionIv: redirect.encryptionIv,
+        cryptoKey: null,
+        hashes: new Map(), // offset (number) -> { limit, hash }
+        reuploadCount: 0,
+    };
+    for (const h of redirect.fileHashes || []) {
+        cdn.hashes.set(Number(h.offset), { limit: h.limit, hash: h.hash });
+    }
+    cdn.cryptoKey = await crypto.subtle.importKey(
+        'raw', cdn.encryptionKey,
+        { name: 'AES-CTR' },
+        false, ['decrypt'],
+    );
+    ctx.cdn = cdn;
+    console.log('[telegram] CDN redirect → DC', redirect.dcId);
+}
+
+// Telegram CDN: AES-CTR with 16-byte IV. The first 12 bytes are
+// encryption_iv; the last 4 bytes are encryption_iv[12..16] XOR
+// (offset / 16) as big-endian 32-bit int. WebCrypto handles the
+// per-block counter increment internally.
+async function _decryptCdnBytes(cdn, offset, encrypted) {
+    const iv = new Uint8Array(cdn.encryptionIv);
+    const counter = Math.floor(offset / 16);
+    iv[12] = iv[12] ^ ((counter >>> 24) & 0xff);
+    iv[13] = iv[13] ^ ((counter >>> 16) & 0xff);
+    iv[14] = iv[14] ^ ((counter >>> 8) & 0xff);
+    iv[15] = iv[15] ^ (counter & 0xff);
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-CTR', counter: iv, length: 64 },
+        cdn.cryptoKey,
+        encrypted.buffer.slice(encrypted.byteOffset, encrypted.byteOffset + encrypted.byteLength),
+    );
+    return new Uint8Array(decrypted);
+}
+
+async function _verifyCdnHashes(cdn, offset, bytes, originSender) {
+    let cursor = 0;
+    while (cursor < bytes.byteLength) {
+        const blockOffset = offset + cursor;
+        let h = cdn.hashes.get(blockOffset);
+        if (!h) {
+            const more = await client.invokeWithSender(
+                new Api.upload.GetCdnFileHashes({
+                    fileToken: cdn.fileToken,
+                    offset: bigInt(blockOffset),
+                }),
+                originSender,
+            );
+            for (const x of more || []) cdn.hashes.set(Number(x.offset), { limit: x.limit, hash: x.hash });
+            h = cdn.hashes.get(blockOffset);
+            if (!h) throw new Error('CDN hash missing for offset ' + blockOffset);
+        }
+        const len = Math.min(h.limit, bytes.byteLength - cursor);
+        const block = bytes.subarray(cursor, cursor + len);
+        const got = new Uint8Array(await crypto.subtle.digest('SHA-256', block));
+        const expected = h.hash instanceof Uint8Array ? h.hash : new Uint8Array(h.hash);
+        if (got.length !== expected.length) throw new Error('CDN hash length mismatch');
+        for (let i = 0; i < got.length; i++) {
+            if (got[i] !== expected[i]) throw new Error('CDN hash mismatch at offset ' + blockOffset);
+        }
+        cursor += len;
+    }
+}
+
+export async function* iterTrackDownloadParallel(groupId, trackId, offset = 0, signal = null, parallelism = 4) {
+    const cdnEnabled = localStorage.getItem('tg_cdn_enabled') !== 'false';
+    let msg = _msgCache[`${groupId}:${trackId}`];
+    if (!msg) throw new Error('Track not in cache');
+    let doc = msg.media?.document;
+    if (!doc) throw new Error('No document in message');
+
+    if (signal?.aborted) return;
+    await _ensureConnected();
+    if (signal?.aborted) return;
+
+    // Persist file DC for next-session pre-warm (T1.3).
+    try { if (doc.dcId) localStorage.setItem(_MEDIA_DC_KEY, String(doc.dcId)); } catch {}
+
+    const totalSize = Number(doc.size);
+    const startOffset = Math.floor(offset / _PART) * _PART;
+    const sender = await getTaintedSender(doc.dcId);
+
+    const ctx = {
+        location: new Api.InputDocumentFileLocation({
+            id: doc.id,
+            accessHash: doc.accessHash,
+            fileReference: doc.fileReference,
+            thumbSize: '',
+        }),
+        cdn: null,
+        cdnEnabled,
+    };
+
+    const inflight = new Map(); // partOffset -> Promise<Uint8Array>
+    const completed = new Map(); // partOffset -> Uint8Array (waiting to yield in order)
+    let nextIssue = startOffset;
+    let nextYield = startOffset;
+    let eofOffset = -1;
+
+    const issueOne = (partOffset) => {
+        const p = (async () => {
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    return await _fetchPart(sender, ctx, partOffset, _PART, signal);
+                } catch (e) {
+                    if (signal?.aborted) throw e;
+                    const m = String(e?.message || e || '');
+                    if (m.includes('FILE_REFERENCE_EXPIRED') || m.includes('FILEREF_UPGRADE_NEEDED')) {
+                        const fresh = await _refreshTrackMsg(groupId, trackId);
+                        const newDoc = fresh?.media?.document;
+                        if (newDoc) {
+                            ctx.location = new Api.InputDocumentFileLocation({
+                                id: newDoc.id,
+                                accessHash: newDoc.accessHash,
+                                fileReference: newDoc.fileReference,
+                                thumbSize: '',
+                            });
+                            ctx.cdn = null; // CDN context becomes stale
+                            continue;
+                        }
+                        throw e;
+                    }
+                    if (attempt === 0 && (_isTransientConnError(e) || m.includes('part-timeout'))) {
+                        try { await sender.reconnect(); } catch {}
+                        continue;
+                    }
+                    throw e;
+                }
+            }
+            throw new Error('part exhausted retries at offset ' + partOffset);
+        })();
+        inflight.set(partOffset, p);
+    };
+
+    const fillWindow = () => {
+        while (
+            inflight.size < parallelism &&
+            nextIssue < totalSize &&
+            (eofOffset < 0 || nextIssue <= eofOffset) &&
+            !signal?.aborted
+        ) {
+            issueOne(nextIssue);
+            nextIssue += _PART;
+        }
+    };
+
+    fillWindow();
+
+    try {
+        while (!signal?.aborted && nextYield < totalSize) {
+            if (completed.has(nextYield)) {
+                const u8 = completed.get(nextYield);
+                completed.delete(nextYield);
+                yield u8;
+                if (u8.byteLength < _PART) return;
+                nextYield += u8.byteLength;
+                fillWindow();
+                continue;
+            }
+            if (inflight.size === 0) return;
+            // Race in-flight; tag winner so we know which offset finished.
+            const tagged = [...inflight.entries()].map(([off, p]) =>
+                p.then(v => ({ off, v }), e => ({ off, err: e }))
+            );
+            const winner = await Promise.race(tagged);
+            inflight.delete(winner.off);
+            if (winner.err) throw winner.err;
+            completed.set(winner.off, winner.v);
+            // EOF detection: a short part means we've reached file end.
+            if (winner.v.byteLength < _PART && (eofOffset < 0 || winner.off < eofOffset)) {
+                eofOffset = winner.off;
+            }
+            fillWindow();
+        }
+    } finally {
+        // In-flight invokeWithSender calls cannot be cancelled mid-flight;
+        // their results just get discarded when the consumer tears down.
+        inflight.clear();
+        completed.clear();
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// T1.2 — Keepalive ping (60 s) + dead-socket detection
+// ──────────────────────────────────────────────────────────────────
+// With autoReconnect off and no app-level ping, a WebSocket killed by
+// an intermediary (mobile NAT, captive portal, ISP throttling) stays
+// "connected" until the next user action throws. We send a Ping with
+// PingDelayDisconnect every 60 s while the player is active. A missed
+// pong (5 s race) means the socket is dead — we force-disconnect it,
+// and the next request triggers the deduped reconnect from T1.0.
+// ══════════════════════════════════════════════════════════════════
+const _KEEPALIVE_MS = 60_000;
+const _PING_TIMEOUT_MS = 5_000;
+let _keepaliveTimer = null;
+let _keepaliveActive = false;
+
+async function _pingSender(sender) {
+    if (!sender || !sender.isConnected?.()) return false;
+    const pingId = bigInt(Math.floor(Math.random() * 0x7fffffff));
+    let timer;
+    try {
+        await Promise.race([
+            client.invokeWithSender(
+                new Api.PingDelayDisconnect({ pingId, disconnectDelay: 75 }),
+                sender,
+            ),
+            new Promise((_, rej) => {
+                timer = setTimeout(() => rej(new Error('ping-timeout')), _PING_TIMEOUT_MS);
+            }),
+        ]);
+        return true;
+    } catch (e) {
+        return false;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function _pingAllSenders() {
+    const seen = new Set();
+    const targets = [];
+    if (client?._sender) { targets.push(client._sender); seen.add(client._sender); }
+    for (const s of _taintedSenders) {
+        if (seen.has(s)) continue;
+        targets.push(s); seen.add(s);
+    }
+    for (const s of targets) {
+        if (!s.isConnected?.()) {
+            _taintedSenders.delete(s);
+            continue;
+        }
+        const ok = await _pingSender(s);
+        if (!ok) {
+            console.warn('[telegram] keepalive: ping missed → disconnecting sender for clean reconnect');
+            try { await s.disconnect?.(); } catch {}
+            _taintedSenders.delete(s);
+        }
+    }
+}
+
+export function startKeepalive() {
+    if (_keepaliveActive) return;
+    _keepaliveActive = true;
+    if (_keepaliveTimer) return;
+    const tick = async () => {
+        _keepaliveTimer = null;
+        if (!_keepaliveActive) return;
+        try { await _pingAllSenders(); } catch {}
+        if (!_keepaliveActive) return;
+        _keepaliveTimer = setTimeout(tick, _KEEPALIVE_MS);
+    };
+    _keepaliveTimer = setTimeout(tick, _KEEPALIVE_MS);
+}
+
+export function stopKeepalive() {
+    _keepaliveActive = false;
+    if (_keepaliveTimer) { clearTimeout(_keepaliveTimer); _keepaliveTimer = null; }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// T1.3 — Pre-warm the media DC sender
+// ──────────────────────────────────────────────────────────────────
+// On every successful track download we record doc.dcId in localStorage.
+// On next boot we open and authorize that DC sender in the background
+// so the first play() skips the WS handshake + auth.ImportAuthorization
+// — typically 1–2 s on cellular.
+// ══════════════════════════════════════════════════════════════════
+async function _prewarmMediaDc() {
+    if (typeof localStorage === 'undefined') return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const dc = parseInt(localStorage.getItem(_MEDIA_DC_KEY) || '0', 10);
+    if (!dc) return;
+    try {
+        await getTaintedSender(dc);
+        console.log('[telegram] pre-warmed media DC', dc);
+    } catch (e) {
+        console.warn('[telegram] pre-warm failed:', e?.message || e);
     }
 }
 
