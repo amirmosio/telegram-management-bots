@@ -3510,6 +3510,203 @@ function _maybeShowInstallBanner() {
 }
 
 // ══════════════════════════════════════
+//  HYPNOTISE MODE — beat-synced fullscreen flash
+// ══════════════════════════════════════
+const btnHypnotise = $('btn-hypnotise');
+const hypnotiseOverlay = $('hypnotise-overlay');
+const hypnotiseFlashEl = $('hypnotise-flash');
+
+let _hypAudioCtx = null;
+let _hypAnalyser = null;
+let _hypSrcNode = null;
+let _hypFreqData = null;
+let _hypRafId = null;
+let _hypEnergyHistory = [];     // rolling window of recent bass-energy samples
+const _HYP_HISTORY_SIZE = 50;   // ~0.8 s at 60fps
+let _hypLastBeatAt = 0;
+let _hypFlash = 0;              // current flash intensity, smoothed in JS
+
+// Hold-to-exit gesture state
+let _hypHoldTimer = null;
+let _hypHoldStart = null;       // {x, y, t}
+const _HYP_HOLD_MS = 600;
+const _HYP_HOLD_MOVE_PX = 10;
+
+function _hypBuildAudioGraph() {
+    if (_hypAudioCtx) return true;
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return false;
+    try {
+        _hypAudioCtx = new Ctor();
+        _hypSrcNode = _hypAudioCtx.createMediaElementSource(audio);
+        _hypAnalyser = _hypAudioCtx.createAnalyser();
+        _hypAnalyser.fftSize = 1024;
+        _hypAnalyser.smoothingTimeConstant = 0.6;
+        _hypSrcNode.connect(_hypAnalyser);
+        _hypAnalyser.connect(_hypAudioCtx.destination);
+        _hypFreqData = new Uint8Array(_hypAnalyser.frequencyBinCount);
+        return true;
+    } catch (e) {
+        // createMediaElementSource throws if already created on this element,
+        // or AudioContext construction fails — degrade gracefully.
+        _hypAudioCtx = null; _hypAnalyser = null; _hypSrcNode = null;
+        return false;
+    }
+}
+
+function _hypTick() {
+    _hypRafId = requestAnimationFrame(_hypTick);
+    if (!_hypAnalyser) return;
+
+    let target = 0;
+    if (!audio.paused && audio.readyState >= 2) {
+        _hypAnalyser.getByteFrequencyData(_hypFreqData);
+
+        // Bass band: bins 1–6 (~40–260 Hz at 44.1kHz / fftSize=1024).
+        // Skip bin 0 (DC offset).
+        let energy = 0;
+        for (let i = 1; i <= 6; i++) energy += _hypFreqData[i];
+        energy /= 6;
+
+        _hypEnergyHistory.push(energy);
+        if (_hypEnergyHistory.length > _HYP_HISTORY_SIZE) _hypEnergyHistory.shift();
+
+        // Mean + stddev over the rolling window.
+        let mean = 0;
+        for (let i = 0; i < _hypEnergyHistory.length; i++) mean += _hypEnergyHistory[i];
+        mean /= _hypEnergyHistory.length;
+        let variance = 0;
+        for (let i = 0; i < _hypEnergyHistory.length; i++) {
+            const d = _hypEnergyHistory[i] - mean;
+            variance += d * d;
+        }
+        variance /= _hypEnergyHistory.length;
+        const stddev = Math.sqrt(variance);
+
+        const now = performance.now();
+        const isBeat = energy > mean + 1.5 * stddev
+            && energy > 30                 // floor: ignore quiet sections
+            && (now - _hypLastBeatAt) > 180;
+
+        if (isBeat) {
+            target = 1;
+            _hypLastBeatAt = now;
+        } else {
+            // Continuous "dancing" pulse riding the overall bass energy.
+            const norm = mean > 1 ? Math.min(1, energy / (mean * 2)) : 0;
+            target = 0.04 + 0.35 * norm;
+        }
+    } else {
+        _hypEnergyHistory.length = 0;
+    }
+
+    // Smooth toward target — fast attack on beats, slower decay.
+    const k = target > _hypFlash ? 0.55 : 0.12;
+    _hypFlash += (target - _hypFlash) * k;
+    hypnotiseFlashEl.style.setProperty('--flash', _hypFlash.toFixed(3));
+}
+
+async function enterHypnotise() {
+    if (hypnotiseOverlay.classList.contains('open')) return;
+
+    const ok = _hypBuildAudioGraph();
+    if (!ok) {
+        // Fallback: open overlay anyway with a steady dim pulse so the UI still works.
+        hypnotiseOverlay.classList.add('open');
+        hypnotiseFlashEl.style.setProperty('--flash', '0.05');
+        _attachHypGestures();
+        return;
+    }
+
+    try { await _hypAudioCtx.resume(); } catch (_) {}
+
+    _hypEnergyHistory.length = 0;
+    _hypLastBeatAt = 0;
+    _hypFlash = 0;
+
+    hypnotiseOverlay.classList.add('open');
+    hypnotiseOverlay.setAttribute('aria-hidden', 'false');
+    _attachHypGestures();
+
+    // Wake lock — playback already requests one when audio is playing,
+    // but request defensively so the screen stays on even if paused.
+    try { _requestWakeLock(); } catch (_) {}
+
+    // Best-effort fullscreen — iOS Safari rejects on non-<video>, that's fine.
+    if (hypnotiseOverlay.requestFullscreen) {
+        hypnotiseOverlay.requestFullscreen().catch(() => {});
+    } else if (hypnotiseOverlay.webkitRequestFullscreen) {
+        try { hypnotiseOverlay.webkitRequestFullscreen(); } catch (_) {}
+    }
+
+    if (_hypRafId == null) _hypRafId = requestAnimationFrame(_hypTick);
+}
+
+function exitHypnotise() {
+    if (!hypnotiseOverlay.classList.contains('open')) return;
+    hypnotiseOverlay.classList.remove('open');
+    hypnotiseOverlay.setAttribute('aria-hidden', 'true');
+    hypnotiseFlashEl.style.setProperty('--flash', '0');
+
+    if (_hypRafId != null) { cancelAnimationFrame(_hypRafId); _hypRafId = null; }
+    _detachHypGestures();
+    _hypClearHold();
+
+    if (document.fullscreenElement === hypnotiseOverlay) {
+        document.exitFullscreen?.().catch(() => {});
+    } else if (document.webkitFullscreenElement === hypnotiseOverlay) {
+        try { document.webkitExitFullscreen?.(); } catch (_) {}
+    }
+    // Don't release the wake lock — playback may still want it.
+}
+
+function _hypClearHold() {
+    if (_hypHoldTimer != null) { clearTimeout(_hypHoldTimer); _hypHoldTimer = null; }
+    _hypHoldStart = null;
+}
+
+function _hypOnPointerDown(e) {
+    _hypClearHold();
+    _hypHoldStart = { x: e.clientX, y: e.clientY };
+    _hypHoldTimer = setTimeout(() => {
+        _hypHoldTimer = null;
+        exitHypnotise();
+    }, _HYP_HOLD_MS);
+}
+function _hypOnPointerMove(e) {
+    if (!_hypHoldStart) return;
+    const dx = e.clientX - _hypHoldStart.x;
+    const dy = e.clientY - _hypHoldStart.y;
+    if (dx * dx + dy * dy > _HYP_HOLD_MOVE_PX * _HYP_HOLD_MOVE_PX) _hypClearHold();
+}
+function _hypOnPointerEnd() { _hypClearHold(); }
+
+function _attachHypGestures() {
+    hypnotiseOverlay.addEventListener('pointerdown', _hypOnPointerDown);
+    hypnotiseOverlay.addEventListener('pointermove', _hypOnPointerMove);
+    hypnotiseOverlay.addEventListener('pointerup', _hypOnPointerEnd);
+    hypnotiseOverlay.addEventListener('pointercancel', _hypOnPointerEnd);
+    hypnotiseOverlay.addEventListener('pointerleave', _hypOnPointerEnd);
+}
+function _detachHypGestures() {
+    hypnotiseOverlay.removeEventListener('pointerdown', _hypOnPointerDown);
+    hypnotiseOverlay.removeEventListener('pointermove', _hypOnPointerMove);
+    hypnotiseOverlay.removeEventListener('pointerup', _hypOnPointerEnd);
+    hypnotiseOverlay.removeEventListener('pointercancel', _hypOnPointerEnd);
+    hypnotiseOverlay.removeEventListener('pointerleave', _hypOnPointerEnd);
+}
+
+btnHypnotise?.addEventListener('click', enterHypnotise);
+
+// If the user exits fullscreen via Esc / system gesture, also leave hypnotise mode.
+document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && hypnotiseOverlay.classList.contains('open')) {
+        // Only exit if we were the fullscreen element — heuristic via "just left FS while open".
+        exitHypnotise();
+    }
+});
+
+// ══════════════════════════════════════
 //  BOOT
 // ══════════════════════════════════════
 let _profilePhotoRetryScheduled = false;

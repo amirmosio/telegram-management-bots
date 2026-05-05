@@ -75956,6 +75956,179 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           installBanner.style.display = "flex";
         }
       }
+      var btnHypnotise = $("btn-hypnotise");
+      var hypnotiseOverlay = $("hypnotise-overlay");
+      var hypnotiseFlashEl = $("hypnotise-flash");
+      var _hypAudioCtx = null;
+      var _hypAnalyser = null;
+      var _hypSrcNode = null;
+      var _hypFreqData = null;
+      var _hypRafId = null;
+      var _hypEnergyHistory = [];
+      var _HYP_HISTORY_SIZE = 50;
+      var _hypLastBeatAt = 0;
+      var _hypFlash = 0;
+      var _hypHoldTimer = null;
+      var _hypHoldStart = null;
+      var _HYP_HOLD_MS = 600;
+      var _HYP_HOLD_MOVE_PX = 10;
+      function _hypBuildAudioGraph() {
+        if (_hypAudioCtx) return true;
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        if (!Ctor) return false;
+        try {
+          _hypAudioCtx = new Ctor();
+          _hypSrcNode = _hypAudioCtx.createMediaElementSource(audio);
+          _hypAnalyser = _hypAudioCtx.createAnalyser();
+          _hypAnalyser.fftSize = 1024;
+          _hypAnalyser.smoothingTimeConstant = 0.6;
+          _hypSrcNode.connect(_hypAnalyser);
+          _hypAnalyser.connect(_hypAudioCtx.destination);
+          _hypFreqData = new Uint8Array(_hypAnalyser.frequencyBinCount);
+          return true;
+        } catch (e) {
+          _hypAudioCtx = null;
+          _hypAnalyser = null;
+          _hypSrcNode = null;
+          return false;
+        }
+      }
+      function _hypTick() {
+        _hypRafId = requestAnimationFrame(_hypTick);
+        if (!_hypAnalyser) return;
+        let target = 0;
+        if (!audio.paused && audio.readyState >= 2) {
+          _hypAnalyser.getByteFrequencyData(_hypFreqData);
+          let energy = 0;
+          for (let i = 1; i <= 6; i++) energy += _hypFreqData[i];
+          energy /= 6;
+          _hypEnergyHistory.push(energy);
+          if (_hypEnergyHistory.length > _HYP_HISTORY_SIZE) _hypEnergyHistory.shift();
+          let mean = 0;
+          for (let i = 0; i < _hypEnergyHistory.length; i++) mean += _hypEnergyHistory[i];
+          mean /= _hypEnergyHistory.length;
+          let variance = 0;
+          for (let i = 0; i < _hypEnergyHistory.length; i++) {
+            const d = _hypEnergyHistory[i] - mean;
+            variance += d * d;
+          }
+          variance /= _hypEnergyHistory.length;
+          const stddev = Math.sqrt(variance);
+          const now = performance.now();
+          const isBeat = energy > mean + 1.5 * stddev && energy > 30 && now - _hypLastBeatAt > 180;
+          if (isBeat) {
+            target = 1;
+            _hypLastBeatAt = now;
+          } else {
+            const norm = mean > 1 ? Math.min(1, energy / (mean * 2)) : 0;
+            target = 0.04 + 0.35 * norm;
+          }
+        } else {
+          _hypEnergyHistory.length = 0;
+        }
+        const k = target > _hypFlash ? 0.55 : 0.12;
+        _hypFlash += (target - _hypFlash) * k;
+        hypnotiseFlashEl.style.setProperty("--flash", _hypFlash.toFixed(3));
+      }
+      async function enterHypnotise() {
+        if (hypnotiseOverlay.classList.contains("open")) return;
+        const ok = _hypBuildAudioGraph();
+        if (!ok) {
+          hypnotiseOverlay.classList.add("open");
+          hypnotiseFlashEl.style.setProperty("--flash", "0.05");
+          _attachHypGestures();
+          return;
+        }
+        try {
+          await _hypAudioCtx.resume();
+        } catch (_) {
+        }
+        _hypEnergyHistory.length = 0;
+        _hypLastBeatAt = 0;
+        _hypFlash = 0;
+        hypnotiseOverlay.classList.add("open");
+        hypnotiseOverlay.setAttribute("aria-hidden", "false");
+        _attachHypGestures();
+        try {
+          _requestWakeLock();
+        } catch (_) {
+        }
+        if (hypnotiseOverlay.requestFullscreen) {
+          hypnotiseOverlay.requestFullscreen().catch(() => {
+          });
+        } else if (hypnotiseOverlay.webkitRequestFullscreen) {
+          try {
+            hypnotiseOverlay.webkitRequestFullscreen();
+          } catch (_) {
+          }
+        }
+        if (_hypRafId == null) _hypRafId = requestAnimationFrame(_hypTick);
+      }
+      function exitHypnotise() {
+        if (!hypnotiseOverlay.classList.contains("open")) return;
+        hypnotiseOverlay.classList.remove("open");
+        hypnotiseOverlay.setAttribute("aria-hidden", "true");
+        hypnotiseFlashEl.style.setProperty("--flash", "0");
+        if (_hypRafId != null) {
+          cancelAnimationFrame(_hypRafId);
+          _hypRafId = null;
+        }
+        _detachHypGestures();
+        _hypClearHold();
+        if (document.fullscreenElement === hypnotiseOverlay) {
+          document.exitFullscreen?.().catch(() => {
+          });
+        } else if (document.webkitFullscreenElement === hypnotiseOverlay) {
+          try {
+            document.webkitExitFullscreen?.();
+          } catch (_) {
+          }
+        }
+      }
+      function _hypClearHold() {
+        if (_hypHoldTimer != null) {
+          clearTimeout(_hypHoldTimer);
+          _hypHoldTimer = null;
+        }
+        _hypHoldStart = null;
+      }
+      function _hypOnPointerDown(e) {
+        _hypClearHold();
+        _hypHoldStart = { x: e.clientX, y: e.clientY };
+        _hypHoldTimer = setTimeout(() => {
+          _hypHoldTimer = null;
+          exitHypnotise();
+        }, _HYP_HOLD_MS);
+      }
+      function _hypOnPointerMove(e) {
+        if (!_hypHoldStart) return;
+        const dx = e.clientX - _hypHoldStart.x;
+        const dy = e.clientY - _hypHoldStart.y;
+        if (dx * dx + dy * dy > _HYP_HOLD_MOVE_PX * _HYP_HOLD_MOVE_PX) _hypClearHold();
+      }
+      function _hypOnPointerEnd() {
+        _hypClearHold();
+      }
+      function _attachHypGestures() {
+        hypnotiseOverlay.addEventListener("pointerdown", _hypOnPointerDown);
+        hypnotiseOverlay.addEventListener("pointermove", _hypOnPointerMove);
+        hypnotiseOverlay.addEventListener("pointerup", _hypOnPointerEnd);
+        hypnotiseOverlay.addEventListener("pointercancel", _hypOnPointerEnd);
+        hypnotiseOverlay.addEventListener("pointerleave", _hypOnPointerEnd);
+      }
+      function _detachHypGestures() {
+        hypnotiseOverlay.removeEventListener("pointerdown", _hypOnPointerDown);
+        hypnotiseOverlay.removeEventListener("pointermove", _hypOnPointerMove);
+        hypnotiseOverlay.removeEventListener("pointerup", _hypOnPointerEnd);
+        hypnotiseOverlay.removeEventListener("pointercancel", _hypOnPointerEnd);
+        hypnotiseOverlay.removeEventListener("pointerleave", _hypOnPointerEnd);
+      }
+      btnHypnotise?.addEventListener("click", enterHypnotise);
+      document.addEventListener("fullscreenchange", () => {
+        if (!document.fullscreenElement && hypnotiseOverlay.classList.contains("open")) {
+          exitHypnotise();
+        }
+      });
       var _profilePhotoRetryScheduled = false;
       function setUserProfile(user) {
         const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "User";

@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=125">
+    <link rel="manifest" href="/manifest.json?v=126">
     <link rel="apple-touch-icon" href="/icons/icon-192.svg">
-    <link rel="stylesheet" href="style.css?v=125">
+    <link rel="stylesheet" href="style.css?v=126">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -151,6 +151,13 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <circle cx="12" cy="12" r="10"/>
                             <path d="M16 8.5c-.9-.9-2.1-1.5-3.5-1.5-2.5 0-4 1.5-4 3s1 2.5 3 3 3 1.5 3 3-1.5 3-4 3c-1.4 0-2.6-.6-3.5-1.5"/>
+                        </svg>
+                    </button>
+                    <button id="btn-hypnotise" class="icon-btn" title="Hypnotise mode (beat-synced flash)" aria-label="Hypnotise mode">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"/>
+                            <circle cx="12" cy="12" r="6"/>
+                            <circle cx="12" cy="12" r="2" fill="currentColor"/>
                         </svg>
                     </button>
                     <button id="btn-search" class="icon-btn" title="Search music">
@@ -373,6 +380,10 @@
     </div>
 
     <div id="overlay"></div>
+    <div id="hypnotise-overlay" aria-hidden="true">
+        <div id="hypnotise-flash"></div>
+        <div id="hypnotise-hint">Hold anywhere to exit</div>
+    </div>
     <audio id="audio-element" preload="auto"></audio>
     <script>
     // Register service worker for PWA + background audio
@@ -380,6 +391,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=125"></script>
+    <script src="app.bundle.js?v=126"></script>
 </body>
 </html>
