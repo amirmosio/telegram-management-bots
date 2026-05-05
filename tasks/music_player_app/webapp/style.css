@@ -1809,7 +1809,7 @@ html, body {
     opacity: 0;
     transition: opacity 200ms ease;
 }
-#hypnotise-overlay.loading #hypnotise-loading { opacity: 1; }
+#hypnotise-overlay.hyp-loading #hypnotise-loading { opacity: 1; }
 .hypnotise-spinner {
     width: 36px;
     height: 36px;
@@ -1828,7 +1828,7 @@ html, body {
 }
 /* While loading, suppress the hold-to-exit hint so the spinner has the
    stage to itself. */
-#hypnotise-overlay.loading #hypnotise-hint { animation: none; opacity: 0; }
+#hypnotise-overlay.hyp-loading #hypnotise-hint { animation: none; opacity: 0; }
 #hypnotise-overlay.open #hypnotise-hint {
     animation: hypnotiseHintFade 3s ease-out forwards;
 }

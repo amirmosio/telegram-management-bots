@@ -78479,7 +78479,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _HYP_HOLD_MOVE_PX = 10;
       function _hypSetLoading(on) {
         if (!hypnotiseOverlay) return;
-        hypnotiseOverlay.classList.toggle("loading", !!on);
+        hypnotiseOverlay.classList.toggle("hyp-loading", !!on);
       }
       async function _hypAnalyzeCurrentTrack() {
         const trackId = currentTrackId;
@@ -78655,7 +78655,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       function exitHypnotise() {
         if (!hypnotiseOverlay.classList.contains("open")) return;
         hypnotiseOverlay.classList.remove("open");
-        hypnotiseOverlay.classList.remove("loading");
+        hypnotiseOverlay.classList.remove("hyp-loading");
         hypnotiseOverlay.setAttribute("aria-hidden", "true");
         hypnotiseFlashEl.style.setProperty("--flash", "0");
         if (_hypRafId != null) {

@@ -3588,7 +3588,11 @@ const _HYP_HOLD_MOVE_PX = 10;
 
 function _hypSetLoading(on) {
     if (!hypnotiseOverlay) return;
-    hypnotiseOverlay.classList.toggle('loading', !!on);
+    // Name must avoid colliding with the generic .loading rule in style.css
+    // (which paints a 20px circular spinner via border + border-radius +
+    // accent top-color); on the fullscreen overlay it scaled into a giant
+    // rotating ellipse.
+    hypnotiseOverlay.classList.toggle('hyp-loading', !!on);
 }
 
 async function _hypAnalyzeCurrentTrack() {
@@ -3814,7 +3818,7 @@ async function enterHypnotise() {
 function exitHypnotise() {
     if (!hypnotiseOverlay.classList.contains('open')) return;
     hypnotiseOverlay.classList.remove('open');
-    hypnotiseOverlay.classList.remove('loading');
+    hypnotiseOverlay.classList.remove('hyp-loading');
     hypnotiseOverlay.setAttribute('aria-hidden', 'true');
     hypnotiseFlashEl.style.setProperty('--flash', '0');
 
