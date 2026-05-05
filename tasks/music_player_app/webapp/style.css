@@ -511,6 +511,22 @@ html, body {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
+/* Topic chip rendered inline next to the artist in mixed-topic views (All). */
+.track-item-topic {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--text-dim);
+    vertical-align: middle;
+    max-width: 50%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .track-item-duration {
     color: var(--text-dim); font-size: 12px;
     font-variant-numeric: tabular-nums;

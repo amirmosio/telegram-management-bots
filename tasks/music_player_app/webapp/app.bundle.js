@@ -70555,6 +70555,16 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return { topicId, topicTitle };
   }
+  function getTrackTopicTag(groupId, trackId) {
+    const { topicId, topicTitle } = _deriveTopicContext(groupId, trackId);
+    if (topicId == null) return null;
+    const topic = (_topicsCache[groupId] || []).find((t) => t.id === topicId);
+    return {
+      topicId,
+      topicTitle: topicTitle || topic?.title || null,
+      icon: topic?.icon || null
+    };
+  }
   async function _upsertTrackRow(groupId, trackId, patch) {
     const key = _trackKey(groupId, trackId);
     const existing = await idbGet(TRACKS_STORE, key) || {
@@ -76146,11 +76156,19 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const addBtn = context.showAddBtn ? `<button class="track-add-btn" title="Add to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg></button>` : "";
         const moveBtn = context.showAddBtn ? `<button class="track-move-btn" title="Move to playlist"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>` : "";
         const placeholderSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+        let topicTagHtml = "";
+        if (context.topicId == null) {
+          const tag = getTrackTopicTag(context.groupId, track.id);
+          if (tag && tag.topicTitle) {
+            const label = (tag.icon ? tag.icon + " " : "") + tag.topicTitle;
+            topicTagHtml = `<span class="track-item-topic" title="${escapeHtml(tag.topicTitle)}">${escapeHtml(label)}</span>`;
+          }
+        }
         el.innerHTML = `
         <div class="track-item-thumb-placeholder">${placeholderSvg}</div>
         <div class="track-item-info">
             <div class="track-item-title">${escapeHtml(track.title)}</div>
-            <div class="track-item-artist">${escapeHtml(track.artist || "Unknown")}</div>
+            <div class="track-item-artist">${escapeHtml(track.artist || "Unknown")}${topicTagHtml}</div>
         </div>
         <span class="track-item-downloaded" title="Available offline"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span>
         <span class="track-item-duration">${formatTime(track.duration)}</span>

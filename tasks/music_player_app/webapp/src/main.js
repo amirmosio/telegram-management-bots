@@ -973,11 +973,23 @@ function _createTrackEl(track, trackList, context) {
         : '';
 
     const placeholderSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+    // Mixed-topic views (currently just the All-tab sidebar list) pass
+    // context.topicId == null. In that case append a small chip showing
+    // which topic each track lives in. Suppressed in topic-specific views
+    // since every row would carry the same tag.
+    let topicTagHtml = '';
+    if (context.topicId == null) {
+        const tag = tg.getTrackTopicTag(context.groupId, track.id);
+        if (tag && tag.topicTitle) {
+            const label = (tag.icon ? tag.icon + ' ' : '') + tag.topicTitle;
+            topicTagHtml = `<span class="track-item-topic" title="${escapeHtml(tag.topicTitle)}">${escapeHtml(label)}</span>`;
+        }
+    }
     el.innerHTML = `
         <div class="track-item-thumb-placeholder">${placeholderSvg}</div>
         <div class="track-item-info">
             <div class="track-item-title">${escapeHtml(track.title)}</div>
-            <div class="track-item-artist">${escapeHtml(track.artist || 'Unknown')}</div>
+            <div class="track-item-artist">${escapeHtml(track.artist || 'Unknown')}${topicTagHtml}</div>
         </div>
         <span class="track-item-downloaded" title="Available offline"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg></span>
         <span class="track-item-duration">${formatTime(track.duration)}</span>

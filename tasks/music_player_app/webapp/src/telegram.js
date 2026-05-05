@@ -156,6 +156,21 @@ function _deriveTopicContext(groupId, trackId, override = {}) {
     return { topicId, topicTitle };
 }
 
+// Public: get the topic tag (id, title, icon) for a track, for UI rendering
+// in mixed-topic views like the "All" sidebar list. Returns null if the
+// track has no resolvable topic (e.g. group has no forum topics, or the
+// msg cache hasn't been warmed yet).
+export function getTrackTopicTag(groupId, trackId) {
+    const { topicId, topicTitle } = _deriveTopicContext(groupId, trackId);
+    if (topicId == null) return null;
+    const topic = (_topicsCache[groupId] || []).find(t => t.id === topicId);
+    return {
+        topicId,
+        topicTitle: topicTitle || topic?.title || null,
+        icon: topic?.icon || null,
+    };
+}
+
 // Generic upsert — merges `patch` into the existing row (or creates a
 // new row). Used by cacheTrack, updateTrackLyrics, updateTrackArtwork.
 async function _upsertTrackRow(groupId, trackId, patch) {
