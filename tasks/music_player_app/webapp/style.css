@@ -511,17 +511,16 @@ html, body {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* Topic chip rendered inline next to the artist in mixed-topic views (All). */
+/* Topic chip — rendered on its own row beneath checkmark+duration in
+   the All view's right-side meta column. */
 .track-item-topic {
     display: inline-block;
-    margin-left: 8px;
     padding: 1px 7px;
     border: 1px solid var(--border);
     border-radius: 999px;
     font-size: 11px;
     color: var(--text-dim);
-    vertical-align: middle;
-    max-width: 50%;
+    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -532,16 +531,34 @@ html, body {
     font-variant-numeric: tabular-nums;
 }
 
-/* Downloaded marker — hidden by default, shown when row has .is-downloaded */
-.track-item-downloaded {
-    display: none;
-    color: var(--accent);
-    align-items: center;
-    margin-right: 6px;
+/* Right-side meta column: checkmark + duration on top, topic chip below. */
+.track-item-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
     flex-shrink: 0;
-    opacity: 0.85;
+    min-width: 0;
 }
-.track-item.is-downloaded .track-item-downloaded { display: inline-flex; }
+.track-item-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* Downloaded marker — always shown, dim by default, accent when downloaded. */
+.track-item-downloaded {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--text-dim);
+    opacity: 0.35;
+    transition: opacity 0.15s, color 0.15s;
+}
+.track-item.is-downloaded .track-item-downloaded {
+    color: var(--accent);
+    opacity: 0.9;
+}
 
 /* Shuffle button spinner while draining all pages */
 .control-btn-sm.draining {
