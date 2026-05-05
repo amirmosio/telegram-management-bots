@@ -3626,11 +3626,12 @@ async function _hypAnalyzeCurrentTrack() {
 
         const envelope = _hypComputeEnvelope(audioBuffer);
 
-        const data = { beatTimes, envelope };
+        const dur = audioBuffer.duration;
+        const beatRate = beatTimes.length / Math.max(1, dur);
+        const data = { beatTimes, envelope, beatRate };
         _hypBeatCache.set(trackId, data);
         if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
-        const dur = audioBuffer.duration;
-        console.log('[hypnotise] analyzed track', trackId, '→', beatTimes.length, 'onsets over', dur.toFixed(1), 's (avg', (beatTimes.length / dur).toFixed(2), '/s)');
+        console.log('[hypnotise] analyzed track', trackId, '→', beatTimes.length, 'onsets over', dur.toFixed(1), 's (avg', beatRate.toFixed(2), '/s)');
     } catch (e) {
         console.warn('[hypnotise] analysis failed for track', trackId, e);
     } finally {
@@ -3653,7 +3654,6 @@ function _hypComputeEnvelope(audioBuffer) {
     const N = ch0.length;
     const numSamples = Math.max(1, Math.floor(N / stride));
     const samples = new Float32Array(numSamples);
-    let max = 0.0001;
     for (let i = 0; i < numSamples; i++) {
         const start = i * stride;
         let sum = 0;
@@ -3668,13 +3668,17 @@ function _hypComputeEnvelope(audioBuffer) {
                 sum += s * s;
             }
         }
-        const rms = Math.sqrt(sum / stride);
-        samples[i] = rms;
-        if (rms > max) max = rms;
+        samples[i] = Math.sqrt(sum / stride);
     }
-    // Normalise so the loudest passage maps to 1.0.
-    for (let i = 0; i < numSamples; i++) samples[i] /= max;
-    return { samples, hz: ENV_HZ };
+    // Per-track percentile normalisation: map each track's typical-quiet to
+    // typical-loud (p10 → p90) onto 0..1. Way more robust than absolute peak —
+    // a single huge transient no longer crushes the rest of the track to
+    // black, and quiet songs no longer stay invisible.
+    const sorted = Float32Array.from(samples).sort();
+    const pct = (p) => sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor(sorted.length * p)))] || 0;
+    const lo = pct(0.10);
+    const hi = Math.max(pct(0.90), lo + 0.001);
+    return { samples, hz: ENV_HZ, lo, hi };
 }
 
 // Onset detector backed by aubio (WASM). aubio's HFC algorithm is the
@@ -3750,21 +3754,33 @@ function _hypTick() {
         const t = audio.currentTime - _HYP_LATENCY_OFFSET;
 
         // ── Continuous amplitude pulse from precomputed envelope ──
+        // Map each track's own [p10, p90] loudness range onto [0, 1] so
+        // quiet songs stay visible and loud songs don't blow out the whole
+        // dynamic range.
         const env = _hypBeats.envelope;
         if (env && env.samples.length) {
             const idx = Math.max(0, Math.min(env.samples.length - 1, Math.floor(t * env.hz)));
-            target = 0.03 + 0.4 * env.samples[idx];
+            const raw = env.samples[idx];
+            const norm = Math.max(0, Math.min(1, (raw - env.lo) / (env.hi - env.lo)));
+            target = 0.03 + 0.4 * norm;
         }
 
-        // ── Onset-driven flash spikes ──
+        // ── Onset-driven flash spikes (adaptive to onset density) ──
+        // Dense beat tracks (>3 onsets/s) used to stack 180 ms decays on top
+        // of each other and pin the screen to white. Shorten the decay and
+        // cap the peak when we know the track is busy.
         const beats = _hypBeats.beatTimes;
+        const rate = _hypBeats.beatRate || 1;
+        const decay = rate > 4 ? 0.07 : rate > 2 ? 0.11 : _HYP_BEAT_DECAY;
+        const peak  = rate > 4 ? 0.65 : rate > 2 ? 0.85 : 1.0;
+
         if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
         while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
 
         if (_hypNextBeatIdx > 0) {
             const since = t - beats[_hypNextBeatIdx - 1];
-            if (since >= 0 && since < _HYP_BEAT_DECAY) {
-                target = Math.max(target, 1 - since / _HYP_BEAT_DECAY);
+            if (since >= 0 && since < decay) {
+                target = Math.max(target, peak * (1 - since / decay));
             }
         }
         if (_hypNextBeatIdx < beats.length) {

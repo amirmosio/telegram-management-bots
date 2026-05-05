@@ -78511,11 +78511,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           const beatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
           if (myToken !== _hypAnalysisToken) return;
           const envelope = _hypComputeEnvelope(audioBuffer);
-          const data = { beatTimes, envelope };
+          const dur = audioBuffer.duration;
+          const beatRate = beatTimes.length / Math.max(1, dur);
+          const data = { beatTimes, envelope, beatRate };
           _hypBeatCache.set(trackId, data);
           if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
-          const dur = audioBuffer.duration;
-          console.log("[hypnotise] analyzed track", trackId, "\u2192", beatTimes.length, "onsets over", dur.toFixed(1), "s (avg", (beatTimes.length / dur).toFixed(2), "/s)");
+          console.log("[hypnotise] analyzed track", trackId, "\u2192", beatTimes.length, "onsets over", dur.toFixed(1), "s (avg", beatRate.toFixed(2), "/s)");
         } catch (e) {
           console.warn("[hypnotise] analysis failed for track", trackId, e);
         } finally {
@@ -78533,7 +78534,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const N = ch0.length;
         const numSamples = Math.max(1, Math.floor(N / stride));
         const samples = new Float32Array(numSamples);
-        let max = 1e-4;
         for (let i = 0; i < numSamples; i++) {
           const start = i * stride;
           let sum = 0;
@@ -78548,12 +78548,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               sum += s * s;
             }
           }
-          const rms = Math.sqrt(sum / stride);
-          samples[i] = rms;
-          if (rms > max) max = rms;
+          samples[i] = Math.sqrt(sum / stride);
         }
-        for (let i = 0; i < numSamples; i++) samples[i] /= max;
-        return { samples, hz: ENV_HZ };
+        const sorted = Float32Array.from(samples).sort();
+        const pct = (p) => sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor(sorted.length * p)))] || 0;
+        const lo = pct(0.1);
+        const hi = Math.max(pct(0.9), lo + 1e-3);
+        return { samples, hz: ENV_HZ, lo, hi };
       }
       var _aubioMod = null;
       async function _hypGetAubio() {
@@ -78604,15 +78605,20 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           const env = _hypBeats.envelope;
           if (env && env.samples.length) {
             const idx = Math.max(0, Math.min(env.samples.length - 1, Math.floor(t * env.hz)));
-            target = 0.03 + 0.4 * env.samples[idx];
+            const raw = env.samples[idx];
+            const norm = Math.max(0, Math.min(1, (raw - env.lo) / (env.hi - env.lo)));
+            target = 0.03 + 0.4 * norm;
           }
           const beats = _hypBeats.beatTimes;
+          const rate = _hypBeats.beatRate || 1;
+          const decay = rate > 4 ? 0.07 : rate > 2 ? 0.11 : _HYP_BEAT_DECAY;
+          const peak = rate > 4 ? 0.65 : rate > 2 ? 0.85 : 1;
           if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
           while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
           if (_hypNextBeatIdx > 0) {
             const since = t - beats[_hypNextBeatIdx - 1];
-            if (since >= 0 && since < _HYP_BEAT_DECAY) {
-              target = Math.max(target, 1 - since / _HYP_BEAT_DECAY);
+            if (since >= 0 && since < decay) {
+              target = Math.max(target, peak * (1 - since / decay));
             }
           }
           if (_hypNextBeatIdx < beats.length) {
