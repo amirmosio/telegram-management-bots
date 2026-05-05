@@ -78569,7 +78569,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const hopSize = 512;
         const onset = new Aubio.Onset("specflux", bufferSize, hopSize, sr);
         onset.setThreshold(0.25);
-        onset.setSilence(-55);
+        onset.setSilence(-45);
         const ch0 = audioBuffer.getChannelData(0);
         const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
         const N = ch0.length;
@@ -78624,7 +78624,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         const k = target > _hypFlash ? 0.55 : 0.12;
         _hypFlash += (target - _hypFlash) * k;
-        hypnotiseFlashEl.style.setProperty("--flash", _hypFlash.toFixed(3));
+        const shaped = _hypFlash < 0.5 ? 4 * _hypFlash * _hypFlash * _hypFlash : 1 - 4 * (1 - _hypFlash) * (1 - _hypFlash) * (1 - _hypFlash);
+        hypnotiseFlashEl.style.setProperty("--flash", shaped.toFixed(3));
       }
       async function enterHypnotise() {
         if (hypnotiseOverlay.classList.contains("open")) return;

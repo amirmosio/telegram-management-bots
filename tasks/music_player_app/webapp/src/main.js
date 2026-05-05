@@ -3699,7 +3699,10 @@ async function _hypDetectOnsets(audioBuffer, stillValid) {
     // Note: index.d.ts (3-arg) is wrong; the C binding takes 4 args.
     const onset = new Aubio.Onset('specflux', bufferSize, hopSize, sr);
     onset.setThreshold(0.25);   // 0 = most sensitive, 1 = strict
-    onset.setSilence(-55);      // dB; ignore peaks in near-silence
+    onset.setSilence(-45);      // dB; ignore peaks in near-silence
+    // Silence floor was -55 dBFS but reverb tails and faint ambience were
+    // still triggering flashes during quiet passages. -45 is louder than
+    // typical noise/decay but well below any real musical beat.
 
     const ch0 = audioBuffer.getChannelData(0);
     const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
@@ -3770,7 +3773,14 @@ function _hypTick() {
 
     const k = target > _hypFlash ? 0.55 : 0.12;
     _hypFlash += (target - _hypFlash) * k;
-    hypnotiseFlashEl.style.setProperty('--flash', _hypFlash.toFixed(3));
+    // S-curve before display: pushes the midrange toward 0 (black) or 1
+    // (white). Linear opacity makes the flash dwell in gray during the
+    // attack/decay; this keeps the visual mostly binary, with a quick
+    // sweep through the middle. Exactly maps 0→0 and 1→1.
+    const shaped = _hypFlash < 0.5
+        ? 4 * _hypFlash * _hypFlash * _hypFlash
+        : 1 - 4 * (1 - _hypFlash) * (1 - _hypFlash) * (1 - _hypFlash);
+    hypnotiseFlashEl.style.setProperty('--flash', shaped.toFixed(3));
 }
 
 async function enterHypnotise() {
