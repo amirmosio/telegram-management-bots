@@ -78477,17 +78477,28 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _hypHoldStart = null;
       var _HYP_HOLD_MS = 600;
       var _HYP_HOLD_MOVE_PX = 10;
+      function _hypSetLoading(on) {
+        if (!hypnotiseOverlay) return;
+        hypnotiseOverlay.classList.toggle("loading", !!on);
+      }
       async function _hypAnalyzeCurrentTrack() {
         const trackId = currentTrackId;
-        if (trackId == null) return;
+        if (trackId == null) {
+          _hypSetLoading(false);
+          return;
+        }
         const cached = _hypBeatCache.get(trackId);
         if (cached) {
           _hypInstallSchedule(trackId, cached);
+          _hypSetLoading(false);
           return;
         }
         const myToken = ++_hypAnalysisToken;
         const src = audio.currentSrc || audio.src;
-        if (!src) return;
+        if (!src) {
+          _hypSetLoading(false);
+          return;
+        }
         let ctx = null;
         try {
           const res = await fetch(src);
@@ -78510,6 +78521,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         } finally {
           if (ctx && ctx.close) ctx.close().catch(() => {
           });
+          if (myToken === _hypAnalysisToken) _hypSetLoading(false);
         }
       }
       function _hypComputeEnvelope(audioBuffer) {
@@ -78621,6 +78633,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _hypNextBeatIdx = 0;
         hypnotiseOverlay.classList.add("open");
         hypnotiseOverlay.setAttribute("aria-hidden", "false");
+        _hypSetLoading(true);
         _attachHypGestures();
         try {
           _requestWakeLock();
@@ -78641,6 +78654,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       function exitHypnotise() {
         if (!hypnotiseOverlay.classList.contains("open")) return;
         hypnotiseOverlay.classList.remove("open");
+        hypnotiseOverlay.classList.remove("loading");
         hypnotiseOverlay.setAttribute("aria-hidden", "true");
         hypnotiseFlashEl.style.setProperty("--flash", "0");
         if (_hypRafId != null) {

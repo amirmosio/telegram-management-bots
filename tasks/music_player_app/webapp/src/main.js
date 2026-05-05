@@ -3586,16 +3586,21 @@ let _hypHoldStart = null;
 const _HYP_HOLD_MS = 600;
 const _HYP_HOLD_MOVE_PX = 10;
 
+function _hypSetLoading(on) {
+    if (!hypnotiseOverlay) return;
+    hypnotiseOverlay.classList.toggle('loading', !!on);
+}
+
 async function _hypAnalyzeCurrentTrack() {
     const trackId = currentTrackId;
-    if (trackId == null) return;
+    if (trackId == null) { _hypSetLoading(false); return; }
 
     const cached = _hypBeatCache.get(trackId);
-    if (cached) { _hypInstallSchedule(trackId, cached); return; }
+    if (cached) { _hypInstallSchedule(trackId, cached); _hypSetLoading(false); return; }
 
     const myToken = ++_hypAnalysisToken;
     const src = audio.currentSrc || audio.src;
-    if (!src) return;
+    if (!src) { _hypSetLoading(false); return; }
 
     // Throwaway AudioContext used ONLY for decodeAudioData. We never connect
     // anything to its destination and close it as soon as we have the buffer,
@@ -3626,6 +3631,9 @@ async function _hypAnalyzeCurrentTrack() {
         console.warn('[hypnotise] analysis failed for track', trackId, e);
     } finally {
         if (ctx && ctx.close) ctx.close().catch(() => {});
+        // Hide the spinner only if this run is still the current one — a
+        // newer analysis (track change while loading) owns the indicator.
+        if (myToken === _hypAnalysisToken) _hypSetLoading(false);
     }
 }
 
@@ -3774,6 +3782,9 @@ async function enterHypnotise() {
 
     hypnotiseOverlay.classList.add('open');
     hypnotiseOverlay.setAttribute('aria-hidden', 'false');
+    // Show the spinner immediately. _hypAnalyzeCurrentTrack will clear it
+    // on cache hit (next tick) or after the offline analysis completes.
+    _hypSetLoading(true);
     _attachHypGestures();
 
     try { _requestWakeLock(); } catch (_) {}
@@ -3793,6 +3804,7 @@ async function enterHypnotise() {
 function exitHypnotise() {
     if (!hypnotiseOverlay.classList.contains('open')) return;
     hypnotiseOverlay.classList.remove('open');
+    hypnotiseOverlay.classList.remove('loading');
     hypnotiseOverlay.setAttribute('aria-hidden', 'true');
     hypnotiseFlashEl.style.setProperty('--flash', '0');
 

@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=138">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=138">
-    <link rel="stylesheet" href="style.css?v=138">
+    <link rel="manifest" href="/manifest.json?v=139">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=139">
+    <link rel="stylesheet" href="style.css?v=139">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -382,6 +382,10 @@
     <div id="overlay"></div>
     <div id="hypnotise-overlay" aria-hidden="true">
         <div id="hypnotise-flash"></div>
+        <div id="hypnotise-loading" aria-hidden="true">
+            <div class="hypnotise-spinner"></div>
+            <div class="hypnotise-loading-label">Analysing beats…</div>
+        </div>
         <div id="hypnotise-hint">Hold anywhere to exit</div>
     </div>
     <audio id="audio-element" preload="auto"></audio>
@@ -391,6 +395,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=138"></script>
+    <script src="app.bundle.js?v=139"></script>
 </body>
 </html>
