@@ -71680,6 +71680,53 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     result.set(footer, header.length + data.length - 3);
     return result;
   }
+  function _extractForwardedId(result) {
+    if (!result) return null;
+    const list = result.updates || (Array.isArray(result) ? result : null);
+    if (!list) return null;
+    for (const upd of list) {
+      if (upd && upd.message && typeof upd.message.id === "number") {
+        return upd.message.id;
+      }
+    }
+    return null;
+  }
+  async function _migrateCacheRow(srcGroupId, srcTrackId, dstGroupId, dstTrackId, dstTopicId) {
+    const srcKey = _trackKey(srcGroupId, srcTrackId);
+    const dstKey = _trackKey(dstGroupId, dstTrackId);
+    if (srcKey === dstKey) return false;
+    const oldRow = await idbGet(TRACKS_STORE, srcKey);
+    if (!oldRow || !oldRow.audio || !oldRow.track) return false;
+    if (await idbGet(TRACKS_STORE, dstKey)) return false;
+    const topic = (_topicsCache[dstGroupId] || []).find((t) => t.id === dstTopicId);
+    const newTrack = { ...oldRow.track, id: dstTrackId };
+    const newRow = {
+      ...oldRow,
+      groupId: dstGroupId,
+      trackId: dstTrackId,
+      topicId: dstTopicId,
+      topicTitle: topic?.title ?? oldRow.topicTitle ?? null,
+      track: newTrack,
+      cachedAt: Date.now()
+    };
+    try {
+      await idbPut(TRACKS_STORE, dstKey, newRow);
+    } catch (e) {
+      console.warn("[cache] migrate failed", srcKey, "\u2192", dstKey, e?.message || e);
+      return false;
+    }
+    _downloadedRecords.set(dstKey, {
+      groupId: dstGroupId,
+      topicId: dstTopicId,
+      topicTitle: newRow.topicTitle,
+      track: newTrack
+    });
+    try {
+      window.dispatchEvent(new CustomEvent("track-downloaded", { detail: { groupId: dstGroupId, trackId: dstTrackId } }));
+    } catch {
+    }
+    return true;
+  }
   async function addTracksToPlaylist(destGroupId, topicId, sourceGroupId, trackIds) {
     const destEntity = await _getEntity(destGroupId);
     const sourceEntity = await _getEntity(sourceGroupId);
@@ -71692,13 +71739,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           failed++;
           continue;
         }
-        await client.invoke(new import_tl.Api.messages.ForwardMessages({
+        const fwResult = await client.invoke(new import_tl.Api.messages.ForwardMessages({
           fromPeer: sourceEntity,
           toPeer: destEntity,
           id: [tid],
           randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))],
           topMsgId: topicId
         }));
+        const newId = _extractForwardedId(fwResult);
+        if (newId != null) {
+          await _migrateCacheRow(sourceGroupId, tid, destGroupId, newId, topicId);
+        }
         added++;
       } catch (e) {
         console.error(`Failed to add track ${tid}:`, e);
@@ -71721,7 +71772,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
           failed++;
           continue;
         }
-        await client.invoke(new import_tl.Api.messages.ForwardMessages({
+        const fwResult = await client.invoke(new import_tl.Api.messages.ForwardMessages({
           fromPeer: sourceEntity,
           toPeer: destEntity,
           id: [tid],
@@ -71730,6 +71781,10 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         }));
         didForward = true;
         forwarded++;
+        const newId = _extractForwardedId(fwResult);
+        if (newId != null) {
+          await _migrateCacheRow(sourceGroupId, tid, destGroupId, newId, topicId);
+        }
         await client.deleteMessages(sourceEntity, [tid], { revoke: true });
         moved++;
         _removeTrackFromSourceCaches(sourceGroupId, tid);

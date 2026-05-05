@@ -1395,6 +1395,59 @@ function _inflateStrippedThumb(stripped) {
 //  PLAYLIST OPERATIONS
 // ════════════════════════════════════
 
+// ForwardMessages returns Updates; pull the new message id out so we can
+// re-key the local cache to follow the forwarded copy.
+function _extractForwardedId(result) {
+    if (!result) return null;
+    const list = result.updates || (Array.isArray(result) ? result : null);
+    if (!list) return null;
+    for (const upd of list) {
+        if (upd && upd.message && typeof upd.message.id === 'number') {
+            return upd.message.id;
+        }
+    }
+    return null;
+}
+
+// Forwarding a track creates a new message with a new id. The cache row is
+// keyed by `${groupId}:${trackId}`, so without help the forwarded copy
+// looks like a fresh, undownloaded track. Copy the existing row to the
+// new key so playback hits the local Blob immediately.
+async function _migrateCacheRow(srcGroupId, srcTrackId, dstGroupId, dstTrackId, dstTopicId) {
+    const srcKey = _trackKey(srcGroupId, srcTrackId);
+    const dstKey = _trackKey(dstGroupId, dstTrackId);
+    if (srcKey === dstKey) return false;
+    const oldRow = await idbGet(TRACKS_STORE, srcKey);
+    if (!oldRow || !oldRow.audio || !oldRow.track) return false;
+    if (await idbGet(TRACKS_STORE, dstKey)) return false; // already cached
+
+    const topic = (_topicsCache[dstGroupId] || []).find(t => t.id === dstTopicId);
+    const newTrack = { ...oldRow.track, id: dstTrackId };
+    const newRow = {
+        ...oldRow,
+        groupId: dstGroupId,
+        trackId: dstTrackId,
+        topicId: dstTopicId,
+        topicTitle: topic?.title ?? oldRow.topicTitle ?? null,
+        track: newTrack,
+        cachedAt: Date.now(),
+    };
+    try {
+        await idbPut(TRACKS_STORE, dstKey, newRow);
+    } catch (e) {
+        console.warn('[cache] migrate failed', srcKey, '→', dstKey, e?.message || e);
+        return false;
+    }
+    _downloadedRecords.set(dstKey, {
+        groupId: dstGroupId,
+        topicId: dstTopicId,
+        topicTitle: newRow.topicTitle,
+        track: newTrack,
+    });
+    try { window.dispatchEvent(new CustomEvent('track-downloaded', { detail: { groupId: dstGroupId, trackId: dstTrackId } })); } catch {}
+    return true;
+}
+
 export async function addTracksToPlaylist(destGroupId, topicId, sourceGroupId, trackIds) {
     const destEntity = await _getEntity(destGroupId);
     const sourceEntity = await _getEntity(sourceGroupId);
@@ -1406,13 +1459,17 @@ export async function addTracksToPlaylist(destGroupId, topicId, sourceGroupId, t
             const msg = msgs[0];
             if (!msg || !msg.media) { failed++; continue; }
 
-            await client.invoke(new Api.messages.ForwardMessages({
+            const fwResult = await client.invoke(new Api.messages.ForwardMessages({
                 fromPeer: sourceEntity,
                 toPeer: destEntity,
                 id: [tid],
                 randomId: [BigInt(Math.floor(Math.random() * 2 ** 53))],
                 topMsgId: topicId,
             }));
+            const newId = _extractForwardedId(fwResult);
+            if (newId != null) {
+                await _migrateCacheRow(sourceGroupId, tid, destGroupId, newId, topicId);
+            }
             added++;
         } catch (e) {
             console.error(`Failed to add track ${tid}:`, e);
@@ -1441,7 +1498,7 @@ export async function moveTracksToPlaylist(destGroupId, topicId, sourceGroupId, 
             const msg = msgs[0];
             if (!msg || !msg.media) { failed++; continue; }
 
-            await client.invoke(new Api.messages.ForwardMessages({
+            const fwResult = await client.invoke(new Api.messages.ForwardMessages({
                 fromPeer: sourceEntity,
                 toPeer: destEntity,
                 id: [tid],
@@ -1451,10 +1508,15 @@ export async function moveTracksToPlaylist(destGroupId, topicId, sourceGroupId, 
             didForward = true;
             forwarded++;
 
+            // Migrate cached audio to the new message id BEFORE we delete
+            // the source row, so the destination playlist keeps the offline copy.
+            const newId = _extractForwardedId(fwResult);
+            if (newId != null) {
+                await _migrateCacheRow(sourceGroupId, tid, destGroupId, newId, topicId);
+            }
+
             await client.deleteMessages(sourceEntity, [tid], { revoke: true });
             moved++;
-            // Drop the track from any source-side caches so it doesn't
-            // come back on the next render.
             _removeTrackFromSourceCaches(sourceGroupId, tid);
         } catch (e) {
             console.error(`Failed to move track ${tid}:`, e);
