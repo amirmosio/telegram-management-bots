@@ -19,7 +19,8 @@
     "input": "^1.0.1",
     "stream-browserify": "^3.0.0",
     "telegram": "^2.26.22",
-    "util": "^0.12.5"
+    "util": "^0.12.5",
+    "web-audio-beat-detector": "^8.2.36"
   },
   "devDependencies": {
     "esbuild": "^0.28.0"

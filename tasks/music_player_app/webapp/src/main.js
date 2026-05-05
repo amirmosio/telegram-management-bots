@@ -5,6 +5,7 @@
 import * as tg from './telegram.js';
 import { searchLyrics, parseTrackInfo } from './lyrics.js';
 import { searchArtwork } from './artwork.js';
+import { guess as guessBeats } from 'web-audio-beat-detector';
 
 // ══════════════════════════════════════
 //  STATE
@@ -3512,6 +3513,20 @@ function _maybeShowInstallBanner() {
 // ══════════════════════════════════════
 //  HYPNOTISE MODE — beat-synced fullscreen flash
 // ══════════════════════════════════════
+//
+// Two-stage sync:
+//
+//   1. On entry / track change, kick off offline analysis: fetch the
+//      track bytes, decodeAudioData → AudioBuffer, then web-audio-beat-detector
+//      `guess()` returns BPM + first-beat offset. We expand that into an
+//      array of beat timestamps in seconds.
+//
+//   2. The rAF loop drives flashes from `audio.currentTime` against that
+//      array — sample-accurate sync, no audio-visual lag.
+//
+// While analysis is in flight, we show a soft amplitude-driven pulse from
+// the live AnalyserNode (no beat thresholding, so no false positives).
+// Results are cached per trackId so repeat entries are instant.
 const btnHypnotise = $('btn-hypnotise');
 const hypnotiseOverlay = $('hypnotise-overlay');
 const hypnotiseFlashEl = $('hypnotise-flash');
@@ -3521,14 +3536,19 @@ let _hypAnalyser = null;
 let _hypSrcNode = null;
 let _hypFreqData = null;
 let _hypRafId = null;
-let _hypEnergyHistory = [];     // rolling window of recent bass-energy samples
-const _HYP_HISTORY_SIZE = 50;   // ~0.8 s at 60fps
-let _hypLastBeatAt = 0;
-let _hypFlash = 0;              // current flash intensity, smoothed in JS
+let _hypFlash = 0;
+
+// Pre-analysed beat schedule for the currently playing track.
+const _hypBeatCache = new Map(); // trackId → { bpm, offset, beatTimes: number[] }
+let _hypAnalysisToken = 0;       // bumps to invalidate stale in-flight analyses
+let _hypBeats = null;            // active schedule, or null = not ready
+let _hypNextBeatIdx = 0;
+const _HYP_LATENCY_OFFSET = 0;   // seconds; positive = flash later (tune per device if needed)
+const _HYP_BEAT_DECAY = 0.16;    // seconds for flash to decay 1→0
 
 // Hold-to-exit gesture state
 let _hypHoldTimer = null;
-let _hypHoldStart = null;       // {x, y, t}
+let _hypHoldStart = null;
 const _HYP_HOLD_MS = 600;
 const _HYP_HOLD_MOVE_PX = 10;
 
@@ -3547,60 +3567,96 @@ function _hypBuildAudioGraph() {
         _hypFreqData = new Uint8Array(_hypAnalyser.frequencyBinCount);
         return true;
     } catch (e) {
-        // createMediaElementSource throws if already created on this element,
-        // or AudioContext construction fails — degrade gracefully.
         _hypAudioCtx = null; _hypAnalyser = null; _hypSrcNode = null;
         return false;
     }
 }
 
+async function _hypAnalyzeCurrentTrack() {
+    const trackId = currentTrackId;
+    if (trackId == null) return;
+
+    // Cached → install immediately.
+    const cached = _hypBeatCache.get(trackId);
+    if (cached) { _hypInstallSchedule(trackId, cached); return; }
+
+    const myToken = ++_hypAnalysisToken;
+    const src = audio.currentSrc || audio.src;
+    if (!src) return;
+
+    try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error('fetch ' + res.status);
+        const buf = await res.arrayBuffer();
+        if (myToken !== _hypAnalysisToken) return;
+
+        const ctx = _hypAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await ctx.decodeAudioData(buf);
+        if (myToken !== _hypAnalysisToken) return;
+
+        const { bpm, offset } = await guessBeats(audioBuffer);
+        if (myToken !== _hypAnalysisToken) return;
+
+        const period = 60 / bpm;
+        const duration = audioBuffer.duration;
+        const beatTimes = [];
+        for (let t = offset; t < duration; t += period) beatTimes.push(t);
+
+        const data = { bpm, offset, beatTimes };
+        _hypBeatCache.set(trackId, data);
+        if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
+        console.log('[hypnotise] analyzed track', trackId, '→', bpm.toFixed(1), 'BPM, offset', offset.toFixed(3), 's,', beatTimes.length, 'beats');
+    } catch (e) {
+        console.warn('[hypnotise] analysis failed for track', trackId, e);
+    }
+}
+
+function _hypInstallSchedule(trackId, data) {
+    if (currentTrackId !== trackId) return;
+    _hypBeats = data;
+    _hypNextBeatIdx = 0;
+}
+
 function _hypTick() {
     _hypRafId = requestAnimationFrame(_hypTick);
-    if (!_hypAnalyser) return;
 
     let target = 0;
     if (!audio.paused && audio.readyState >= 2) {
-        _hypAnalyser.getByteFrequencyData(_hypFreqData);
+        if (_hypBeats) {
+            // ── Pre-analysed schedule: drive flashes from audio.currentTime ──
+            const t = audio.currentTime + _HYP_LATENCY_OFFSET;
+            const beats = _hypBeats.beatTimes;
+            // Re-find position after a seek/rewind.
+            if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
+            while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
 
-        // Bass band: bins 1–6 (~40–260 Hz at 44.1kHz / fftSize=1024).
-        // Skip bin 0 (DC offset).
-        let energy = 0;
-        for (let i = 1; i <= 6; i++) energy += _hypFreqData[i];
-        energy /= 6;
-
-        _hypEnergyHistory.push(energy);
-        if (_hypEnergyHistory.length > _HYP_HISTORY_SIZE) _hypEnergyHistory.shift();
-
-        // Mean + stddev over the rolling window.
-        let mean = 0;
-        for (let i = 0; i < _hypEnergyHistory.length; i++) mean += _hypEnergyHistory[i];
-        mean /= _hypEnergyHistory.length;
-        let variance = 0;
-        for (let i = 0; i < _hypEnergyHistory.length; i++) {
-            const d = _hypEnergyHistory[i] - mean;
-            variance += d * d;
+            // Decay from the most-recently-passed beat.
+            if (_hypNextBeatIdx > 0) {
+                const since = t - beats[_hypNextBeatIdx - 1];
+                if (since >= 0 && since < _HYP_BEAT_DECAY) {
+                    target = 1 - since / _HYP_BEAT_DECAY;
+                }
+            }
+            // Subtle anticipation glow ~80 ms before the next beat.
+            if (_hypNextBeatIdx < beats.length) {
+                const until = beats[_hypNextBeatIdx] - t;
+                if (until >= 0 && until < 0.08) {
+                    target = Math.max(target, 0.18 * (1 - until / 0.08));
+                }
+            }
+        } else if (_hypAnalyser) {
+            // ── "Preparing" pulse: amplitude-driven, no thresholding ──
+            // Used while the offline analysis is still running so the screen
+            // doesn't sit dead-black, but we don't fire wrong-time flashes.
+            _hypAnalyser.getByteFrequencyData(_hypFreqData);
+            let sum = 0;
+            const n = Math.min(32, _hypFreqData.length);
+            for (let i = 1; i < n; i++) sum += _hypFreqData[i];
+            const avg = sum / ((n - 1) * 255);
+            target = 0.04 + 0.55 * avg;
         }
-        variance /= _hypEnergyHistory.length;
-        const stddev = Math.sqrt(variance);
-
-        const now = performance.now();
-        const isBeat = energy > mean + 1.5 * stddev
-            && energy > 30                 // floor: ignore quiet sections
-            && (now - _hypLastBeatAt) > 180;
-
-        if (isBeat) {
-            target = 1;
-            _hypLastBeatAt = now;
-        } else {
-            // Continuous "dancing" pulse riding the overall bass energy.
-            const norm = mean > 1 ? Math.min(1, energy / (mean * 2)) : 0;
-            target = 0.04 + 0.35 * norm;
-        }
-    } else {
-        _hypEnergyHistory.length = 0;
     }
 
-    // Smooth toward target — fast attack on beats, slower decay.
     const k = target > _hypFlash ? 0.55 : 0.12;
     _hypFlash += (target - _hypFlash) * k;
     hypnotiseFlashEl.style.setProperty('--flash', _hypFlash.toFixed(3));
@@ -3611,7 +3667,6 @@ async function enterHypnotise() {
 
     const ok = _hypBuildAudioGraph();
     if (!ok) {
-        // Fallback: open overlay anyway with a steady dim pulse so the UI still works.
         hypnotiseOverlay.classList.add('open');
         hypnotiseFlashEl.style.setProperty('--flash', '0.05');
         _attachHypGestures();
@@ -3620,19 +3675,16 @@ async function enterHypnotise() {
 
     try { await _hypAudioCtx.resume(); } catch (_) {}
 
-    _hypEnergyHistory.length = 0;
-    _hypLastBeatAt = 0;
     _hypFlash = 0;
+    _hypBeats = null;
+    _hypNextBeatIdx = 0;
 
     hypnotiseOverlay.classList.add('open');
     hypnotiseOverlay.setAttribute('aria-hidden', 'false');
     _attachHypGestures();
 
-    // Wake lock — playback already requests one when audio is playing,
-    // but request defensively so the screen stays on even if paused.
     try { _requestWakeLock(); } catch (_) {}
 
-    // Best-effort fullscreen — iOS Safari rejects on non-<video>, that's fine.
     if (hypnotiseOverlay.requestFullscreen) {
         hypnotiseOverlay.requestFullscreen().catch(() => {});
     } else if (hypnotiseOverlay.webkitRequestFullscreen) {
@@ -3640,6 +3692,9 @@ async function enterHypnotise() {
     }
 
     if (_hypRafId == null) _hypRafId = requestAnimationFrame(_hypTick);
+
+    // Kick off offline beat analysis (fire-and-forget; live-pulse fallback runs meanwhile).
+    _hypAnalyzeCurrentTrack();
 }
 
 function exitHypnotise() {
@@ -3698,10 +3753,17 @@ function _detachHypGestures() {
 
 btnHypnotise?.addEventListener('click', enterHypnotise);
 
+// Track changes mid-hypnotise: invalidate the schedule and re-analyse the new track.
+audio.addEventListener('loadstart', () => {
+    _hypBeats = null;
+    _hypNextBeatIdx = 0;
+    _hypAnalysisToken++;  // cancel any in-flight analysis for the previous src
+    if (hypnotiseOverlay.classList.contains('open')) _hypAnalyzeCurrentTrack();
+});
+
 // If the user exits fullscreen via Esc / system gesture, also leave hypnotise mode.
 document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && hypnotiseOverlay.classList.contains('open')) {
-        // Only exit if we were the fullscreen element — heuristic via "just left FS while open".
         exitHypnotise();
     }
 });
