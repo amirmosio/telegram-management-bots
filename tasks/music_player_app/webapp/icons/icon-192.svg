@@ -1,5 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="32" fill="#0d1117"/>
-  <circle cx="96" cy="96" r="80" fill="#161b22"/>
-  <path d="M96 44v68.5c-3.8-2.2-8.2-3.5-13-3.5-14.4 0-26 11.6-26 26s11.6 26 26 26 26-11.6 26-26V70h26V44H96z" fill="#5288c1"/>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#41BCE7"/>
+      <stop offset="100%" stop-color="#1A8DBF"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="28%" cy="22%" r="80%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="60%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="192" height="192" rx="42" fill="url(#bg)"/>
+  <rect width="192" height="192" rx="42" fill="url(#glow)"/>
+  <g>
+    <ellipse cx="68" cy="136" rx="22.5" ry="18" transform="rotate(-20 68 136)" fill="#ffffff"/>
+    <rect x="83.5" y="48" width="8.5" height="91" rx="1.5" fill="#ffffff"/>
+    <path d="M 92 48 L 165 73 L 92 93 Z" fill="#ffffff"/>
+    <path d="M 92 70.5 L 132.5 81.5 L 92 93 Z" fill="#1A8DBF"/>
+  </g>
 </svg>
