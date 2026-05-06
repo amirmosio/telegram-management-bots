@@ -2868,6 +2868,13 @@ async function _sendShareToChat(chat, rowEl) {
     const track = _shareCurrentTrack;
     rowEl.classList.add('sending');
     try {
+        // Lazy-forward to the share channel only now (so the link in the
+        // caption resolves to a real msg). Skipped if the user already
+        // tapped copy and we cached the link.
+        if (!_shareCurrentLink) {
+            _shareCurrentLink = await _prepareShareLink(track);
+            if (_shareCurrentTrack !== track) return;
+        }
         await tg.sendTrackToChat(chat.id, playerGroupId, track.id, _shareCaption());
         showToast(`Sent to ${chat.title}`);
         _closeShareDialog();
@@ -2890,14 +2897,26 @@ function _closeShareDialog() {
 }
 
 async function _copyShareLink() {
-    if (!_shareCurrentLink) return;
+    if (!_shareCurrentTrack) return;
+    if (shareLinkRow.classList.contains('preparing')) return;
+    shareLinkRow.classList.add('preparing');
+    shareLinkText.textContent = 'Preparing link…';
+    const track = _shareCurrentTrack;
+    let link = _shareCurrentLink;
     try {
-        await navigator.clipboard.writeText(_shareCurrentLink);
-        shareLinkRow.classList.add('copied');
+        if (!link) {
+            link = await _prepareShareLink(track);
+            if (_shareCurrentTrack !== track) return; // dialog closed
+            _shareCurrentLink = link;
+        }
+        try { await navigator.clipboard.writeText(link); } catch {}
         showToast('Link copied!');
-        setTimeout(() => shareLinkRow.classList.remove('copied'), 1500);
+        _closeShareDialog();
     } catch (e) {
-        showToast(_shareCurrentLink);
+        console.error('Prepare share link failed:', e);
+        shareLinkText.textContent = 'Failed to build link';
+        localStorage.removeItem('share_channel_id');
+        shareLinkRow.classList.remove('preparing');
     }
 }
 
@@ -2934,21 +2953,14 @@ btnShare.addEventListener('click', async () => {
     _shareCurrentTrack = track;
     _shareCurrentLink = null;
 
-    // Open the dialog immediately so the UI feels responsive.
-    shareLinkText.textContent = 'Preparing link…';
+    // Open the dialog immediately. Don't forward to the public share
+    // channel just because someone opened the dialog — that produces
+    // noise in @tgmusicplayer_shared for users who only meant to send
+    // a track to a friend. The forward happens lazily on copy or send.
+    shareLinkText.textContent = 'Tap to copy share link';
+    shareLinkRow.classList.remove('preparing', 'copied');
     shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Loading chats…</div>';
     shareModal.style.display = 'flex';
-
-    // Kick off link preparation and chat loading in parallel.
-    _prepareShareLink(track).then(link => {
-        if (_shareCurrentTrack !== track) return; // dialog closed/changed
-        _shareCurrentLink = link;
-        shareLinkText.textContent = link;
-    }).catch(e => {
-        console.error('Prepare share link failed:', e);
-        shareLinkText.textContent = 'Failed to build link';
-        localStorage.removeItem('share_channel_id');
-    });
 
     try {
         _share.chatsCache = await tg.listChatsForShare(200);
@@ -2992,10 +3004,10 @@ const coplayChatsEl = $('coplay-chats');
 const coplayCancelBtn = $('coplay-cancel');
 const coplayStartBtn = $('coplay-start');
 const coplayHostBanner = $('coplay-host-banner');
-const coplayHostCountEl = $('coplay-host-count');
+const coplayHostChipsEl = $('coplay-host-chips');
+const coplayFollowerChipsEl = $('coplay-follower-chips');
 const coplayEndBtn = $('coplay-end-btn');
 const coplayFollowerBanner = $('coplay-follower-banner');
-const coplayHostNameEl = $('coplay-host-name');
 const coplayLeaveBtn = $('coplay-leave-btn');
 const coplayFab = $('coplay-floating-button');
 const coplayFabAvatarImg = $('coplay-fab-avatar-img');
@@ -3007,6 +3019,7 @@ let _coplayInviteList = [];        // multi-select buffer, [{ id, title, _entity
 const _coplay = _pickerState();    // shared search state for the picker
 const _COPLAY_KINDS = ['user'];    // co-play targets are people only
 const _pendingInvites = new Map(); // syncMsgId -> { hostId, hostName, channelId, addedAt }
+let _coplayMyUserId = null;        // logged-in user's id, used to hide self chip
 
 // ──────────────────────────────────────
 //  Host
@@ -3223,7 +3236,7 @@ async function _coplayStartHost() {
         };
         localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
 
-        _coplayShowHostBanner(invitees.length);
+        _coplayShowHostBanner(invitees);
         btnCoplay.classList.add('active');
         _coplayCloseModal();
         showToast(`Co-playing with ${invitees.length}`);
@@ -3235,8 +3248,33 @@ async function _coplayStartHost() {
     }
 }
 
-function _coplayShowHostBanner(count) {
-    coplayHostCountEl.textContent = String(count);
+// Build a chip element. People = [{ id, name }]. `klass` is added to the
+// chip class list (e.g. 'host' for the gold host chip). Avatar is filled
+// in lazily once the profile photo has been fetched + cached.
+function _coplayBuildChip(person, klass) {
+    const el = document.createElement('span');
+    el.className = 'coplay-chip' + (klass ? ' ' + klass : '');
+    const initial = (person.name || '?').trim()[0]?.toUpperCase() || '?';
+    el.innerHTML = `
+        <span class="coplay-chip-avatar"><span data-init>${escapeHtml(initial)}</span></span>
+        <span class="coplay-chip-name">${escapeHtml(person.name || 'User')}</span>
+    `;
+    if (person.id) {
+        tg.coplayGetUserAvatarUrl(person.id).then(url => {
+            if (!url) return;
+            const avatarEl = el.querySelector('.coplay-chip-avatar');
+            if (!avatarEl || !el.isConnected) return;
+            avatarEl.innerHTML = `<img src="${url}" alt="">`;
+        }).catch(() => {});
+    }
+    return el;
+}
+
+function _coplayShowHostBanner(invitees) {
+    coplayHostChipsEl.innerHTML = '';
+    for (const inv of invitees) {
+        coplayHostChipsEl.appendChild(_coplayBuildChip({ id: inv.id, name: inv.title || inv.name || 'User' }));
+    }
     coplayHostBanner.style.display = 'flex';
 }
 function _coplayHideHostBanner() {
@@ -3329,7 +3367,6 @@ async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
     coplayFab.style.display = 'none';
     document.body.classList.add('coplay-follower');
     coplayFollowerBanner.style.display = 'flex';
-    coplayHostNameEl.textContent = hintHostName || 'host';
 
     _coplaySession = {
         role: 'follower',
@@ -3343,10 +3380,31 @@ async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
         broadcastQueued: false,
         invitees: null,
         lastDocId: null,
+        renderedRosterKey: null,
     };
+    // Render a placeholder host chip while we wait for the first poll
+    // to come back with the real fromUserId + invitee list.
+    _coplayRenderFollowerBanner(_coplaySession);
     showToast('Joining co-play…');
     await _coplayPollTick(true);
     _coplaySession.pollHandle = setInterval(_coplayPollTick, COPLAY_POLL_MS);
+}
+
+// Render the follower banner: host chip (gold) first, then the other
+// invitees (skipping the logged-in user themselves).
+function _coplayRenderFollowerBanner(s) {
+    coplayFollowerChipsEl.innerHTML = '';
+    const hostChip = _coplayBuildChip({
+        id: s.hostUserId,
+        name: s.hostName || 'host',
+    }, 'host');
+    coplayFollowerChipsEl.appendChild(hostChip);
+    const others = (s.invitees || []).filter(p =>
+        p.id !== s.hostUserId && p.id !== _coplayMyUserId,
+    );
+    for (const p of others) {
+        coplayFollowerChipsEl.appendChild(_coplayBuildChip(p));
+    }
 }
 
 function _coplayLeaveFollower(reason) {
@@ -3381,17 +3439,28 @@ async function _coplayPollTick(initial) {
         return;
     }
     s.lastFetchWallSec = res.fetchedWallSec;
+    let rosterDirty = false;
     if (res.fromUserId && !s.hostUserId) {
         s.hostUserId = res.fromUserId;
+        rosterDirty = true;
         if (!s.hostName) {
             tg.getUserDisplayName(res.fromUserId).then(name => {
                 if (_coplaySession === s) {
                     s.hostName = name;
-                    coplayHostNameEl.textContent = name;
+                    _coplayRenderFollowerBanner(s);
                 }
             }).catch(() => {});
         }
     }
+    if (Array.isArray(res.invitees)) {
+        const key = res.invitees.map(p => p.id).sort().join(',');
+        if (s.renderedRosterKey !== key) {
+            s.invitees = res.invitees;
+            s.renderedRosterKey = key;
+            rosterDirty = true;
+        }
+    }
+    if (rosterDirty) _coplayRenderFollowerBanner(s);
     const state = res.state;
     if (!state || !state.track) return;
 
@@ -3476,6 +3545,9 @@ async function _coplayPollTick(initial) {
 // ──────────────────────────────────────
 
 async function _coplayInstallListenerAndCatchUp() {
+    try {
+        _coplayMyUserId = await tg.getMyUserId();
+    } catch { /* used only to hide self chip; non-fatal */ }
     try {
         await tg.installCoplayInviteListener(_coplayHandleIncomingInvite);
     } catch (e) {

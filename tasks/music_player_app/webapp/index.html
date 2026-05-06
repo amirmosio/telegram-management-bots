@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=157">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=157">
-    <link rel="stylesheet" href="style.css?v=157">
+    <link rel="manifest" href="/manifest.json?v=158">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=158">
+    <link rel="stylesheet" href="style.css?v=158">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -300,17 +300,18 @@
         </div>
     </div>
 
-    <!-- Host banner shown while a co-play session is active -->
+    <!-- Host banner shown while a co-play session is active. Chips for
+         each invitee are populated by JS into #coplay-host-chips. -->
     <div id="coplay-host-banner" class="coplay-banner" style="display:none">
         <span class="coplay-banner-dot"></span>
-        <span class="coplay-banner-text">Co-playing with <span id="coplay-host-count">0</span></span>
+        <div id="coplay-host-chips" class="coplay-banner-chips"></div>
         <button id="coplay-end-btn" class="text-btn">End</button>
     </div>
 
-    <!-- Follower banner shown while listening to a host -->
+    <!-- Follower banner: host chip (gold) + co-follower chips (white). -->
     <div id="coplay-follower-banner" class="coplay-banner coplay-follower-banner" style="display:none">
         <span class="coplay-banner-dot"></span>
-        <span class="coplay-banner-text">Following <span id="coplay-host-name">…</span></span>
+        <div id="coplay-follower-chips" class="coplay-banner-chips"></div>
         <button id="coplay-leave-btn" class="text-btn">Leave</button>
     </div>
 
@@ -471,6 +472,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=157"></script>
+    <script src="app.bundle.js?v=158"></script>
 </body>
 </html>

@@ -2992,7 +2992,46 @@ function _coplayParse(msg) {
         const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
         if (raw != null) fromUserId = Number(typeof raw === 'bigint' ? raw : raw);
     }
-    return { state, fromUserId, msgId: msg.id };
+
+    // Pull invitees out of the caption's mention entities. Telegram entity
+    // offsets are UTF-16 code units; we slice the message text at those
+    // offsets to recover the displayed name (the host wrote it there at
+    // session-start).
+    const invitees = [];
+    const seenInvitees = new Set();
+    for (const ent of (msg.entities || [])) {
+        const cn = ent.className || '';
+        if (cn !== 'MessageEntityMentionName' && cn !== 'InputMessageEntityMentionName') continue;
+        let idRaw;
+        if (cn === 'InputMessageEntityMentionName') {
+            idRaw = ent.userId?.userId?.value ?? ent.userId?.userId;
+        } else {
+            idRaw = ent.userId?.value ?? ent.userId;
+        }
+        if (idRaw == null) continue;
+        const id = Number(typeof idRaw === 'bigint' ? idRaw : idRaw);
+        if (!id || seenInvitees.has(id)) continue;
+        seenInvitees.add(id);
+        let name = '';
+        try { name = text.substring(ent.offset, ent.offset + ent.length); } catch {}
+        invitees.push({ id, name: name || 'User' });
+    }
+
+    return { state, fromUserId, msgId: msg.id, invitees };
+}
+
+// Logged-in user's id, cached. Used so the follower banner can hide
+// their own chip (they already know they're in the session).
+let _myUserId = null;
+export async function getMyUserId() {
+    if (_myUserId != null) return _myUserId;
+    try {
+        await _ensureConnected();
+        const me = await client.getMe();
+        const raw = me?.id?.value ?? me?.id;
+        if (raw != null) _myUserId = Number(typeof raw === 'bigint' ? raw : raw);
+    } catch {}
+    return _myUserId;
 }
 
 // Best-effort display-name fetch for a user id. Returns a friendly string

@@ -72930,7 +72930,40 @@ ${JSON.stringify(state)}`;
       const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
       if (raw != null) fromUserId = Number(typeof raw === "bigint" ? raw : raw);
     }
-    return { state, fromUserId, msgId: msg.id };
+    const invitees = [];
+    const seenInvitees = /* @__PURE__ */ new Set();
+    for (const ent of msg.entities || []) {
+      const cn = ent.className || "";
+      if (cn !== "MessageEntityMentionName" && cn !== "InputMessageEntityMentionName") continue;
+      let idRaw;
+      if (cn === "InputMessageEntityMentionName") {
+        idRaw = ent.userId?.userId?.value ?? ent.userId?.userId;
+      } else {
+        idRaw = ent.userId?.value ?? ent.userId;
+      }
+      if (idRaw == null) continue;
+      const id = Number(typeof idRaw === "bigint" ? idRaw : idRaw);
+      if (!id || seenInvitees.has(id)) continue;
+      seenInvitees.add(id);
+      let name = "";
+      try {
+        name = text.substring(ent.offset, ent.offset + ent.length);
+      } catch {
+      }
+      invitees.push({ id, name: name || "User" });
+    }
+    return { state, fromUserId, msgId: msg.id, invitees };
+  }
+  async function getMyUserId() {
+    if (_myUserId != null) return _myUserId;
+    try {
+      await _ensureConnected();
+      const me = await client.getMe();
+      const raw = me?.id?.value ?? me?.id;
+      if (raw != null) _myUserId = Number(typeof raw === "bigint" ? raw : raw);
+    } catch {
+    }
+    return _myUserId;
   }
   async function getUserDisplayName(userId) {
     if (!userId) return "Someone";
@@ -73127,7 +73160,7 @@ ${JSON.stringify(state)}`;
     _coplayAvatarCache.set(userId, url);
     return url;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_events, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _lifecycleInstalled, _reconnectPromise, _TAINT, _taintedSenders, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, TRANSLATE_CHUNK, _PART, _PART_TIMEOUT_MS, _CDN_HASH_BLOCK, _MEDIA_DC_KEY, _KEEPALIVE_MS, _PING_TIMEOUT_MS, _keepaliveTimer, _keepaliveActive, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT, COPLAY_MARKER, _coplayInviteHandlerInstalled, _coplayAvatarCache;
+  var import_process3, import_telegram, import_sessions, import_tl, import_events, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _lifecycleInstalled, _reconnectPromise, _TAINT, _taintedSenders, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, TRANSLATE_CHUNK, _PART, _PART_TIMEOUT_MS, _CDN_HASH_BLOCK, _MEDIA_DC_KEY, _KEEPALIVE_MS, _PING_TIMEOUT_MS, _keepaliveTimer, _keepaliveActive, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT, COPLAY_MARKER, _myUserId, _coplayInviteHandlerInstalled, _coplayAvatarCache;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -73200,6 +73233,7 @@ ${JSON.stringify(state)}`;
       NP_TOKEN_KEY = "np_token";
       NP_SALT = "musicplayer-np-v1";
       COPLAY_MARKER = "[telemusic-coplay-v1] ";
+      _myUserId = null;
       _coplayInviteHandlerInstalled = false;
       _coplayAvatarCache = /* @__PURE__ */ new Map();
     }
@@ -84804,6 +84838,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const track = _shareCurrentTrack;
         rowEl.classList.add("sending");
         try {
+          if (!_shareCurrentLink) {
+            _shareCurrentLink = await _prepareShareLink(track);
+            if (_shareCurrentTrack !== track) return;
+          }
           await sendTrackToChat(chat.id, playerGroupId, track.id, _shareCaption());
           showToast(`Sent to ${chat.title}`);
           _closeShareDialog();
@@ -84824,14 +84862,29 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _share.chatsCache = [];
       }
       async function _copyShareLink() {
-        if (!_shareCurrentLink) return;
+        if (!_shareCurrentTrack) return;
+        if (shareLinkRow.classList.contains("preparing")) return;
+        shareLinkRow.classList.add("preparing");
+        shareLinkText.textContent = "Preparing link\u2026";
+        const track = _shareCurrentTrack;
+        let link = _shareCurrentLink;
         try {
-          await navigator.clipboard.writeText(_shareCurrentLink);
-          shareLinkRow.classList.add("copied");
+          if (!link) {
+            link = await _prepareShareLink(track);
+            if (_shareCurrentTrack !== track) return;
+            _shareCurrentLink = link;
+          }
+          try {
+            await navigator.clipboard.writeText(link);
+          } catch {
+          }
           showToast("Link copied!");
-          setTimeout(() => shareLinkRow.classList.remove("copied"), 1500);
+          _closeShareDialog();
         } catch (e) {
-          showToast(_shareCurrentLink);
+          console.error("Prepare share link failed:", e);
+          shareLinkText.textContent = "Failed to build link";
+          localStorage.removeItem("share_channel_id");
+          shareLinkRow.classList.remove("preparing");
         }
       }
       async function _prepareShareLink(track) {
@@ -84861,18 +84914,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const track = playerTracks[currentTrackIndex];
         _shareCurrentTrack = track;
         _shareCurrentLink = null;
-        shareLinkText.textContent = "Preparing link\u2026";
+        shareLinkText.textContent = "Tap to copy share link";
+        shareLinkRow.classList.remove("preparing", "copied");
         shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Loading chats\u2026</div>';
         shareModal.style.display = "flex";
-        _prepareShareLink(track).then((link) => {
-          if (_shareCurrentTrack !== track) return;
-          _shareCurrentLink = link;
-          shareLinkText.textContent = link;
-        }).catch((e) => {
-          console.error("Prepare share link failed:", e);
-          shareLinkText.textContent = "Failed to build link";
-          localStorage.removeItem("share_channel_id");
-        });
         try {
           _share.chatsCache = await listChatsForShare(200);
           if (_shareCurrentTrack === track) _renderShareChats();
@@ -84898,10 +84943,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var coplayCancelBtn = $("coplay-cancel");
       var coplayStartBtn = $("coplay-start");
       var coplayHostBanner = $("coplay-host-banner");
-      var coplayHostCountEl = $("coplay-host-count");
+      var coplayHostChipsEl = $("coplay-host-chips");
+      var coplayFollowerChipsEl = $("coplay-follower-chips");
       var coplayEndBtn = $("coplay-end-btn");
       var coplayFollowerBanner = $("coplay-follower-banner");
-      var coplayHostNameEl = $("coplay-host-name");
       var coplayLeaveBtn = $("coplay-leave-btn");
       var coplayFab = $("coplay-floating-button");
       var coplayFabAvatarImg = $("coplay-fab-avatar-img");
@@ -84912,6 +84957,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _coplay = _pickerState();
       var _COPLAY_KINDS = ["user"];
       var _pendingInvites = /* @__PURE__ */ new Map();
+      var _coplayMyUserId = null;
       function _coplayCurrentTrack() {
         if (currentTrackIndex < 0 || currentTrackIndex >= playerTracks.length) return null;
         return playerTracks[currentTrackIndex];
@@ -85083,7 +85129,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             lastBroadcastSourceGroupId: playerGroupId
           };
           localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
-          _coplayShowHostBanner(invitees.length);
+          _coplayShowHostBanner(invitees);
           btnCoplay.classList.add("active");
           _coplayCloseModal();
           showToast(`Co-playing with ${invitees.length}`);
@@ -85094,8 +85140,30 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           _coplayUpdateStartButton();
         }
       }
-      function _coplayShowHostBanner(count) {
-        coplayHostCountEl.textContent = String(count);
+      function _coplayBuildChip(person, klass) {
+        const el = document.createElement("span");
+        el.className = "coplay-chip" + (klass ? " " + klass : "");
+        const initial = (person.name || "?").trim()[0]?.toUpperCase() || "?";
+        el.innerHTML = `
+        <span class="coplay-chip-avatar"><span data-init>${escapeHtml(initial)}</span></span>
+        <span class="coplay-chip-name">${escapeHtml(person.name || "User")}</span>
+    `;
+        if (person.id) {
+          coplayGetUserAvatarUrl(person.id).then((url) => {
+            if (!url) return;
+            const avatarEl = el.querySelector(".coplay-chip-avatar");
+            if (!avatarEl || !el.isConnected) return;
+            avatarEl.innerHTML = `<img src="${url}" alt="">`;
+          }).catch(() => {
+          });
+        }
+        return el;
+      }
+      function _coplayShowHostBanner(invitees) {
+        coplayHostChipsEl.innerHTML = "";
+        for (const inv of invitees) {
+          coplayHostChipsEl.appendChild(_coplayBuildChip({ id: inv.id, name: inv.title || inv.name || "User" }));
+        }
         coplayHostBanner.style.display = "flex";
       }
       function _coplayHideHostBanner() {
@@ -85181,7 +85249,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         coplayFab.style.display = "none";
         document.body.classList.add("coplay-follower");
         coplayFollowerBanner.style.display = "flex";
-        coplayHostNameEl.textContent = hintHostName || "host";
         _coplaySession = {
           role: "follower",
           syncMsgId,
@@ -85193,11 +85260,27 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           broadcastInflight: false,
           broadcastQueued: false,
           invitees: null,
-          lastDocId: null
+          lastDocId: null,
+          renderedRosterKey: null
         };
+        _coplayRenderFollowerBanner(_coplaySession);
         showToast("Joining co-play\u2026");
         await _coplayPollTick(true);
         _coplaySession.pollHandle = setInterval(_coplayPollTick, COPLAY_POLL_MS);
+      }
+      function _coplayRenderFollowerBanner(s) {
+        coplayFollowerChipsEl.innerHTML = "";
+        const hostChip = _coplayBuildChip({
+          id: s.hostUserId,
+          name: s.hostName || "host"
+        }, "host");
+        coplayFollowerChipsEl.appendChild(hostChip);
+        const others = (s.invitees || []).filter(
+          (p) => p.id !== s.hostUserId && p.id !== _coplayMyUserId
+        );
+        for (const p of others) {
+          coplayFollowerChipsEl.appendChild(_coplayBuildChip(p));
+        }
       }
       function _coplayLeaveFollower(reason) {
         const s = _coplaySession;
@@ -85229,18 +85312,29 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           return;
         }
         s.lastFetchWallSec = res.fetchedWallSec;
+        let rosterDirty = false;
         if (res.fromUserId && !s.hostUserId) {
           s.hostUserId = res.fromUserId;
+          rosterDirty = true;
           if (!s.hostName) {
             getUserDisplayName(res.fromUserId).then((name) => {
               if (_coplaySession === s) {
                 s.hostName = name;
-                coplayHostNameEl.textContent = name;
+                _coplayRenderFollowerBanner(s);
               }
             }).catch(() => {
             });
           }
         }
+        if (Array.isArray(res.invitees)) {
+          const key = res.invitees.map((p) => p.id).sort().join(",");
+          if (s.renderedRosterKey !== key) {
+            s.invitees = res.invitees;
+            s.renderedRosterKey = key;
+            rosterDirty = true;
+          }
+        }
+        if (rosterDirty) _coplayRenderFollowerBanner(s);
         const state = res.state;
         if (!state || !state.track) return;
         const docRaw = res.raw?.media?.document?.id;
@@ -85302,6 +85396,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
       }
       async function _coplayInstallListenerAndCatchUp() {
+        try {
+          _coplayMyUserId = await getMyUserId();
+        } catch {
+        }
         try {
           await installCoplayInviteListener(_coplayHandleIncomingInvite);
         } catch (e) {
