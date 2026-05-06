@@ -70632,6 +70632,17 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     } catch {
     }
   }
+  async function updateTrackPianoNotes(groupId, trackId, notes, context = {}) {
+    const ctx = _deriveTopicContext(groupId, trackId, context);
+    const patch = { pianoNotes: notes };
+    if (context.track) patch.track = context.track;
+    if (ctx.topicId != null) patch.topicId = ctx.topicId;
+    if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;
+    try {
+      await _upsertTrackRow(groupId, trackId, patch);
+    } catch {
+    }
+  }
   async function updateTrackTranslation(groupId, trackId, lang, lines) {
     const existing = (await getCachedTrackRecord(groupId, trackId))?.translations || {};
     const next = { ...existing, [lang]: lines };
@@ -86380,6 +86391,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _hypNextBeatIdx = 0;
         _hypAnalysisToken++;
         if (hypnotiseOverlay.classList.contains("open")) _hypAnalyzeCurrentTrack();
+        _pianoNotes = null;
+        _pianoNextIdx = 0;
+        _pianoAnalysisToken++;
+        if (typeof pianoOverlay !== "undefined" && pianoOverlay?.classList.contains("open")) {
+          _pianoAnalyzeCurrentTrack();
+        }
       });
       document.addEventListener("fullscreenchange", () => {
         if (!document.fullscreenElement && hypnotiseOverlay.classList.contains("open")) {
@@ -86387,6 +86404,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         if (!document.fullscreenElement && visualizerOverlay?.classList.contains("open")) {
           exitVisualizer();
+        }
+        if (!document.fullscreenElement && typeof pianoOverlay !== "undefined" && pianoOverlay?.classList.contains("open")) {
+          exitPiano();
         }
       });
       var visualizerOverlay = $("visualizer-overlay");
@@ -86606,6 +86626,457 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       btnVisualize?.addEventListener("click", enterVisualizer);
       window.addEventListener("resize", () => {
         if (visualizerOverlay.classList.contains("open")) _vizApplySize();
+      });
+      var pianoOverlay = $("piano-overlay");
+      var pianoCanvas = $("piano-canvas");
+      var pianoLoadingLabel = $("piano-loading-label");
+      var btnPiano = $("btn-piano");
+      var _pianoCtx = null;
+      var _pianoNotes = null;
+      var _pianoCache = /* @__PURE__ */ new Map();
+      var _pianoAnalysisToken = 0;
+      var _pianoRafId = null;
+      var _pianoNextIdx = 0;
+      var _pianoKeyboardLayout = null;
+      var _pianoEnginesLoading = null;
+      var _pianoEnginesReady = false;
+      var _pianoModelInstance = null;
+      var _pianoHoldTimer = null;
+      var _pianoHoldStart = null;
+      var _PIANO_HOLD_MS = 600;
+      var _PIANO_HOLD_MOVE_PX = 10;
+      var _PIANO_LOOK_AHEAD_S = 3.5;
+      var _PIANO_KEYBOARD_HEIGHT_FRAC = 0.22;
+      var _PIANO_MIDI_LOW = 21;
+      var _PIANO_MIDI_HIGH = 108;
+      var _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
+      var _PIANO_TFJS_URL = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js";
+      var _PIANO_BP_URL = "https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/dist/basic-pitch.min.js";
+      var _PIANO_MODEL_URL = "https://cdn.jsdelivr.net/gh/spotify/basic-pitch-ts@main/model/model.json";
+      function _pianoSetLoading(label) {
+        if (!pianoOverlay) return;
+        if (label === null) {
+          pianoOverlay.classList.remove("piano-loading");
+        } else {
+          pianoOverlay.classList.add("piano-loading");
+          if (pianoLoadingLabel) pianoLoadingLabel.textContent = label;
+        }
+      }
+      function _pianoSetWarning(on) {
+        pianoOverlay?.classList.toggle("piano-warn", !!on);
+      }
+      function _pianoBuildKeyboardLayout(canvasWidth) {
+        let whiteCount = 0;
+        for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
+          if (_PIANO_IS_WHITE[m % 12]) whiteCount++;
+        }
+        const whiteW = canvasWidth / whiteCount;
+        const blackW = whiteW * 0.62;
+        const layout = /* @__PURE__ */ new Map();
+        let whiteIdx = 0;
+        for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
+          const pc = m % 12;
+          if (_PIANO_IS_WHITE[pc]) {
+            layout.set(m, { isWhite: true, x: whiteIdx * whiteW, w: whiteW });
+            whiteIdx++;
+          } else {
+            const boundary = whiteIdx * whiteW;
+            layout.set(m, { isWhite: false, x: boundary - blackW / 2, w: blackW });
+          }
+        }
+        return { whiteW, blackW, layout, whiteCount };
+      }
+      function _pianoApplySize() {
+        if (!pianoCanvas) return;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = window.innerWidth, h = window.innerHeight;
+        pianoCanvas.width = Math.floor(w * dpr);
+        pianoCanvas.height = Math.floor(h * dpr);
+        pianoCanvas.style.width = w + "px";
+        pianoCanvas.style.height = h + "px";
+        _pianoCtx = pianoCanvas.getContext("2d");
+        _pianoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        _pianoKeyboardLayout = _pianoBuildKeyboardLayout(w);
+      }
+      function _pianoLoadScript(src) {
+        return new Promise((resolve, reject) => {
+          if (document.querySelector(`script[data-piano-src="${src}"]`)) {
+            resolve();
+            return;
+          }
+          const s = document.createElement("script");
+          s.src = src;
+          s.async = true;
+          s.dataset.pianoSrc = src;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error("script load failed: " + src));
+          document.head.appendChild(s);
+        });
+      }
+      async function _pianoLoadEngines() {
+        if (_pianoEnginesReady) return true;
+        if (_pianoEnginesLoading) return _pianoEnginesLoading;
+        _pianoEnginesLoading = (async () => {
+          _pianoSetLoading("Loading TensorFlow.js\u2026");
+          await _pianoLoadScript(_PIANO_TFJS_URL);
+          _pianoSetLoading("Loading basic-pitch\u2026");
+          await _pianoLoadScript(_PIANO_BP_URL);
+          _pianoEnginesReady = true;
+          return true;
+        })();
+        try {
+          return await _pianoEnginesLoading;
+        } catch (e) {
+          _pianoEnginesLoading = null;
+          throw e;
+        }
+      }
+      function _pianoGetBasicPitchNs() {
+        return window.basicPitch || window["@spotify/basic-pitch"] || null;
+      }
+      async function _pianoTranscribe(audioBuffer, progressCb) {
+        const targetSr = 22050;
+        let monoSamples;
+        if (audioBuffer.sampleRate === targetSr && audioBuffer.numberOfChannels === 1) {
+          monoSamples = audioBuffer.getChannelData(0);
+        } else {
+          const offCtx = new OfflineAudioContext(
+            1,
+            Math.max(1, Math.ceil(audioBuffer.duration * targetSr)),
+            targetSr
+          );
+          const src = offCtx.createBufferSource();
+          src.buffer = audioBuffer;
+          src.connect(offCtx.destination);
+          src.start();
+          const resampled = await offCtx.startRendering();
+          monoSamples = resampled.getChannelData(0);
+        }
+        const bp = _pianoGetBasicPitchNs();
+        if (!bp || !bp.BasicPitch) throw new Error("basic-pitch did not load");
+        if (!_pianoModelInstance) {
+          _pianoModelInstance = new bp.BasicPitch(_PIANO_MODEL_URL);
+        }
+        const frames = [], onsets = [], contours = [];
+        await _pianoModelInstance.evaluateModel(
+          monoSamples,
+          (f, o, c) => {
+            for (const x of f) frames.push(x);
+            for (const x of o) onsets.push(x);
+            for (const x of c) contours.push(x);
+          },
+          progressCb
+        );
+        const onsetTh = 0.5;
+        const frameTh = 0.3;
+        const minNoteFrames = 5;
+        const poly = bp.outputToNotesPoly(frames, onsets, onsetTh, frameTh, minNoteFrames);
+        const withBends = bp.addPitchBendsToNoteEvents(contours, poly);
+        const events = bp.noteFramesToTime(withBends);
+        return events.map((n) => ({
+          t0: n.startTimeSeconds,
+          t1: n.startTimeSeconds + n.durationSeconds,
+          pitch: n.pitchMidi
+        })).filter((n) => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH);
+      }
+      function _pianoFindCurrentTrack() {
+        if (typeof playerTracks === "undefined") return null;
+        return playerTracks.find((t) => t.id === currentTrackId) || null;
+      }
+      async function _pianoAnalyzeCurrentTrack() {
+        const trackId = currentTrackId;
+        if (trackId == null) {
+          _pianoSetLoading(null);
+          return;
+        }
+        const memHit = _pianoCache.get(trackId);
+        if (memHit) {
+          _pianoInstallNotes(trackId, memHit);
+          _pianoSetWarning(_pianoIsUnreliable(memHit));
+          _pianoSetLoading(null);
+          return;
+        }
+        const myToken = ++_pianoAnalysisToken;
+        try {
+          const row = await getCachedTrackRecord(playerGroupId, trackId);
+          if (myToken !== _pianoAnalysisToken) return;
+          if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0) {
+            _pianoCache.set(trackId, row.pianoNotes);
+            _pianoInstallNotes(trackId, row.pianoNotes);
+            _pianoSetWarning(_pianoIsUnreliable(row.pianoNotes));
+            _pianoSetLoading(null);
+            return;
+          }
+        } catch (_) {
+        }
+        if (myToken !== _pianoAnalysisToken) return;
+        try {
+          await _pianoLoadEngines();
+        } catch (e) {
+          if (myToken !== _pianoAnalysisToken) return;
+          console.warn("[piano] engine load failed:", e);
+          _pianoSetLoading("Could not load piano engine. Check connection.");
+          return;
+        }
+        if (myToken !== _pianoAnalysisToken) return;
+        _pianoSetLoading("Decoding audio\u2026");
+        const src = audio.currentSrc || audio.src;
+        if (!src) {
+          _pianoSetLoading(null);
+          return;
+        }
+        let ctx = null, audioBuffer = null;
+        try {
+          const res = await fetch(src);
+          if (!res.ok) throw new Error("fetch " + res.status);
+          const buf = await res.arrayBuffer();
+          if (myToken !== _pianoAnalysisToken) return;
+          ctx = new (window.AudioContext || window.webkitAudioContext)();
+          audioBuffer = await ctx.decodeAudioData(buf);
+        } catch (e) {
+          if (myToken !== _pianoAnalysisToken) return;
+          console.warn("[piano] audio decode failed:", e);
+          _pianoSetLoading("Could not decode audio.");
+          return;
+        } finally {
+          if (ctx && ctx.close) ctx.close().catch(() => {
+          });
+        }
+        if (myToken !== _pianoAnalysisToken) return;
+        let notes;
+        try {
+          _pianoSetLoading("Transcribing piano\u2026 0%");
+          notes = await _pianoTranscribe(audioBuffer, (p) => {
+            if (myToken !== _pianoAnalysisToken) return;
+            _pianoSetLoading(`Transcribing piano\u2026 ${Math.round((p || 0) * 100)}%`);
+          });
+        } catch (e) {
+          if (myToken !== _pianoAnalysisToken) return;
+          console.warn("[piano] transcription failed:", e);
+          _pianoSetLoading("Transcription failed.");
+          return;
+        }
+        if (myToken !== _pianoAnalysisToken) return;
+        _pianoCache.set(trackId, notes);
+        try {
+          updateTrackPianoNotes(playerGroupId, trackId, notes, { track: _pianoFindCurrentTrack() });
+        } catch (_) {
+        }
+        _pianoSetWarning(_pianoIsUnreliable(notes, audioBuffer.duration));
+        _pianoInstallNotes(trackId, notes);
+        _pianoSetLoading(null);
+        console.log(
+          "[piano] transcribed",
+          trackId,
+          "\u2192",
+          notes.length,
+          "notes (",
+          (notes.length / Math.max(1, audioBuffer.duration)).toFixed(2),
+          "/s )"
+        );
+      }
+      function _pianoIsUnreliable(notes, dur) {
+        if (!Array.isArray(notes)) return true;
+        if (notes.length < 10) return true;
+        if (dur && notes.length / dur < 0.3) return true;
+        return false;
+      }
+      function _pianoInstallNotes(trackId, notes) {
+        if (currentTrackId !== trackId) return;
+        _pianoNotes = notes;
+        _pianoNextIdx = 0;
+      }
+      function _pianoRoundRect(ctx, x, y, w, h, r) {
+        r = Math.max(0, Math.min(r, w / 2, h / 2));
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+      function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys) {
+        const layout = _pianoKeyboardLayout.layout;
+        for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
+          const k = layout.get(m);
+          if (!k || !k.isWhite) continue;
+          const isActive = activeKeys.has(m);
+          ctx.fillStyle = isActive ? "#7eb6f0" : "#f0eee5";
+          ctx.fillRect(k.x, kbTop, k.w, kbH);
+          ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+          ctx.fillRect(k.x + k.w - 0.5, kbTop, 0.5, kbH);
+          ctx.fillStyle = "rgba(0, 0, 0, 0.20)";
+          ctx.fillRect(k.x, kbTop + kbH - 4, k.w, 4);
+        }
+        const blackH = kbH * 0.62;
+        for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
+          const k = layout.get(m);
+          if (!k || k.isWhite) continue;
+          const isActive = activeKeys.has(m);
+          const grad = ctx.createLinearGradient(0, kbTop, 0, kbTop + blackH);
+          if (isActive) {
+            grad.addColorStop(0, "#7eb6f0");
+            grad.addColorStop(1, "#3d6c9c");
+          } else {
+            grad.addColorStop(0, "#1c1c1c");
+            grad.addColorStop(1, "#070707");
+          }
+          ctx.fillStyle = grad;
+          ctx.fillRect(k.x, kbTop, k.w, blackH);
+          ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+          ctx.fillRect(k.x, kbTop, k.w, 2);
+        }
+      }
+      function _pianoTick() {
+        _pianoRafId = requestAnimationFrame(_pianoTick);
+        if (!_pianoCtx || !_pianoKeyboardLayout) return;
+        const w = pianoCanvas.clientWidth;
+        const h = pianoCanvas.clientHeight;
+        const ctx = _pianoCtx;
+        const kbH = h * _PIANO_KEYBOARD_HEIGHT_FRAC;
+        const kbTop = h - kbH;
+        const lookAhead = _PIANO_LOOK_AHEAD_S;
+        const pps = kbTop / lookAhead;
+        ctx.clearRect(0, 0, w, h);
+        const bg = ctx.createLinearGradient(0, 0, 0, kbTop);
+        bg.addColorStop(0, "#070910");
+        bg.addColorStop(1, "#11151e");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, kbTop);
+        ctx.fillStyle = "rgba(82, 136, 193, 0.55)";
+        ctx.fillRect(0, kbTop - 1.5, w, 2);
+        ctx.fillStyle = "rgba(82, 136, 193, 0.10)";
+        ctx.fillRect(0, kbTop - 10, w, 10);
+        const activeKeys = /* @__PURE__ */ new Set();
+        if (_pianoNotes && _pianoNotes.length) {
+          const t = audio.currentTime;
+          const tLow = t - 0.2;
+          const tHigh = t + lookAhead;
+          const layout = _pianoKeyboardLayout.layout;
+          for (let i = 0; i < _pianoNotes.length; i++) {
+            const n = _pianoNotes[i];
+            if (n.t1 < tLow) continue;
+            if (n.t0 > tHigh) continue;
+            const k = layout.get(n.pitch);
+            if (!k) continue;
+            if (n.t0 <= t && t <= n.t1) activeKeys.add(n.pitch);
+            const yBottom = kbTop + (t - n.t1) * pps;
+            const yTop = yBottom - (n.t1 - n.t0) * pps;
+            const drawBottom = Math.min(yBottom, kbTop);
+            const drawTop = Math.max(yTop, 0);
+            if (drawBottom <= 0 || drawTop >= kbTop) continue;
+            const drawH = drawBottom - drawTop;
+            if (drawH < 1) continue;
+            const inset = k.isWhite ? 2 : 1;
+            const x = k.x + inset;
+            const ww = Math.max(1, k.w - inset * 2);
+            const gr = ctx.createLinearGradient(0, drawTop, 0, drawBottom);
+            if (k.isWhite) {
+              gr.addColorStop(0, "#9ec8f5");
+              gr.addColorStop(1, "#3a6595");
+            } else {
+              gr.addColorStop(0, "#6ea4d8");
+              gr.addColorStop(1, "#274c75");
+            }
+            ctx.fillStyle = gr;
+            _pianoRoundRect(ctx, x, drawTop, ww, drawH, 4);
+            ctx.fill();
+            ctx.fillStyle = "rgba(255, 255, 255, 0.30)";
+            ctx.fillRect(x + 1, drawTop, ww - 2, 1);
+          }
+        }
+        _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
+      }
+      async function enterPiano() {
+        if (!pianoOverlay) return;
+        if (pianoOverlay.classList.contains("open")) return;
+        pianoOverlay.classList.add("open");
+        pianoOverlay.setAttribute("aria-hidden", "false");
+        _pianoSetWarning(false);
+        _pianoSetLoading("Loading piano model\u2026");
+        _attachPianoGestures();
+        _pianoApplySize();
+        if (pianoOverlay.requestFullscreen) {
+          pianoOverlay.requestFullscreen().catch(() => {
+          });
+        } else if (pianoOverlay.webkitRequestFullscreen) {
+          try {
+            pianoOverlay.webkitRequestFullscreen();
+          } catch (_) {
+          }
+        }
+        try {
+          _requestWakeLock();
+        } catch (_) {
+        }
+        if (_pianoRafId == null) _pianoRafId = requestAnimationFrame(_pianoTick);
+        _pianoAnalyzeCurrentTrack();
+      }
+      function exitPiano() {
+        if (!pianoOverlay) return;
+        if (!pianoOverlay.classList.contains("open")) return;
+        pianoOverlay.classList.remove("open");
+        pianoOverlay.classList.remove("piano-loading");
+        pianoOverlay.classList.remove("piano-warn");
+        pianoOverlay.setAttribute("aria-hidden", "true");
+        if (_pianoRafId != null) {
+          cancelAnimationFrame(_pianoRafId);
+          _pianoRafId = null;
+        }
+        _detachPianoGestures();
+        _pianoClearHold();
+        if (document.fullscreenElement === pianoOverlay) {
+          document.exitFullscreen?.().catch(() => {
+          });
+        } else if (document.webkitFullscreenElement === pianoOverlay) {
+          try {
+            document.webkitExitFullscreen?.();
+          } catch (_) {
+          }
+        }
+      }
+      function _pianoClearHold() {
+        if (_pianoHoldTimer != null) {
+          clearTimeout(_pianoHoldTimer);
+          _pianoHoldTimer = null;
+        }
+        _pianoHoldStart = null;
+      }
+      function _pianoOnPointerDown(e) {
+        _pianoClearHold();
+        _pianoHoldStart = { x: e.clientX, y: e.clientY };
+        _pianoHoldTimer = setTimeout(() => {
+          _pianoHoldTimer = null;
+          exitPiano();
+        }, _PIANO_HOLD_MS);
+      }
+      function _pianoOnPointerMove(e) {
+        if (!_pianoHoldStart) return;
+        const dx = e.clientX - _pianoHoldStart.x;
+        const dy = e.clientY - _pianoHoldStart.y;
+        if (dx * dx + dy * dy > _PIANO_HOLD_MOVE_PX * _PIANO_HOLD_MOVE_PX) _pianoClearHold();
+      }
+      function _pianoOnPointerUp() {
+        _pianoClearHold();
+      }
+      function _attachPianoGestures() {
+        pianoOverlay.addEventListener("pointerdown", _pianoOnPointerDown);
+        pianoOverlay.addEventListener("pointermove", _pianoOnPointerMove);
+        pianoOverlay.addEventListener("pointerup", _pianoOnPointerUp);
+        pianoOverlay.addEventListener("pointercancel", _pianoOnPointerUp);
+        pianoOverlay.addEventListener("pointerleave", _pianoOnPointerUp);
+      }
+      function _detachPianoGestures() {
+        pianoOverlay.removeEventListener("pointerdown", _pianoOnPointerDown);
+        pianoOverlay.removeEventListener("pointermove", _pianoOnPointerMove);
+        pianoOverlay.removeEventListener("pointerup", _pianoOnPointerUp);
+        pianoOverlay.removeEventListener("pointercancel", _pianoOnPointerUp);
+        pianoOverlay.removeEventListener("pointerleave", _pianoOnPointerUp);
+      }
+      btnPiano?.addEventListener("click", enterPiano);
+      window.addEventListener("resize", () => {
+        if (pianoOverlay?.classList.contains("open")) _pianoApplySize();
       });
       var _profilePhotoRetryScheduled = false;
       function setUserProfile(user) {
