@@ -2741,13 +2741,19 @@ const coplayFabAvatarImg = $('coplay-fab-avatar-img');
 const coplayFabAvatarFallback = $('coplay-fab-avatar-fallback');
 const coplayFabBadge = $('coplay-fab-badge');
 
-// Make an element draggable. Drag fires for any pointerdown anywhere
-// on the element EXCEPT targets matching `skipSelector` (e.g. the
-// End/Leave button on a banner — those should remain pure click
-// handlers). Movement threshold keeps short taps as clicks; trailing
-// click is suppressed when an actual drag happened. Position is
-// persisted per `storageKey` and re-applied when the element becomes
-// visible. Clamped to viewport.
+// Make an element draggable using plain mouse + touch events. Drag
+// fires for any down anywhere on the element EXCEPT targets matching
+// `skipSelector` (e.g. the End/Leave button on a banner — those stay
+// pure click targets). Movement threshold keeps short taps as clicks;
+// the trailing click is suppressed if an actual drag happened.
+// Position is persisted per `storageKey` and re-applied when the
+// element becomes visible. Clamped to viewport.
+//
+// We intentionally avoid Pointer Events here. They sometimes go
+// missing when the down-target is a child element and the finger /
+// cursor leaves it before any move events have fired (mobile Safari
+// in particular). Listening for moves on `document` solves that —
+// no matter where the finger ends up, document gets the events.
 const _COPLAY_DRAG_THRESHOLD_PX = 6;
 function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
     if (!el) return;
@@ -2776,65 +2782,83 @@ function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
         } catch {}
     };
 
-    let pointerDown = false, dragging = false;
-    let startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
+    let active = false;        // press has begun, may or may not have crossed threshold
+    let dragging = false;      // crossed threshold → actually dragging
+    let suppressNextClick = false;
+    let startX = 0, startY = 0, originX = 0, originY = 0;
 
-    el.addEventListener('pointerdown', (e) => {
-        // Children matching the skip selector (e.g. End/Leave action
-        // buttons inside a banner) are excluded from drag entirely so
-        // they remain pure click targets.
-        if (skipSelector && e.target.closest(skipSelector)) return;
-        pointerDown = true;
+    const onStart = (e, x, y) => {
+        if (skipSelector && e.target.closest(skipSelector)) return false;
+        active = true;
         dragging = false;
-        pid = e.pointerId;
         const r = el.getBoundingClientRect();
         originX = r.left;
         originY = r.top;
-        startX = e.clientX;
-        startY = e.clientY;
-    });
-    el.addEventListener('pointermove', (e) => {
-        if (!pointerDown || e.pointerId !== pid) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
+        startX = x;
+        startY = y;
+        return true;
+    };
+    const onMove = (x, y, ePreventDefault) => {
+        if (!active) return;
+        const dx = x - startX;
+        const dy = y - startY;
         if (!dragging && Math.hypot(dx, dy) >= _COPLAY_DRAG_THRESHOLD_PX) {
             dragging = true;
-            try { el.setPointerCapture(pid); } catch {}
             el.classList.add('dragging');
         }
         if (dragging) {
             apply(originX + dx, originY + dy);
-            e.preventDefault();
+            if (typeof ePreventDefault === 'function') ePreventDefault();
         }
-    });
-    const end = (e) => {
-        if (!pointerDown || (pid !== null && e.pointerId !== pid)) return;
-        pointerDown = false;
+    };
+    const onEnd = () => {
+        if (!active) return;
+        active = false;
         if (dragging) {
-            try { el.releasePointerCapture(pid); } catch {}
             el.classList.remove('dragging');
             const r = el.getBoundingClientRect();
             try { localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top })); } catch {}
-            // Suppress the trailing click that the OS will fire on the
-            // pointerdown target — otherwise dragging the FAB would
-            // trigger "Join co-play".
-            const swallow = (clickEvt) => {
-                clickEvt.preventDefault();
-                clickEvt.stopImmediatePropagation();
-                el.removeEventListener('click', swallow, true);
-            };
-            el.addEventListener('click', swallow, true);
-            // Defensive: also drop the swallow after the next frame so
-            // we don't intercept a genuine subsequent click.
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-                el.removeEventListener('click', swallow, true);
-            }));
+            suppressNextClick = true;
             dragging = false;
         }
-        pid = null;
     };
-    el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', end);
+
+    // Mouse path (desktop)
+    el.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        if (!onStart(e, e.clientX, e.clientY)) return;
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+        onMove(e.clientX, e.clientY, () => e.preventDefault());
+    });
+    document.addEventListener('mouseup', onEnd);
+
+    // Touch path (mobile). passive:false so we can preventDefault during a
+    // drag and stop the browser from scrolling the page underneath.
+    el.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0];
+        if (!onStart(e, t.clientX, t.clientY)) return;
+        // Don't preventDefault here — that'd suppress the click that a
+        // pure tap should still produce. We only suppress on actual move.
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+        if (!active || e.touches.length !== 1) return;
+        const t = e.touches[0];
+        onMove(t.clientX, t.clientY, () => e.preventDefault());
+    }, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onEnd);
+
+    // Suppress the click that the OS fires after a tap turned into a drag.
+    el.addEventListener('click', (e) => {
+        if (suppressNextClick) {
+            suppressNextClick = false;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+        }
+    }, true);
 
     window.addEventListener('resize', () => {
         if (el.style.left) {
@@ -2843,7 +2867,6 @@ function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
         }
     });
 
-    // Re-apply persisted position whenever the element becomes visible.
     new MutationObserver(() => {
         if (el.style.display !== 'none') restore();
     }).observe(el, { attributes: true, attributeFilter: ['style'] });

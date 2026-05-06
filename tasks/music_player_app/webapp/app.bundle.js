@@ -86091,65 +86091,76 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           } catch {
           }
         };
-        let pointerDown = false, dragging = false;
-        let startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
-        el.addEventListener("pointerdown", (e) => {
-          if (skipSelector && e.target.closest(skipSelector)) return;
-          pointerDown = true;
+        let active = false;
+        let dragging = false;
+        let suppressNextClick = false;
+        let startX = 0, startY = 0, originX = 0, originY = 0;
+        const onStart = (e, x, y) => {
+          if (skipSelector && e.target.closest(skipSelector)) return false;
+          active = true;
           dragging = false;
-          pid = e.pointerId;
           const r = el.getBoundingClientRect();
           originX = r.left;
           originY = r.top;
-          startX = e.clientX;
-          startY = e.clientY;
-        });
-        el.addEventListener("pointermove", (e) => {
-          if (!pointerDown || e.pointerId !== pid) return;
-          const dx = e.clientX - startX;
-          const dy = e.clientY - startY;
+          startX = x;
+          startY = y;
+          return true;
+        };
+        const onMove = (x, y, ePreventDefault) => {
+          if (!active) return;
+          const dx = x - startX;
+          const dy = y - startY;
           if (!dragging && Math.hypot(dx, dy) >= _COPLAY_DRAG_THRESHOLD_PX) {
             dragging = true;
-            try {
-              el.setPointerCapture(pid);
-            } catch {
-            }
             el.classList.add("dragging");
           }
           if (dragging) {
             apply(originX + dx, originY + dy);
-            e.preventDefault();
+            if (typeof ePreventDefault === "function") ePreventDefault();
           }
-        });
-        const end = (e) => {
-          if (!pointerDown || pid !== null && e.pointerId !== pid) return;
-          pointerDown = false;
+        };
+        const onEnd = () => {
+          if (!active) return;
+          active = false;
           if (dragging) {
-            try {
-              el.releasePointerCapture(pid);
-            } catch {
-            }
             el.classList.remove("dragging");
             const r = el.getBoundingClientRect();
             try {
               localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top }));
             } catch {
             }
-            const swallow = (clickEvt) => {
-              clickEvt.preventDefault();
-              clickEvt.stopImmediatePropagation();
-              el.removeEventListener("click", swallow, true);
-            };
-            el.addEventListener("click", swallow, true);
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-              el.removeEventListener("click", swallow, true);
-            }));
+            suppressNextClick = true;
             dragging = false;
           }
-          pid = null;
         };
-        el.addEventListener("pointerup", end);
-        el.addEventListener("pointercancel", end);
+        el.addEventListener("mousedown", (e) => {
+          if (e.button !== 0) return;
+          if (!onStart(e, e.clientX, e.clientY)) return;
+          e.preventDefault();
+        });
+        document.addEventListener("mousemove", (e) => {
+          onMove(e.clientX, e.clientY, () => e.preventDefault());
+        });
+        document.addEventListener("mouseup", onEnd);
+        el.addEventListener("touchstart", (e) => {
+          if (e.touches.length !== 1) return;
+          const t = e.touches[0];
+          if (!onStart(e, t.clientX, t.clientY)) return;
+        }, { passive: true });
+        document.addEventListener("touchmove", (e) => {
+          if (!active || e.touches.length !== 1) return;
+          const t = e.touches[0];
+          onMove(t.clientX, t.clientY, () => e.preventDefault());
+        }, { passive: false });
+        document.addEventListener("touchend", onEnd);
+        document.addEventListener("touchcancel", onEnd);
+        el.addEventListener("click", (e) => {
+          if (suppressNextClick) {
+            suppressNextClick = false;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
         window.addEventListener("resize", () => {
           if (el.style.left) {
             const r = el.getBoundingClientRect();
