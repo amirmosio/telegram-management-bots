@@ -85992,8 +85992,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       });
       var COPLAY_HOST_KEY = "coplay_host_msg";
       var COPLAY_POLL_MS = 700;
+      var COPLAY_POLL_MS_IOS = 3e3;
       var COPLAY_DRIFT_IGNORE_SEC = 0.03;
       var COPLAY_DRIFT_TRIM_SEC = 0.3;
+      var COPLAY_DRIFT_HARD_SEEK_IOS_SEC = 2;
       var COPLAY_RATE_TRIM_MAX = 0.05;
       var COPLAY_RATE_TRIM_GAIN = 0.2;
       var COPLAY_RATE_WRITE_EPSILON = 5e-3;
@@ -86489,12 +86491,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           broadcastQueued: false,
           invitees: null,
           lastTid: null,
-          renderedRosterKey: null
+          renderedRosterKey: null,
+          lastFollowerWantsPlaying: null
         };
         _coplayRenderFollowerBanner(_coplaySession);
         showToast("Joining co-play\u2026");
         await _coplayPollTick(true);
-        _coplaySession.pollHandle = setInterval(_coplayPollTick, COPLAY_POLL_MS);
+        _coplaySession.pollHandle = setInterval(_coplayPollTick, IS_IOS ? COPLAY_POLL_MS_IOS : COPLAY_POLL_MS);
       }
       function _coplayRenderFollowerBanner(s) {
         coplayFollowerChipsEl.innerHTML = "";
@@ -86595,7 +86598,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           const drift = audio.currentTime - expected;
           const absDrift = Math.abs(drift);
           if (IS_IOS) {
-            if (absDrift > COPLAY_DRIFT_TRIM_SEC) {
+            if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC) {
               try {
                 audio.currentTime = Math.max(0, Math.min(audio.duration, expected));
               } catch {
@@ -86620,11 +86623,20 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         } else if (audio.playbackRate !== 1) {
           audio.playbackRate = 1;
         }
-        if (state.playing && audio.paused) {
-          audio.play().catch(() => {
-          });
-        } else if (!state.playing && !audio.paused) {
-          audio.pause();
+        if (IS_IOS) {
+          if (state.playing !== s.lastFollowerWantsPlaying) {
+            s.lastFollowerWantsPlaying = !!state.playing;
+            if (state.playing) audio.play().catch(() => {
+            });
+            else audio.pause();
+          }
+        } else {
+          if (state.playing && audio.paused) {
+            audio.play().catch(() => {
+            });
+          } else if (!state.playing && !audio.paused) {
+            audio.pause();
+          }
         }
       }
       async function _coplayInstallListenerAndCatchUp() {

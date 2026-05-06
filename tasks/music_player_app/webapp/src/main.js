@@ -2657,14 +2657,17 @@ document.addEventListener('keydown', e => {
 // ══════════════════════════════════════
 
 const COPLAY_HOST_KEY = 'coplay_host_msg';
+// Desktop runs the full sync pipeline tight (700 ms poll, 300 ms seek
+// threshold, smooth proportional rate trim). iOS Safari is sensitive
+// to anything that touches the audio element while it's playing —
+// even a getMessages RPC during decoding can hitch — so we deliberately
+// loosen everything for iOS in follower mode and accept more drift in
+// exchange for clean playback.
 const COPLAY_POLL_MS = 700;
-// Drift correction is tiered:
-//   < 30 ms: do nothing (audio-engine jitter is already bigger than this).
-//   30-300 ms: nudge playbackRate *proportionally* so the trim shrinks
-//              as we converge (smooth approach to 0, not a bang-bang).
-//   > 300 ms: hard seek + reset rate.
+const COPLAY_POLL_MS_IOS = 3000;
 const COPLAY_DRIFT_IGNORE_SEC = 0.03;
 const COPLAY_DRIFT_TRIM_SEC = 0.3;
+const COPLAY_DRIFT_HARD_SEEK_IOS_SEC = 2.0;
 const COPLAY_RATE_TRIM_MAX = 0.05;     // cap the rate offset at ±5 %
 const COPLAY_RATE_TRIM_GAIN = 0.2;     // 200 ms drift → 4 % rate offset
 // Only re-write playbackRate when it changes by at least this much.
@@ -3247,13 +3250,14 @@ async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
         invitees: null,
         lastTid: null,
         renderedRosterKey: null,
+        lastFollowerWantsPlaying: null,
     };
     // Render a placeholder host chip while we wait for the first poll
     // to come back with the real fromUserId + invitee list.
     _coplayRenderFollowerBanner(_coplaySession);
     showToast('Joining co-play…');
     await _coplayPollTick(true);
-    _coplaySession.pollHandle = setInterval(_coplayPollTick, COPLAY_POLL_MS);
+    _coplaySession.pollHandle = setInterval(_coplayPollTick, IS_IOS ? COPLAY_POLL_MS_IOS : COPLAY_POLL_MS);
 }
 
 // Render the follower banner: host chip (gold) first, then the other
@@ -3377,12 +3381,11 @@ async function _coplayPollTick(initial) {
     if (state.playing && audio.duration) {
         const drift = audio.currentTime - expected; // +ahead, -behind
         const absDrift = Math.abs(drift);
-        // iOS Safari's time-stretch produces audible vocoder/robot
-        // artifacts at sustained off-1.0 rates, and re-writes flush the
-        // decoder. Skip the rate-trim band entirely there — only ignore
-        // small drift or hard-seek above the threshold.
         if (IS_IOS) {
-            if (absDrift > COPLAY_DRIFT_TRIM_SEC) {
+            // iOS: very loose threshold so seeks rarely fire (each one
+            // makes the decoder hitch). No rate trim — iOS time-stretch
+            // is the artifact source.
+            if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC) {
                 try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
             }
             if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
@@ -3403,10 +3406,21 @@ async function _coplayPollTick(initial) {
     } else if (audio.playbackRate !== 1.0) {
         audio.playbackRate = 1.0;
     }
-    if (state.playing && audio.paused) {
-        audio.play().catch(() => {});
-    } else if (!state.playing && !audio.paused) {
-        audio.pause();
+    // Play/pause reconciliation. On iOS we only act on a *transition*
+    // of state.playing — calling audio.play() repeatedly during steady
+    // playback can re-init the decoder and produce robotic stutters.
+    if (IS_IOS) {
+        if (state.playing !== s.lastFollowerWantsPlaying) {
+            s.lastFollowerWantsPlaying = !!state.playing;
+            if (state.playing) audio.play().catch(() => {});
+            else audio.pause();
+        }
+    } else {
+        if (state.playing && audio.paused) {
+            audio.play().catch(() => {});
+        } else if (!state.playing && !audio.paused) {
+            audio.pause();
+        }
     }
 }
 
