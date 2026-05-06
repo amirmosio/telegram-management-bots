@@ -72924,16 +72924,48 @@ ${JSON.stringify(state)}`;
     }
     return { text: head + line, entities };
   }
-  async function coplaySendInvite(stateJson, invitees) {
+  async function _coplayBuildInputMediaFromChannelMsg(channelId, trackMsgIdInChannel) {
+    const entity = await _getEntity(channelId);
+    const msgs = await client.getMessages(entity, { ids: [trackMsgIdInChannel] });
+    const msg = msgs[0];
+    if (!msg || !msg.media || !msg.media.document) {
+      throw new Error("Track media not found in share channel");
+    }
+    const doc = msg.media.document;
+    return new import_tl.Api.InputMediaDocument({
+      id: new import_tl.Api.InputDocument({
+        id: doc.id,
+        accessHash: doc.accessHash,
+        fileReference: doc.fileReference
+      })
+    });
+  }
+  async function coplaySendInvite(stateJson, invitees, trackMsgIdInChannel) {
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
     const entity = await _getEntity(channel.id);
     const { text, entities } = coplayBuildMessage(stateJson, invitees);
-    const sent = await client.sendMessage(entity, {
+    const inputMedia = await _coplayBuildInputMediaFromChannelMsg(channel.id, trackMsgIdInChannel);
+    const result = await client.invoke(new import_tl.Api.messages.SendMedia({
+      peer: entity,
+      media: inputMedia,
       message: text,
-      formattingEntities: entities.length ? entities : void 0
-    });
-    return { syncMsgId: sent.id, channelId: channel.id };
+      entities: entities.length ? entities : void 0,
+      randomId: (0, import_big_integer.default)(Math.floor(Math.random() * 2 ** 53))
+    }));
+    let sentId = null;
+    for (const update of result.updates || []) {
+      if (update.message && update.message.id) {
+        sentId = update.message.id;
+        break;
+      }
+      if (update.id != null && update.message) {
+        sentId = update.id;
+        break;
+      }
+    }
+    if (!sentId) throw new Error("coplaySendInvite: no message id in response");
+    return { syncMsgId: sentId, channelId: channel.id };
   }
   async function coplayEditState(channelId, syncMsgId, stateJson, invitees) {
     await _ensureConnected();
@@ -72944,6 +72976,19 @@ ${JSON.stringify(state)}`;
       id: syncMsgId,
       message: text,
       entities: entities.length ? entities : void 0
+    }));
+  }
+  async function coplayEditTrack(channelId, syncMsgId, newTrackMsgIdInChannel, stateJson, invitees) {
+    await _ensureConnected();
+    const peer = await client.getInputEntity(channelId);
+    const { text, entities } = coplayBuildMessage(stateJson, invitees);
+    const inputMedia = await _coplayBuildInputMediaFromChannelMsg(channelId, newTrackMsgIdInChannel);
+    await client.invoke(new import_tl.Api.messages.EditMessage({
+      peer,
+      id: syncMsgId,
+      message: text,
+      entities: entities.length ? entities : void 0,
+      media: inputMedia
     }));
   }
   async function coplayDelete(channelId, syncMsgId) {
@@ -72994,10 +73039,13 @@ ${JSON.stringify(state)}`;
     if (_coplayInviteHandlerInstalled) return;
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
-    const entity = await _getEntity(channel.id);
+    const bareChannelId = channel.id < 0 ? Number(String(channel.id).replace(/^-100/, "")) : channel.id;
     const handler = async (event) => {
       const msg = event.message;
       if (!msg || !msg.mentioned) return;
+      const peerCh = msg.peerId?.channelId;
+      const ch = peerCh != null ? Number(typeof peerCh === "bigint" ? peerCh : peerCh.value ?? peerCh) : null;
+      if (ch !== bareChannelId) return;
       const parsed = _coplayParse(msg);
       if (!parsed) return;
       try {
@@ -73006,7 +73054,7 @@ ${JSON.stringify(state)}`;
         console.warn("coplay invite cb threw:", e?.message || e);
       }
     };
-    client.addEventHandler(handler, new import_events.NewMessage({ chats: [entity] }));
+    client.addEventHandler(handler, new import_events.NewMessage({}));
     _coplayInviteHandlerInstalled = true;
   }
   function getCachedUserEntity(userId) {
@@ -84694,7 +84742,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       });
       var COPLAY_HOST_KEY = "coplay_host_msg";
       var COPLAY_POLL_MS = 1500;
-      var COPLAY_DRIFT_MAX_SEC = 0.5;
+      var COPLAY_DRIFT_MAX_SEC = 1.2;
       var btnCoplay = $("btn-coplay");
       var coplayModal = $("coplay-modal");
       var coplaySearchInput = $("coplay-search");
@@ -84726,6 +84774,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           v: 1,
           playing: !audio.paused,
           pos: Math.max(0, audio.currentTime || 0),
+          anchor: Date.now() / 1e3,
           track: t ? {
             i: trackMsgIdInChannel,
             t: t.title || "",
@@ -84775,7 +84824,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             s.broadcastQueued = false;
             const trackMsgId = await _coplayEnsureTrackInChannel();
             const state = _coplayBuildState(trackMsgId);
-            await coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
+            const trackChanged = trackMsgId && trackMsgId !== s.lastBroadcastTrackMsgId;
+            if (trackChanged) {
+              await coplayEditTrack(s.channelId, s.syncMsgId, trackMsgId, state, s.invitees);
+              s.lastBroadcastTrackMsgId = trackMsgId;
+            } else {
+              await coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
+            }
           } while (s.broadcastQueued && _coplaySession === s);
         } catch (e) {
           console.warn("[coplay] broadcast failed:", e?.message || e);
@@ -84944,9 +84999,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             v: 1,
             playing: !audio.paused,
             pos: Math.max(0, audio.currentTime || 0),
+            anchor: Date.now() / 1e3,
             track: { i: trackMsgId, t: t.title || "", a: t.artist || "", d: t.duration || 0 }
           };
-          const { syncMsgId } = await coplaySendInvite(initialState, invitees);
+          const { syncMsgId } = await coplaySendInvite(initialState, invitees, trackMsgId);
           _coplaySession = {
             role: "host",
             syncMsgId,
@@ -84957,7 +85013,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             pollHandle: null,
             broadcastInflight: false,
             broadcastQueued: false,
-            invitees
+            invitees,
+            lastBroadcastTrackMsgId: trackMsgId
           };
           localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
           _coplayShowHostBanner(invitees.length);
@@ -85125,7 +85182,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           s.lastTrackKey = trackKey;
           try {
             const { track, groupId } = await resolveShareLink(state.track.i);
-            _pendingSeekTime = Math.max(0, state.pos || 0);
+            const anchor2 = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
+            const elapsed2 = Math.max(0, Date.now() / 1e3 - anchor2);
+            _pendingSeekTime = Math.max(0, (state.pos || 0) + (state.playing ? elapsed2 : 0));
             _pendingSeekTrackId = track.id;
             startPlayback([track], groupId, null, 0, false);
           } catch (e) {
@@ -85133,7 +85192,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
           return;
         }
-        const elapsed = Date.now() / 1e3 - res.fetchedWallSec;
+        const anchor = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
+        const elapsed = Math.max(0, Date.now() / 1e3 - anchor);
         const expected = (state.pos || 0) + (state.playing ? elapsed : 0);
         if (audio.duration && Math.abs(audio.currentTime - expected) > COPLAY_DRIFT_MAX_SEC) {
           try {
@@ -85160,6 +85220,15 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         } catch (e) {
           console.warn("[coplay] catch-up failed:", e?.message || e);
         }
+        setInterval(async () => {
+          if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+          if (_coplaySession?.role === "host") return;
+          try {
+            const pending = await coplayCatchupMentions();
+            for (const p of pending) await _coplayHandleIncomingInvite(p);
+          } catch {
+          }
+        }, 5e3);
       }
       async function _coplayBootSweep() {
         const raw = localStorage.getItem(COPLAY_HOST_KEY);
@@ -85195,6 +85264,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const msgId = parseInt(coplayFab.dataset.msgId || "0", 10);
         const channelId = parseInt(coplayFab.dataset.channelId || "0", 10);
         if (!msgId || !channelId) return;
+        try {
+          const p = audio.play();
+          if (p && typeof p.then === "function") p.then(() => audio.pause()).catch(() => {
+          });
+          else audio.pause();
+        } catch {
+        }
         const info = _pendingInvites.get(msgId);
         _pendingInvites.delete(msgId);
         _coplayEnterFollower(msgId, channelId, info?.hostName);

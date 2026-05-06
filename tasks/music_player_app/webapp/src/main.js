@@ -2864,7 +2864,9 @@ document.addEventListener('keydown', e => {
 
 const COPLAY_HOST_KEY = 'coplay_host_msg';
 const COPLAY_POLL_MS = 1500;
-const COPLAY_DRIFT_MAX_SEC = 0.5;
+// 1.2 s drift threshold absorbs ~half a second of network round-trip plus
+// the typical NTP-aligned clock skew between two phones (≈100-500 ms).
+const COPLAY_DRIFT_MAX_SEC = 1.2;
 
 const btnCoplay = $('btn-coplay');
 const coplayModal = $('coplay-modal');
@@ -2898,13 +2900,18 @@ function _coplayCurrentTrack() {
     return playerTracks[currentTrackIndex];
 }
 
-// Build the JSON state payload broadcast to followers.
+// Build the JSON state payload broadcast to followers. `anchor` is the
+// host's local wall-clock (unix seconds) at the moment of broadcast, so
+// followers can extrapolate the host's *current* playback position as
+//   expected = pos + (now - anchor)   [when playing]
+// without depending on continuous re-broadcasts.
 function _coplayBuildState(trackMsgIdInChannel) {
     const t = _coplayCurrentTrack();
     return {
         v: 1,
         playing: !audio.paused,
         pos: Math.max(0, audio.currentTime || 0),
+        anchor: Date.now() / 1000,
         track: t ? {
             i: trackMsgIdInChannel,
             t: t.title || '',
@@ -2950,7 +2957,9 @@ async function _coplayEnsureTrackInChannel() {
 
 // Single-flight broadcast: at most one EditMessage in flight; if more
 // state changes arrive while we're waiting, only the LATEST is applied
-// once the in-flight call resolves.
+// once the in-flight call resolves. When the host's current track has
+// changed since the last broadcast we also swap the message's attached
+// media; otherwise we send a caption-only edit.
 async function _coplayBroadcast() {
     const s = _coplaySession;
     if (!s || s.role !== 'host') return;
@@ -2961,7 +2970,13 @@ async function _coplayBroadcast() {
             s.broadcastQueued = false;
             const trackMsgId = await _coplayEnsureTrackInChannel();
             const state = _coplayBuildState(trackMsgId);
-            await tg.coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
+            const trackChanged = trackMsgId && trackMsgId !== s.lastBroadcastTrackMsgId;
+            if (trackChanged) {
+                await tg.coplayEditTrack(s.channelId, s.syncMsgId, trackMsgId, state, s.invitees);
+                s.lastBroadcastTrackMsgId = trackMsgId;
+            } else {
+                await tg.coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
+            }
         } while (s.broadcastQueued && _coplaySession === s);
     } catch (e) {
         console.warn('[coplay] broadcast failed:', e?.message || e);
@@ -3158,9 +3173,10 @@ async function _coplayStartHost() {
             v: 1,
             playing: !audio.paused,
             pos: Math.max(0, audio.currentTime || 0),
+            anchor: Date.now() / 1000,
             track: { i: trackMsgId, t: t.title || '', a: t.artist || '', d: t.duration || 0 },
         };
-        const { syncMsgId } = await tg.coplaySendInvite(initialState, invitees);
+        const { syncMsgId } = await tg.coplaySendInvite(initialState, invitees, trackMsgId);
 
         _coplaySession = {
             role: 'host',
@@ -3173,6 +3189,7 @@ async function _coplayStartHost() {
             broadcastInflight: false,
             broadcastQueued: false,
             invitees,
+            lastBroadcastTrackMsgId: trackMsgId,
         };
         localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
 
@@ -3354,7 +3371,12 @@ async function _coplayPollTick(initial) {
         s.lastTrackKey = trackKey;
         try {
             const { track, groupId } = await tg.resolveShareLink(state.track.i);
-            _pendingSeekTime = Math.max(0, state.pos || 0);
+            // Land at host's CURRENT position, not the stale pos baked into
+            // the message. Same anchor-extrapolation as the steady-state
+            // drift correction below.
+            const anchor = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
+            const elapsed = Math.max(0, (Date.now() / 1000) - anchor);
+            _pendingSeekTime = Math.max(0, (state.pos || 0) + (state.playing ? elapsed : 0));
             _pendingSeekTrackId = track.id;
             startPlayback([track], groupId, null, 0, false);
         } catch (e) {
@@ -3363,8 +3385,14 @@ async function _coplayPollTick(initial) {
         return;
     }
 
-    // Reconcile position + play/pause.
-    const elapsed = (Date.now() / 1000) - res.fetchedWallSec;
+    // Reconcile position + play/pause. `anchor` is the host's wall-clock
+    // (unix seconds) at the moment of broadcast — extrapolating from that
+    // means infrequent broadcasts don't make us snap back to a stale pos.
+    // Falls back to the local fetch-time anchor for old (pre-anchor)
+    // states, just in case a follower polls a sync msg from before this
+    // version was deployed.
+    const anchor = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
+    const elapsed = Math.max(0, (Date.now() / 1000) - anchor);
     const expected = (state.pos || 0) + (state.playing ? elapsed : 0);
     if (audio.duration && Math.abs(audio.currentTime - expected) > COPLAY_DRIFT_MAX_SEC) {
         try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
@@ -3386,12 +3414,26 @@ async function _coplayInstallListenerAndCatchUp() {
     } catch (e) {
         console.warn('[coplay] install listener failed:', e?.message || e);
     }
+    // Initial catch-up.
     try {
         const pending = await tg.coplayCatchupMentions();
         for (const p of pending) await _coplayHandleIncomingInvite(p);
     } catch (e) {
         console.warn('[coplay] catch-up failed:', e?.message || e);
     }
+    // Belt-and-braces: a periodic poll that runs while the tab is visible.
+    // The realtime NewMessage handler is the primary path, but the GramJS
+    // update loop is brittle in this client (autoReconnect is off), so we
+    // also poll unread mentions every 5 s. Cheap one-RPC call; deduped
+    // server-side by mention-state.
+    setInterval(async () => {
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+        if (_coplaySession?.role === 'host') return; // host doesn't need invites
+        try {
+            const pending = await tg.coplayCatchupMentions();
+            for (const p of pending) await _coplayHandleIncomingInvite(p);
+        } catch { /* swallow — next tick will retry */ }
+    }, 5000);
 }
 
 async function _coplayBootSweep() {
@@ -3431,6 +3473,14 @@ coplayFab.addEventListener('click', () => {
     const msgId = parseInt(coplayFab.dataset.msgId || '0', 10);
     const channelId = parseInt(coplayFab.dataset.channelId || '0', 10);
     if (!msgId || !channelId) return;
+    // iOS audio-gesture unlock: play+pause the (currently empty) audio
+    // element synchronously inside the click handler so the upcoming
+    // async-chain audio.play() inherits the user-gesture privilege.
+    try {
+        const p = audio.play();
+        if (p && typeof p.then === 'function') p.then(() => audio.pause()).catch(() => {});
+        else audio.pause();
+    } catch {}
     const info = _pendingInvites.get(msgId);
     _pendingInvites.delete(msgId);
     _coplayEnterFollower(msgId, channelId, info?.hostName);

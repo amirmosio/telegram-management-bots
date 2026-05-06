@@ -2989,18 +2989,54 @@ function coplayBuildMessage(stateJson, invitees) {
     return { text: head + line, entities };
 }
 
-export async function coplaySendInvite(stateJson, invitees) {
+// Fetch a share-channel msg's document and wrap it as InputMediaDocument
+// so we can re-use it as media on a NEW or EDITED message.
+async function _coplayBuildInputMediaFromChannelMsg(channelId, trackMsgIdInChannel) {
+    const entity = await _getEntity(channelId);
+    const msgs = await client.getMessages(entity, { ids: [trackMsgIdInChannel] });
+    const msg = msgs[0];
+    if (!msg || !msg.media || !msg.media.document) {
+        throw new Error('Track media not found in share channel');
+    }
+    const doc = msg.media.document;
+    return new Api.InputMediaDocument({
+        id: new Api.InputDocument({
+            id: doc.id,
+            accessHash: doc.accessHash,
+            fileReference: doc.fileReference,
+        }),
+    });
+}
+
+// Send the sync message AS an audio post: the current track is attached
+// as media, and the caption holds the magic prefix + JSON state +
+// mentions of every invitee.
+export async function coplaySendInvite(stateJson, invitees, trackMsgIdInChannel) {
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
     const entity = await _getEntity(channel.id);
     const { text, entities } = coplayBuildMessage(stateJson, invitees);
-    const sent = await client.sendMessage(entity, {
+    const inputMedia = await _coplayBuildInputMediaFromChannelMsg(channel.id, trackMsgIdInChannel);
+    // Use messages.SendMedia directly so we can control the entities array
+    // (sendFile would force its own caption parsing).
+    const result = await client.invoke(new Api.messages.SendMedia({
+        peer: entity,
+        media: inputMedia,
         message: text,
-        formattingEntities: entities.length ? entities : undefined,
-    });
-    return { syncMsgId: sent.id, channelId: channel.id };
+        entities: entities.length ? entities : undefined,
+        randomId: bigInt(Math.floor(Math.random() * 2 ** 53)),
+    }));
+    let sentId = null;
+    for (const update of result.updates || []) {
+        if (update.message && update.message.id) { sentId = update.message.id; break; }
+        if (update.id != null && update.message) { sentId = update.id; break; }
+    }
+    if (!sentId) throw new Error('coplaySendInvite: no message id in response');
+    return { syncMsgId: sentId, channelId: channel.id };
 }
 
+// Caption-only edit (play/pause/seek). Telegram preserves the existing
+// media when the `media` field is omitted.
 export async function coplayEditState(channelId, syncMsgId, stateJson, invitees) {
     await _ensureConnected();
     const peer = await client.getInputEntity(channelId);
@@ -3010,6 +3046,22 @@ export async function coplayEditState(channelId, syncMsgId, stateJson, invitees)
         id: syncMsgId,
         message: text,
         entities: entities.length ? entities : undefined,
+    }));
+}
+
+// Track change: swap the message's media to the new track AND update the
+// caption JSON. Both happen in one EditMessage round-trip.
+export async function coplayEditTrack(channelId, syncMsgId, newTrackMsgIdInChannel, stateJson, invitees) {
+    await _ensureConnected();
+    const peer = await client.getInputEntity(channelId);
+    const { text, entities } = coplayBuildMessage(stateJson, invitees);
+    const inputMedia = await _coplayBuildInputMediaFromChannelMsg(channelId, newTrackMsgIdInChannel);
+    await client.invoke(new Api.messages.EditMessage({
+        peer,
+        id: syncMsgId,
+        message: text,
+        entities: entities.length ? entities : undefined,
+        media: inputMedia,
     }));
 }
 
@@ -3064,24 +3116,34 @@ export async function coplayCatchupMentions() {
     return out;
 }
 
-// Register a NewMessage handler that fires for any message in the share
-// channel that mentions the logged-in user and matches the co-play marker.
+// Register a NewMessage handler that fires for any message that mentions
+// the logged-in user, then narrows to the share channel inside the
+// handler (the `chats:` filter has been flaky cross-DC for channels).
 // The callback is invoked with `{ msgId, fromUserId, state, channelId }`.
 let _coplayInviteHandlerInstalled = false;
 export async function installCoplayInviteListener(callback) {
     if (_coplayInviteHandlerInstalled) return;
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
-    const entity = await _getEntity(channel.id);
+    // Resolve the channel-id that messages will carry on PeerChannel.
+    // Channel msg.peerId.channelId is the bare channel id (no -100 prefix).
+    const bareChannelId = channel.id < 0
+        ? Number(String(channel.id).replace(/^-100/, ''))
+        : channel.id;
     const handler = async (event) => {
         const msg = event.message;
         if (!msg || !msg.mentioned) return;
+        const peerCh = msg.peerId?.channelId;
+        const ch = peerCh != null
+            ? Number(typeof peerCh === 'bigint' ? peerCh : (peerCh.value ?? peerCh))
+            : null;
+        if (ch !== bareChannelId) return;
         const parsed = _coplayParse(msg);
         if (!parsed) return;
         try { callback({ ...parsed, channelId: channel.id }); }
         catch (e) { console.warn('coplay invite cb threw:', e?.message || e); }
     };
-    client.addEventHandler(handler, new NewMessage({ chats: [entity] }));
+    client.addEventHandler(handler, new NewMessage({}));
     _coplayInviteHandlerInstalled = true;
 }
 
