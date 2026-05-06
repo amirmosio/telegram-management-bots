@@ -244,9 +244,12 @@ export async function updateTrackArtwork(groupId, trackId, artworkBlob, context 
 // Piano-mode transcription upsert. `notes` is an array of {t0, t1, pitch}
 // produced by basic-pitch's audio→MIDI inference; cached on the track row
 // so re-entering Piano mode for a track skips the 30-60s analysis.
+// Pass `context.pianoNotesVersion` to invalidate older transcriptions
+// when the model parameters change.
 export async function updateTrackPianoNotes(groupId, trackId, notes, context = {}) {
     const ctx = _deriveTopicContext(groupId, trackId, context);
     const patch = { pianoNotes: notes };
+    if (context.pianoNotesVersion != null) patch.pianoNotesVersion = context.pianoNotesVersion;
     if (context.track) patch.track = context.track;
     if (ctx.topicId != null) patch.topicId = ctx.topicId;
     if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;

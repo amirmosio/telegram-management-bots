@@ -5145,6 +5145,10 @@ const _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, fals
 // arrive on the first piano-mode entry.
 const _PIANO_BP_URL    = 'https://esm.sh/@spotify/basic-pitch@1.0.1';
 const _PIANO_MODEL_URL = 'https://cdn.jsdelivr.net/gh/spotify/basic-pitch-ts@main/model/model.json';
+// Bump this whenever the transcription parameters in _pianoTranscribe
+// change so cached IDB notes from older runs get re-transcribed instead
+// of silently using the looser thresholds. Stored next to pianoNotes.
+const _PIANO_NOTES_VERSION = 2;
 
 function _pianoSetLoading(label) {
     if (!pianoOverlay) return;
@@ -5267,19 +5271,42 @@ async function _pianoTranscribe(audioBuffer, progressCb) {
         progressCb,
     );
 
-    // Convert raw model output → note events.
-    const onsetTh = 0.5;
-    const frameTh = 0.3;
-    const minNoteFrames = 5;
-    const poly = bp.outputToNotesPoly(frames, onsets, onsetTh, frameTh, minNoteFrames);
+    // Convert raw model output → note events. Tighter than basic-pitch's
+    // defaults (0.5 / 0.3 / 5) — the user reported a lot of phantom notes
+    // not in the music. Higher onset/frame thresholds drop weak detections
+    // and longer minNoteLength filters out spurious blips that can't be
+    // real piano notes. Pitch range hard-clamped to the piano (A0..C8)
+    // even though basic-pitch is piano-trained, as belt-and-braces.
+    const A0_HZ = 27.5;
+    const C8_HZ = 4186.0;
+    const onsetTh = 0.65;            // was 0.5
+    const frameTh = 0.45;            // was 0.3
+    const minNoteFrames = 11;        // was 5  (each frame ≈ 11 ms → ~120 ms minimum)
+    const inferOnsets = true;
+    const melodiaTrick = true;
+    const energyTolerance = 11;
+    const poly = bp.outputToNotesPoly(
+        frames, onsets,
+        onsetTh, frameTh, minNoteFrames,
+        inferOnsets,
+        C8_HZ, A0_HZ,
+        melodiaTrick, energyTolerance,
+    );
     const withBends = bp.addPitchBendsToNoteEvents(contours, poly);
     const events = bp.noteFramesToTime(withBends);
 
-    return events.map(n => ({
-        t0: n.startTimeSeconds,
-        t1: n.startTimeSeconds + n.durationSeconds,
-        pitch: n.pitchMidi,
-    })).filter(n => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH);
+    // Final amplitude filter — basic-pitch attaches a 0..1 amplitude to
+    // each note; very low values are usually transcription noise rather
+    // than real notes. 0.3 is conservative; raise if user still reports
+    // false positives, lower if real notes start dropping.
+    return events
+        .filter(n => (n.amplitude ?? 1) >= 0.3)
+        .map(n => ({
+            t0: n.startTimeSeconds,
+            t1: n.startTimeSeconds + n.durationSeconds,
+            pitch: n.pitchMidi,
+        }))
+        .filter(n => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH);
 }
 
 function _pianoFindCurrentTrack() {
@@ -5306,7 +5333,8 @@ async function _pianoAnalyzeCurrentTrack() {
     try {
         const row = await tg.getCachedTrackRecord(playerGroupId, trackId);
         if (myToken !== _pianoAnalysisToken) return;
-        if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0) {
+        if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0
+            && row.pianoNotesVersion === _PIANO_NOTES_VERSION) {
             _pianoCache.set(trackId, row.pianoNotes);
             _pianoInstallNotes(trackId, row.pianoNotes);
             _pianoSetWarning(_pianoIsUnreliable(row.pianoNotes));
@@ -5367,7 +5395,7 @@ async function _pianoAnalyzeCurrentTrack() {
 
     // 6. Cache + install + warn-if-poor
     _pianoCache.set(trackId, notes);
-    try { tg.updateTrackPianoNotes(playerGroupId, trackId, notes, { track: _pianoFindCurrentTrack() }); } catch (_) {}
+    try { tg.updateTrackPianoNotes(playerGroupId, trackId, notes, { track: _pianoFindCurrentTrack(), pianoNotesVersion: _PIANO_NOTES_VERSION }); } catch (_) {}
     _pianoSetWarning(_pianoIsUnreliable(notes, audioBuffer.duration));
     _pianoInstallNotes(trackId, notes);
     _pianoSetLoading(null);

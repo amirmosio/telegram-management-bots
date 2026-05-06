@@ -70635,6 +70635,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   async function updateTrackPianoNotes(groupId, trackId, notes, context = {}) {
     const ctx = _deriveTopicContext(groupId, trackId, context);
     const patch = { pianoNotes: notes };
+    if (context.pianoNotesVersion != null) patch.pianoNotesVersion = context.pianoNotesVersion;
     if (context.track) patch.track = context.track;
     if (ctx.topicId != null) patch.topicId = ctx.topicId;
     if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;
@@ -86779,6 +86780,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
       var _PIANO_BP_URL = "https://esm.sh/@spotify/basic-pitch@1.0.1";
       var _PIANO_MODEL_URL = "https://cdn.jsdelivr.net/gh/spotify/basic-pitch-ts@main/model/model.json";
+      var _PIANO_NOTES_VERSION = 2;
       function _pianoSetLoading(label) {
         if (!pianoOverlay) return;
         if (label === null) {
@@ -86881,13 +86883,29 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           },
           progressCb
         );
-        const onsetTh = 0.5;
-        const frameTh = 0.3;
-        const minNoteFrames = 5;
-        const poly = bp.outputToNotesPoly(frames, onsets, onsetTh, frameTh, minNoteFrames);
+        const A0_HZ = 27.5;
+        const C8_HZ = 4186;
+        const onsetTh = 0.65;
+        const frameTh = 0.45;
+        const minNoteFrames = 11;
+        const inferOnsets = true;
+        const melodiaTrick = true;
+        const energyTolerance = 11;
+        const poly = bp.outputToNotesPoly(
+          frames,
+          onsets,
+          onsetTh,
+          frameTh,
+          minNoteFrames,
+          inferOnsets,
+          C8_HZ,
+          A0_HZ,
+          melodiaTrick,
+          energyTolerance
+        );
         const withBends = bp.addPitchBendsToNoteEvents(contours, poly);
         const events = bp.noteFramesToTime(withBends);
-        return events.map((n) => ({
+        return events.filter((n) => (n.amplitude ?? 1) >= 0.3).map((n) => ({
           t0: n.startTimeSeconds,
           t1: n.startTimeSeconds + n.durationSeconds,
           pitch: n.pitchMidi
@@ -86914,7 +86932,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         try {
           const row = await getCachedTrackRecord(playerGroupId, trackId);
           if (myToken !== _pianoAnalysisToken) return;
-          if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0) {
+          if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0 && row.pianoNotesVersion === _PIANO_NOTES_VERSION) {
             _pianoCache.set(trackId, row.pianoNotes);
             _pianoInstallNotes(trackId, row.pianoNotes);
             _pianoSetWarning(_pianoIsUnreliable(row.pianoNotes));
@@ -86973,7 +86991,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (myToken !== _pianoAnalysisToken) return;
         _pianoCache.set(trackId, notes);
         try {
-          updateTrackPianoNotes(playerGroupId, trackId, notes, { track: _pianoFindCurrentTrack() });
+          updateTrackPianoNotes(playerGroupId, trackId, notes, { track: _pianoFindCurrentTrack(), pianoNotesVersion: _PIANO_NOTES_VERSION });
         } catch (_) {
         }
         _pianoSetWarning(_pianoIsUnreliable(notes, audioBuffer.duration));
