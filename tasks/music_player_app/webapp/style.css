@@ -2231,11 +2231,17 @@ html, body {
 .coplay-banner .text-btn:hover { background: rgba(255,255,255,0.3); color: #fff; }
 .coplay-follower-banner { background: rgba(60, 130, 90, 0.95); }
 
-/* Drag affordance. Buttons + chips inside still get pointer cursor;
-   the drag handler skips those targets. */
+/* Drag affordance. `touch-action: none` has to apply to children too —
+   without it, mobile Safari hands touches that land on a chip / the
+   action button to its own scroll handler and our pointer-drag never
+   gets the pointermove deltas. Tap behaviour is unaffected (taps fire
+   regardless of touch-action). */
+.coplay-banner.coplay-draggable,
+.coplay-banner.coplay-draggable * {
+    touch-action: none;
+}
 .coplay-banner.coplay-draggable {
     cursor: grab;
-    touch-action: none;
     user-select: none;
 }
 .coplay-banner.coplay-draggable.dragging {
