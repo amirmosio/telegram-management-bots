@@ -2328,11 +2328,12 @@ export function primeMsgCache(groupId, trackId, msg) {
     _msgCache[`${groupId}:${trackId}`] = msg;
 }
 
-// Force-evict in-memory caches for a (groupId, trackId) pair so the next
-// playback fetches fresh msg metadata + audio bytes. Used when the host
-// edits the co-play sync message's media — the msg.id stays the same
-// but the underlying document changes.
-export function evictTrackCaches(groupId, trackId) {
+// Force-evict every cache layer for a (groupId, trackId) pair so the
+// next playback fetches fresh msg metadata, audio bytes, AND artwork.
+// Used when the host edits the co-play sync message's media — the
+// msg.id stays the same but the underlying document changes, so
+// (groupId, trackId) keyed caches would otherwise serve stale bytes.
+export async function evictTrackCaches(groupId, trackId) {
     const key = `${groupId}:${trackId}`;
     if (_msgCache[key]) delete _msgCache[key];
     if (_blobCache[key]) {
@@ -2343,6 +2344,8 @@ export function evictTrackCaches(groupId, trackId) {
         try { URL.revokeObjectURL(_thumbBlobCache[key]); } catch {}
         delete _thumbBlobCache[key];
     }
+    _downloadedRecords.delete(key);
+    try { await idbDelete(TRACKS_STORE, key); } catch {}
 }
 
 // Send an audio track (referenced by source message) to a destination chat

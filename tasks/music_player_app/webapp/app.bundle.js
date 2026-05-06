@@ -72426,7 +72426,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     if (!msg) return;
     _msgCache[`${groupId}:${trackId}`] = msg;
   }
-  function evictTrackCaches(groupId, trackId) {
+  async function evictTrackCaches(groupId, trackId) {
     const key = `${groupId}:${trackId}`;
     if (_msgCache[key]) delete _msgCache[key];
     if (_blobCache[key]) {
@@ -72442,6 +72442,11 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       } catch {
       }
       delete _thumbBlobCache[key];
+    }
+    _downloadedRecords.delete(key);
+    try {
+      await idbDelete(TRACKS_STORE, key);
+    } catch {
     }
   }
   async function sendTrackToChat(chatId, sourceGroupId, trackId, htmlCaption) {
@@ -85264,11 +85269,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               duration: duration || 0,
               file_name: "audio.mp3",
               msg_id: s.syncMsgId,
-              has_thumb: false,
+              has_thumb: !!(doc.thumbs && doc.thumbs.length > 0),
               mime_type: doc.mimeType || "audio/mpeg",
               file_size: Number(doc.size?.value ?? doc.size ?? 0) || 0
             };
-            evictTrackCaches(s.channelId, s.syncMsgId);
+            await evictTrackCaches(s.channelId, s.syncMsgId);
             primeMsgCache(s.channelId, s.syncMsgId, res.raw);
             const anchor2 = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
             const elapsed2 = Math.max(0, Date.now() / 1e3 - anchor2);

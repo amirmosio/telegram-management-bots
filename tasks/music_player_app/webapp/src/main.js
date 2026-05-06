@@ -3428,14 +3428,15 @@ async function _coplayPollTick(initial) {
                 duration: duration || 0,
                 file_name: 'audio.mp3',
                 msg_id: s.syncMsgId,
-                has_thumb: false,
+                has_thumb: !!(doc.thumbs && doc.thumbs.length > 0),
                 mime_type: doc.mimeType || 'audio/mpeg',
                 file_size: Number(doc.size?.value ?? doc.size ?? 0) || 0,
             };
-            // Cache the freshly fetched msg so getTrackBlobUrl can find
-            // it by (channelId, syncMsgId), and evict stale audio bytes
-            // from the previous track on this same syncMsgId.
-            tg.evictTrackCaches(s.channelId, s.syncMsgId);
+            // The (channelId, syncMsgId) key is the SAME for every track
+            // this host plays during the session; old audio + artwork
+            // bytes are still sitting in IDB under that key from the
+            // previous track. Wipe everything before priming + replaying.
+            await tg.evictTrackCaches(s.channelId, s.syncMsgId);
             tg.primeMsgCache(s.channelId, s.syncMsgId, res.raw);
             // Land at host's CURRENT position, not the stale pos baked into
             // the message. Same anchor-extrapolation as the steady-state
