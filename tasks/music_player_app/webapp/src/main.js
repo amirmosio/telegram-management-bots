@@ -2983,7 +2983,7 @@ async function _coplayOpenPicker() {
     coplaySearchInput.value = '';
     coplayModal.style.display = 'flex';
     try {
-        const all = await tg.listChatsForShare(80);
+        const all = await tg.listChatsForShare(200);
         // Co-play targets are people only — group/channel mention semantics
         // don't fit our "tagged person opens app" model.
         _coplayChatsCache = all.filter(c => c.kind === 'user');
@@ -2999,33 +2999,98 @@ function _coplayCloseModal() {
     coplayChatsEl.innerHTML = '';
     coplaySearchInput.value = '';
     _coplayInviteList = [];
+    _coplayRemoteHits = [];
+    if (_coplaySearchDebounce) { clearTimeout(_coplaySearchDebounce); _coplaySearchDebounce = null; }
+    _coplaySearchToken = 0;
+}
+
+let _coplayRemoteHits = [];     // most recent server-side contact search results
+let _coplaySearchDebounce = null;
+let _coplaySearchToken = 0;
+
+// Local filter matches title OR @username (case-insensitive).
+function _coplayLocalMatch(c, q) {
+    if (!q) return true;
+    const t = (c.title || '').toLowerCase();
+    const u = (c.username || '').toLowerCase();
+    return t.includes(q) || u.includes(q);
 }
 
 function _coplayRenderChats(filter) {
     const q = (filter || '').trim().toLowerCase();
-    const list = q
-        ? _coplayChatsCache.filter(c => c.title.toLowerCase().includes(q))
-        : _coplayChatsCache;
+
+    // Build the displayed list: local matches first, then remote hits not
+    // already in local. This way someone you've chatted with recently
+    // ranks above someone Telegram only knows by directory search.
+    const local = _coplayChatsCache.filter(c => _coplayLocalMatch(c, q));
+    const localIds = new Set(local.map(c => c.id));
+    const remote = q
+        ? _coplayRemoteHits.filter(c => !localIds.has(c.id))
+        : [];
+    const list = [...local, ...remote];
+
+    // Always render the currently-selected invitees too — even if a query
+    // would have hidden them — so picks aren't lost when the user types.
+    const visibleIds = new Set(list.map(c => c.id));
+    const stickySelected = _coplayInviteList.filter(c => !visibleIds.has(c.id));
+
     coplayChatsEl.innerHTML = '';
-    if (list.length === 0) {
-        coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">No contacts found</div>';
+
+    if (list.length === 0 && stickySelected.length === 0) {
+        const text = q
+            ? (_coplaySearchToken > 0 ? 'Searching…' : 'No contacts found')
+            : 'No contacts found';
+        coplayChatsEl.innerHTML = `<div class="coplay-chats-placeholder">${text}</div>`;
         return;
     }
-    for (const chat of list) {
+
+    const renderRow = (chat) => {
         const selected = _coplayInviteList.find(c => c.id === chat.id);
         const el = document.createElement('div');
         el.className = 'coplay-chat-item' + (selected ? ' selected' : '');
         const initial = (chat.title.trim()[0] || '?').toUpperCase();
+        const sub = chat.username ? `@${chat.username}` : '';
         el.innerHTML = `
             <div class="coplay-chat-check">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
             <div class="coplay-chat-avatar">${escapeHtml(initial)}</div>
-            <div class="coplay-chat-title">${escapeHtml(chat.title)}</div>
+            <div class="coplay-chat-title">
+                <div>${escapeHtml(chat.title)}</div>
+                ${sub ? `<div class="coplay-chat-sub">${escapeHtml(sub)}</div>` : ''}
+            </div>
         `;
         el.addEventListener('click', () => _coplayToggleSelect(chat, el));
         coplayChatsEl.appendChild(el);
+    };
+
+    for (const chat of stickySelected) renderRow(chat);
+    if (stickySelected.length && list.length) {
+        const sep = document.createElement('div');
+        sep.className = 'coplay-chats-sep';
+        coplayChatsEl.appendChild(sep);
     }
+    for (const chat of list) renderRow(chat);
+}
+
+function _coplayOnSearchInput(value) {
+    _coplayRenderChats(value);
+    if (_coplaySearchDebounce) clearTimeout(_coplaySearchDebounce);
+    const q = (value || '').trim();
+    if (q.length < 2) {
+        _coplayRemoteHits = [];
+        _coplaySearchToken = 0;
+        return;
+    }
+    const token = ++_coplaySearchToken;
+    _coplaySearchDebounce = setTimeout(async () => {
+        try {
+            const hits = await tg.searchContactsForCoplay(q, 20);
+            if (token !== _coplaySearchToken) return; // stale
+            _coplayRemoteHits = hits;
+            _coplayRenderChats(coplaySearchInput.value);
+        } catch (e) { /* swallow — local results still shown */ }
+    }, 220);
 }
 
 function _coplayToggleSelect(chat, el) {
@@ -3348,7 +3413,7 @@ audio.addEventListener('seeked', _coplayBroadcast);
 btnCoplay.addEventListener('click', _coplayOpenPicker);
 coplayCancelBtn.addEventListener('click', _coplayCloseModal);
 coplayModal.querySelector('.modal-backdrop')?.addEventListener('click', _coplayCloseModal);
-coplaySearchInput.addEventListener('input', e => _coplayRenderChats(e.target.value));
+coplaySearchInput.addEventListener('input', e => _coplayOnSearchInput(e.target.value));
 coplayStartBtn.addEventListener('click', _coplayStartHost);
 coplayEndBtn.addEventListener('click', () => _coplayEndHost());
 coplayLeaveBtn.addEventListener('click', () => _coplayLeaveFollower('left'));

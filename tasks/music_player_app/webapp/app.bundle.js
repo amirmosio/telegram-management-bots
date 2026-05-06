@@ -72363,9 +72363,40 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         continue;
       }
       _groupsCache[id] = entity;
-      chats.push({ id, title, kind });
+      chats.push({ id, title, kind, username: entity.username || "" });
     }
     return chats;
+  }
+  async function searchContactsForCoplay(q, limit = 20) {
+    if (!q || q.trim().length < 2) return [];
+    await _ensureConnected();
+    if (!client.connected) return [];
+    let result;
+    try {
+      result = await client.invoke(new import_tl.Api.contacts.Search({ q: q.trim(), limit }));
+    } catch (e) {
+      console.warn("searchContactsForCoplay failed:", e?.message || e);
+      return [];
+    }
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const collect = (users) => {
+      for (const u of users || []) {
+        if (!(u instanceof import_tl.Api.User)) continue;
+        if (u.self || u.deleted || u.bot) continue;
+        const raw = u.id?.value ?? u.id;
+        const id = Number(typeof raw === "bigint" ? raw : raw);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const first = u.firstName || "";
+        const last = u.lastName || "";
+        const title = (first + " " + last).trim() || u.username || "User";
+        _groupsCache[id] = u;
+        out.push({ id, title, kind: "user", username: u.username || "" });
+      }
+    };
+    collect(result.users);
+    return out;
   }
   async function sendTrackToChat(chatId, sourceGroupId, trackId, htmlCaption) {
     await _ensureConnected();
@@ -84764,7 +84795,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         coplaySearchInput.value = "";
         coplayModal.style.display = "flex";
         try {
-          const all = await listChatsForShare(80);
+          const all = await listChatsForShare(200);
           _coplayChatsCache = all.filter((c) => c.kind === "user");
           _coplayRenderChats("");
         } catch (e) {
@@ -84777,30 +84808,82 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         coplayChatsEl.innerHTML = "";
         coplaySearchInput.value = "";
         _coplayInviteList = [];
+        _coplayRemoteHits = [];
+        if (_coplaySearchDebounce) {
+          clearTimeout(_coplaySearchDebounce);
+          _coplaySearchDebounce = null;
+        }
+        _coplaySearchToken = 0;
+      }
+      var _coplayRemoteHits = [];
+      var _coplaySearchDebounce = null;
+      var _coplaySearchToken = 0;
+      function _coplayLocalMatch(c, q) {
+        if (!q) return true;
+        const t = (c.title || "").toLowerCase();
+        const u = (c.username || "").toLowerCase();
+        return t.includes(q) || u.includes(q);
       }
       function _coplayRenderChats(filter) {
         const q = (filter || "").trim().toLowerCase();
-        const list = q ? _coplayChatsCache.filter((c) => c.title.toLowerCase().includes(q)) : _coplayChatsCache;
+        const local = _coplayChatsCache.filter((c) => _coplayLocalMatch(c, q));
+        const localIds = new Set(local.map((c) => c.id));
+        const remote = q ? _coplayRemoteHits.filter((c) => !localIds.has(c.id)) : [];
+        const list = [...local, ...remote];
+        const visibleIds = new Set(list.map((c) => c.id));
+        const stickySelected = _coplayInviteList.filter((c) => !visibleIds.has(c.id));
         coplayChatsEl.innerHTML = "";
-        if (list.length === 0) {
-          coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">No contacts found</div>';
+        if (list.length === 0 && stickySelected.length === 0) {
+          const text = q ? _coplaySearchToken > 0 ? "Searching\u2026" : "No contacts found" : "No contacts found";
+          coplayChatsEl.innerHTML = `<div class="coplay-chats-placeholder">${text}</div>`;
           return;
         }
-        for (const chat of list) {
+        const renderRow = (chat) => {
           const selected = _coplayInviteList.find((c) => c.id === chat.id);
           const el = document.createElement("div");
           el.className = "coplay-chat-item" + (selected ? " selected" : "");
           const initial = (chat.title.trim()[0] || "?").toUpperCase();
+          const sub = chat.username ? `@${chat.username}` : "";
           el.innerHTML = `
             <div class="coplay-chat-check">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
             <div class="coplay-chat-avatar">${escapeHtml(initial)}</div>
-            <div class="coplay-chat-title">${escapeHtml(chat.title)}</div>
+            <div class="coplay-chat-title">
+                <div>${escapeHtml(chat.title)}</div>
+                ${sub ? `<div class="coplay-chat-sub">${escapeHtml(sub)}</div>` : ""}
+            </div>
         `;
           el.addEventListener("click", () => _coplayToggleSelect(chat, el));
           coplayChatsEl.appendChild(el);
+        };
+        for (const chat of stickySelected) renderRow(chat);
+        if (stickySelected.length && list.length) {
+          const sep = document.createElement("div");
+          sep.className = "coplay-chats-sep";
+          coplayChatsEl.appendChild(sep);
         }
+        for (const chat of list) renderRow(chat);
+      }
+      function _coplayOnSearchInput(value) {
+        _coplayRenderChats(value);
+        if (_coplaySearchDebounce) clearTimeout(_coplaySearchDebounce);
+        const q = (value || "").trim();
+        if (q.length < 2) {
+          _coplayRemoteHits = [];
+          _coplaySearchToken = 0;
+          return;
+        }
+        const token = ++_coplaySearchToken;
+        _coplaySearchDebounce = setTimeout(async () => {
+          try {
+            const hits = await searchContactsForCoplay(q, 20);
+            if (token !== _coplaySearchToken) return;
+            _coplayRemoteHits = hits;
+            _coplayRenderChats(coplaySearchInput.value);
+          } catch (e) {
+          }
+        }, 220);
       }
       function _coplayToggleSelect(chat, el) {
         const idx = _coplayInviteList.findIndex((c) => c.id === chat.id);
@@ -85091,7 +85174,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       btnCoplay.addEventListener("click", _coplayOpenPicker);
       coplayCancelBtn.addEventListener("click", _coplayCloseModal);
       coplayModal.querySelector(".modal-backdrop")?.addEventListener("click", _coplayCloseModal);
-      coplaySearchInput.addEventListener("input", (e) => _coplayRenderChats(e.target.value));
+      coplaySearchInput.addEventListener("input", (e) => _coplayOnSearchInput(e.target.value));
       coplayStartBtn.addEventListener("click", _coplayStartHost);
       coplayEndBtn.addEventListener("click", () => _coplayEndHost());
       coplayLeaveBtn.addEventListener("click", () => _coplayLeaveFollower("left"));

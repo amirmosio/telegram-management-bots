@@ -1997,9 +1997,25 @@ html, body {
 }
 .coplay-chat-title {
     flex: 1;
+    min-width: 0;
+}
+.coplay-chat-title > div:first-child {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.coplay-chat-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.coplay-chats-sep {
+    height: 1px;
+    background: var(--border);
+    margin: 6px 0;
+    opacity: 0.6;
 }
 .coplay-chats-placeholder {
     padding: 20px;

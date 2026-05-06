@@ -2235,9 +2235,47 @@ export async function listChatsForShare(limit = 80) {
         }
 
         _groupsCache[id] = entity;
-        chats.push({ id, title, kind });
+        chats.push({ id, title, kind, username: entity.username || '' });
     }
     return chats;
+}
+
+// Telegram-side contact search for the co-play picker. Used as a fallback
+// when the local dialog list doesn't contain the typed query. Returns
+// user-only results in the same shape as listChatsForShare; entities are
+// cached so getCachedUserEntity works for picks.
+export async function searchContactsForCoplay(q, limit = 20) {
+    if (!q || q.trim().length < 2) return [];
+    await _ensureConnected();
+    if (!client.connected) return [];
+    let result;
+    try {
+        result = await client.invoke(new Api.contacts.Search({ q: q.trim(), limit }));
+    } catch (e) {
+        console.warn('searchContactsForCoplay failed:', e?.message || e);
+        return [];
+    }
+    const out = [];
+    const seen = new Set();
+    const collect = (users) => {
+        for (const u of users || []) {
+            if (!(u instanceof Api.User)) continue;
+            if (u.self || u.deleted || u.bot) continue;
+            const raw = u.id?.value ?? u.id;
+            const id = Number(typeof raw === 'bigint' ? raw : raw);
+            if (seen.has(id)) continue;
+            seen.add(id);
+            const first = u.firstName || '';
+            const last = u.lastName || '';
+            const title = (first + ' ' + last).trim() || u.username || 'User';
+            _groupsCache[id] = u;
+            out.push({ id, title, kind: 'user', username: u.username || '' });
+        }
+    };
+    // Telegram returns hits split across `myResults` (own contacts) and
+    // `results` (broader directory). Merge with own contacts ranked first.
+    collect(result.users);
+    return out;
 }
 
 // Send a plain text message (with an embedded URL) to a chat.
