@@ -86735,7 +86735,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _PIANO_MIDI_LOW = 21;
       var _PIANO_MIDI_HIGH = 108;
       var _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-      var _PIANO_MAGENTA_URL = "https://esm.sh/@magenta/music@1.23.1/esm/transcription.js";
+      var _PIANO_MAGENTA_URL = "https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/es5/transcription.js";
       var _PIANO_OAF_CHECKPOINT = "https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni";
       var _PIANO_NOTES_VERSION = 3;
       function _pianoSetLoading(label) {
@@ -86783,16 +86783,36 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _pianoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         _pianoKeyboardLayout = _pianoBuildKeyboardLayout(w);
       }
+      function _pianoLoadScript(url) {
+        return new Promise((resolve, reject) => {
+          const existing = document.querySelector('script[data-piano-src="' + url + '"]');
+          if (existing) {
+            if (existing.dataset.loaded === "1") return resolve();
+            existing.addEventListener("load", () => resolve(), { once: true });
+            existing.addEventListener("error", () => reject(new Error("script load failed: " + url)), { once: true });
+            return;
+          }
+          const s = document.createElement("script");
+          s.src = url;
+          s.async = true;
+          s.dataset.pianoSrc = url;
+          s.addEventListener("load", () => {
+            s.dataset.loaded = "1";
+            resolve();
+          }, { once: true });
+          s.addEventListener("error", () => reject(new Error("script load failed: " + url)), { once: true });
+          document.head.appendChild(s);
+        });
+      }
       async function _pianoLoadEngines() {
         if (_pianoEnginesReady) return true;
         if (_pianoEnginesLoading) return _pianoEnginesLoading;
         _pianoEnginesLoading = (async () => {
           _pianoSetLoading("Loading piano engine\u2026");
-          const url = _PIANO_MAGENTA_URL;
-          const mod = await import(url);
-          const ns = mod && mod.OnsetsAndFrames ? mod : mod && mod.default && mod.default.OnsetsAndFrames ? mod.default : null;
+          await _pianoLoadScript(_PIANO_MAGENTA_URL);
+          const ns = window.mm && window.mm.OnsetsAndFrames ? window.mm : window.transcription && window.transcription.OnsetsAndFrames ? window.transcription : null;
           if (!ns) {
-            throw new Error("@magenta/music did not export OnsetsAndFrames");
+            throw new Error("@magenta/music did not register OnsetsAndFrames on window");
           }
           _pianoMagentaModule = ns;
           _pianoEnginesReady = true;

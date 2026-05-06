@@ -5186,11 +5186,14 @@ const _PIANO_MIDI_LOW = 21;   // A0
 const _PIANO_MIDI_HIGH = 108; // C8
 // Pitch class → white-key flag. Order: C C# D D# E F F# G G# A A# B
 const _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-// @magenta/music as ESM with deps (TF.js) bundled by esm.sh. Dynamic
-// import() so engines stay lazy-loaded — they only arrive on first
-// piano-mode entry. The 'esm/transcription.js' subpath gives us just
-// the OnsetsAndFrames code instead of the full library.
-const _PIANO_MAGENTA_URL    = 'https://esm.sh/@magenta/music@1.23.1/esm/transcription.js';
+// @magenta/music UMD bundle from jsdelivr — the official browser
+// distribution. We loaded esm.sh first; it produced a "Lt is not a
+// constructor" error inside transcribeFromAudioBuffer because esm.sh's
+// transform of magenta's /esm/ subpath corrupted an internal class
+// reference. The /es5/ UMD is what magenta's own docs recommend, is
+// what every Glitch demo uses, and exposes a `mm` global with
+// OnsetsAndFrames already wired to its bundled TF.js.
+const _PIANO_MAGENTA_URL    = 'https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/es5/transcription.js';
 // Official Magenta-hosted Onsets & Frames checkpoint (universal,
 // piano-trained on MAESTRO). ~30 MB. The model fetches a manifest +
 // weights from this base URL on initialize().
@@ -5252,24 +5255,42 @@ function _pianoApplySize() {
     _pianoKeyboardLayout = _pianoBuildKeyboardLayout(w);
 }
 
-// @magenta/music ships ESM. We pull it via dynamic import() from
-// esm.sh, which serves a browser-ready ESM build with TF.js resolved
-// as a transitive import. Esbuild leaves dynamic import() with a
-// non-literal argument as a runtime call, so the lazy-load behaviour
-// is preserved (engines arrive only when the user actually opens
-// piano mode).
+// Inject a <script> tag and resolve once it loads. Used to lazy-load
+// the magenta UMD bundle on first piano-mode entry. SW cache picks it
+// up on the second visit.
+function _pianoLoadScript(url) {
+    return new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-piano-src="' + url + '"]');
+        if (existing) {
+            if (existing.dataset.loaded === '1') return resolve();
+            existing.addEventListener('load', () => resolve(), { once: true });
+            existing.addEventListener('error', () => reject(new Error('script load failed: ' + url)), { once: true });
+            return;
+        }
+        const s = document.createElement('script');
+        s.src = url;
+        s.async = true;
+        s.dataset.pianoSrc = url;
+        s.addEventListener('load', () => { s.dataset.loaded = '1'; resolve(); }, { once: true });
+        s.addEventListener('error', () => reject(new Error('script load failed: ' + url)), { once: true });
+        document.head.appendChild(s);
+    });
+}
+
 async function _pianoLoadEngines() {
     if (_pianoEnginesReady) return true;
     if (_pianoEnginesLoading) return _pianoEnginesLoading;
     _pianoEnginesLoading = (async () => {
         _pianoSetLoading('Loading piano engine…');
-        const url = _PIANO_MAGENTA_URL;
-        const mod = await import(url);
-        // esm.sh re-exports — accept both flat and default-wrapped shapes.
-        const ns = mod && mod.OnsetsAndFrames ? mod
-                 : (mod && mod.default && mod.default.OnsetsAndFrames ? mod.default : null);
+        await _pianoLoadScript(_PIANO_MAGENTA_URL);
+        // Magenta's UMD exposes a `mm` global with OnsetsAndFrames + a
+        // bundled TF.js. Some sub-bundles use a different global name
+        // — fall back to scanning a couple of known shapes.
+        const ns = (window.mm && window.mm.OnsetsAndFrames) ? window.mm
+                 : (window.transcription && window.transcription.OnsetsAndFrames) ? window.transcription
+                 : null;
         if (!ns) {
-            throw new Error('@magenta/music did not export OnsetsAndFrames');
+            throw new Error('@magenta/music did not register OnsetsAndFrames on window');
         }
         _pianoMagentaModule = ns;
         _pianoEnginesReady = true;
