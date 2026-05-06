@@ -3061,23 +3061,24 @@ export async function getUserDisplayName(userId) {
 
 // Build caption text for the sync message.
 //
-//   text = "[telemusic-coplay-v1] {json}\nCo-play with @user1, @user2, @user3"
+//   text = "[telemusic-coplay-v1] {json}\nCo-play with Amir, Beth, Carla"
 //
-// The invitees are also carried inside `stateJson.inv` (added by the
-// caller), which is the *authoritative* discovery channel. The plain
-// "@username" text is purely cosmetic — we deliberately do NOT attach
-// MessageEntityMentionName entities, because real mentions trigger
-// Telegram notifications that pull the share channel out of the
-// recipient's archive.
+// The invitees are carried inside `stateJson.inv` (added by the
+// caller) — the *authoritative* discovery channel. The body line is
+// purely cosmetic.
 //
-// invitees: [{ id, title, username }]
+// We deliberately:
+//   - do NOT attach MessageEntityMentionName entities, AND
+//   - do NOT include any "@username" text either.
+// Both of those make Telegram's server auto-add a MessageEntityMention,
+// which notifies the @user and pulls the share channel out of archive
+// on their device. Plain display names are safe.
+//
+// invitees: [{ id, title }]
 function coplayBuildMessage(stateJson, invitees) {
     const head = COPLAY_MARKER + JSON.stringify(stateJson);
     if (!invitees.length) return { text: head, entities: [] };
-    const tags = invitees.map(inv => {
-        if (inv.username) return '@' + inv.username;
-        return (inv.title || 'User').slice(0, 32);
-    });
+    const tags = invitees.map(inv => (inv.title || 'User').slice(0, 32));
     return { text: head + '\nCo-play with ' + tags.join(', '), entities: [] };
 }
 

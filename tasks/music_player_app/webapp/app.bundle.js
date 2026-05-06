@@ -72950,10 +72950,7 @@ ${JSON.stringify(state)}`;
   function coplayBuildMessage(stateJson, invitees) {
     const head = COPLAY_MARKER + JSON.stringify(stateJson);
     if (!invitees.length) return { text: head, entities: [] };
-    const tags = invitees.map((inv) => {
-      if (inv.username) return "@" + inv.username;
-      return (inv.title || "User").slice(0, 32);
-    });
+    const tags = invitees.map((inv) => (inv.title || "User").slice(0, 32));
     return { text: head + "\nCo-play with " + tags.join(", "), entities: [] };
   }
   async function coplaySendInvite(stateJson, invitees) {
