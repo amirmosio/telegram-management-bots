@@ -73017,11 +73017,12 @@ ${JSON.stringify(state)}`;
       entities: entities.length ? entities : void 0
     }));
   }
-  async function coplayDelete(channelId, syncMsgId) {
+  async function coplayDelete(channelId, syncMsgId, extraIds = []) {
     await _ensureConnected();
     const entity = await _getEntity(channelId);
+    const ids = [syncMsgId, ...extraIds].filter(Boolean);
     try {
-      await client.deleteMessages(entity, [syncMsgId], { revoke: true });
+      await client.deleteMessages(entity, ids, { revoke: true });
     } catch (e) {
       console.warn("coplayDelete failed:", e?.message || e);
     }
@@ -84932,6 +84933,22 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         return mid;
       }
+      function _coplayRecordTrackUse(s, sourceGroupId, sourceTrackId, cid) {
+        if (!s || !cid) return;
+        if (!s.tracksUsed) s.tracksUsed = [];
+        const cacheKey = `share_${sourceGroupId}_${sourceTrackId}`;
+        if (s.tracksUsed.some((e) => e.cid === cid)) return;
+        s.tracksUsed.push({ cid, cacheKey });
+        _coplayPersistHostSession(s);
+      }
+      function _coplayPersistHostSession(s) {
+        if (!s || s.role !== "host") return;
+        localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({
+          syncMsgId: s.syncMsgId,
+          channelId: s.channelId,
+          tracksUsed: s.tracksUsed || []
+        }));
+      }
       function _coplayBuildState(channelTrackMsgId) {
         const t = _coplayCurrentTrack();
         return {
@@ -84969,6 +84986,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               s.lastBroadcastChannelTrackMsgId = cid;
               s.lastBroadcastSourceTrackId = sourceTrackId;
               s.lastBroadcastSourceGroupId = sourceGroupId;
+              _coplayRecordTrackUse(s, sourceGroupId, sourceTrackId, cid);
             }
             const state = _coplayBuildState(cid);
             await coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
@@ -85100,9 +85118,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             invitees,
             lastBroadcastSourceTrackId: t.id,
             lastBroadcastSourceGroupId: playerGroupId,
-            lastBroadcastChannelTrackMsgId: initialCid
+            lastBroadcastChannelTrackMsgId: initialCid,
+            tracksUsed: []
           };
-          localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
+          _coplayRecordTrackUse(_coplaySession, playerGroupId, t.id, initialCid);
+          _coplayPersistHostSession(_coplaySession);
           _coplayShowHostBanner(invitees);
           btnCoplay.classList.add("active");
           _coplayCloseModal();
@@ -85150,9 +85170,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _coplaySession = null;
         _coplayHideHostBanner();
         localStorage.removeItem(COPLAY_HOST_KEY);
+        const usedCids = (s.tracksUsed || []).map((e) => e.cid).filter(Boolean);
         try {
-          await coplayDelete(s.channelId, s.syncMsgId);
+          await coplayDelete(s.channelId, s.syncMsgId, usedCids);
         } catch (e) {
+        }
+        for (const e of s.tracksUsed || []) {
+          if (e.cacheKey) localStorage.removeItem(e.cacheKey);
         }
         if (!opts.silent) showToast("Co-play ended");
       }
@@ -85401,9 +85425,15 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           localStorage.removeItem(COPLAY_HOST_KEY);
           return;
         }
+        const cids = Array.isArray(saved.tracksUsed) ? saved.tracksUsed.map((e) => e?.cid).filter(Boolean) : [];
         try {
-          await coplayDelete(saved.channelId, saved.syncMsgId);
+          await coplayDelete(saved.channelId, saved.syncMsgId, cids);
         } catch {
+        }
+        if (Array.isArray(saved.tracksUsed)) {
+          for (const e of saved.tracksUsed) {
+            if (e?.cacheKey) localStorage.removeItem(e.cacheKey);
+          }
         }
         localStorage.removeItem(COPLAY_HOST_KEY);
       }
@@ -85438,8 +85468,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       window.addEventListener("pagehide", () => {
         const s = _coplaySession;
         if (s && s.role === "host") {
+          const usedCids = (s.tracksUsed || []).map((e) => e.cid).filter(Boolean);
           try {
-            coplayDelete(s.channelId, s.syncMsgId);
+            coplayDelete(s.channelId, s.syncMsgId, usedCids);
           } catch {
           }
         }

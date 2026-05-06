@@ -3144,11 +3144,12 @@ export async function coplayEditState(channelId, syncMsgId, stateJson, invitees)
     }));
 }
 
-export async function coplayDelete(channelId, syncMsgId) {
+export async function coplayDelete(channelId, syncMsgId, extraIds = []) {
     await _ensureConnected();
     const entity = await _getEntity(channelId);
+    const ids = [syncMsgId, ...extraIds].filter(Boolean);
     try {
-        await client.deleteMessages(entity, [syncMsgId], { revoke: true });
+        await client.deleteMessages(entity, ids, { revoke: true });
     } catch (e) {
         console.warn('coplayDelete failed:', e?.message || e);
     }

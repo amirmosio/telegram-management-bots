@@ -3069,6 +3069,27 @@ async function _coplayEnsureTrackInChannel(sourceGroupId, sourceTrackId, channel
     return mid;
 }
 
+// Track every track-forward used during the live host session so we
+// can delete those msgs (and clear their localStorage cache entries)
+// when the session ends.
+function _coplayRecordTrackUse(s, sourceGroupId, sourceTrackId, cid) {
+    if (!s || !cid) return;
+    if (!s.tracksUsed) s.tracksUsed = [];
+    const cacheKey = `share_${sourceGroupId}_${sourceTrackId}`;
+    if (s.tracksUsed.some(e => e.cid === cid)) return;
+    s.tracksUsed.push({ cid, cacheKey });
+    _coplayPersistHostSession(s);
+}
+
+function _coplayPersistHostSession(s) {
+    if (!s || s.role !== 'host') return;
+    localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({
+        syncMsgId: s.syncMsgId,
+        channelId: s.channelId,
+        tracksUsed: s.tracksUsed || [],
+    }));
+}
+
 // Build the JSON state payload broadcast to followers.
 //   anchor: host's local wall-clock (unix seconds) at the moment of
 //           broadcast so followers can extrapolate the host's *current*
@@ -3124,6 +3145,7 @@ async function _coplayBroadcast() {
                 s.lastBroadcastChannelTrackMsgId = cid;
                 s.lastBroadcastSourceTrackId = sourceTrackId;
                 s.lastBroadcastSourceGroupId = sourceGroupId;
+                _coplayRecordTrackUse(s, sourceGroupId, sourceTrackId, cid);
             }
             const state = _coplayBuildState(cid);
             await tg.coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
@@ -3282,8 +3304,10 @@ async function _coplayStartHost() {
             lastBroadcastSourceTrackId: t.id,
             lastBroadcastSourceGroupId: playerGroupId,
             lastBroadcastChannelTrackMsgId: initialCid,
+            tracksUsed: [],
         };
-        localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
+        _coplayRecordTrackUse(_coplaySession, playerGroupId, t.id, initialCid);
+        _coplayPersistHostSession(_coplaySession);
 
         _coplayShowHostBanner(invitees);
         btnCoplay.classList.add('active');
@@ -3337,9 +3361,13 @@ async function _coplayEndHost(opts = {}) {
     _coplaySession = null;
     _coplayHideHostBanner();
     localStorage.removeItem(COPLAY_HOST_KEY);
+    const usedCids = (s.tracksUsed || []).map(e => e.cid).filter(Boolean);
     try {
-        await tg.coplayDelete(s.channelId, s.syncMsgId);
+        await tg.coplayDelete(s.channelId, s.syncMsgId, usedCids);
     } catch (e) { /* fire-and-forget on close */ }
+    for (const e of (s.tracksUsed || [])) {
+        if (e.cacheKey) localStorage.removeItem(e.cacheKey);
+    }
     if (!opts.silent) showToast('Co-play ended');
 }
 
@@ -3624,7 +3652,15 @@ async function _coplayBootSweep() {
         localStorage.removeItem(COPLAY_HOST_KEY);
         return;
     }
-    try { await tg.coplayDelete(saved.channelId, saved.syncMsgId); } catch {}
+    const cids = Array.isArray(saved.tracksUsed)
+        ? saved.tracksUsed.map(e => e?.cid).filter(Boolean)
+        : [];
+    try { await tg.coplayDelete(saved.channelId, saved.syncMsgId, cids); } catch {}
+    if (Array.isArray(saved.tracksUsed)) {
+        for (const e of saved.tracksUsed) {
+            if (e?.cacheKey) localStorage.removeItem(e.cacheKey);
+        }
+    }
     localStorage.removeItem(COPLAY_HOST_KEY);
 }
 
@@ -3674,7 +3710,8 @@ window.addEventListener('pagehide', () => {
     const s = _coplaySession;
     if (s && s.role === 'host') {
         // Fire and forget; the boot sweep covers the case where this misses.
-        try { tg.coplayDelete(s.channelId, s.syncMsgId); } catch {}
+        const usedCids = (s.tracksUsed || []).map(e => e.cid).filter(Boolean);
+        try { tg.coplayDelete(s.channelId, s.syncMsgId, usedCids); } catch {}
     }
 });
 
