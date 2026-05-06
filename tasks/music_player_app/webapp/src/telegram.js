@@ -2311,6 +2311,24 @@ export async function searchContactsByQuery(q, opts = {}) {
     return out;
 }
 
+// Returns true if `msgId` still exists in the given channel and has
+// audio media attached. Used by the share flow to detect stale cached
+// share-channel forwards (msg deleted by mod, by user, or stale entry
+// from before the lazy-forward refactor).
+export async function shareMsgIsValid(channelId, msgId) {
+    try {
+        await _ensureConnected();
+        const entity = await _getEntity(channelId);
+        const msgs = await client.getMessages(entity, { ids: [msgId] });
+        const m = msgs[0];
+        if (!m || m.className === 'MessageEmpty') return false;
+        if (!m.media || !m.media.document) return false;
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 // Send a plain text message (with an embedded URL) to a chat.
 // Telegram auto-generates a link preview below the text.
 export async function sendTextToChat(chatId, text) {

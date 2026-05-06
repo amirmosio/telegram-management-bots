@@ -2933,18 +2933,26 @@ async function _prepareShareLink(track) {
     }
     const parsedShareId = parseInt(shareChannelId, 10);
 
+    // Reuse a cached forward only if the msg still exists in the channel.
+    // Without this check a stale localStorage entry (msg deleted, channel
+    // cleared, leftover from before lazy-forward) would silently produce
+    // a deep link that 404s when the recipient opens it.
     const shareCacheKey = `share_${playerGroupId}_${track.id}`;
-    let sharedMsgId = localStorage.getItem(shareCacheKey);
+    let sharedMsgId = parseInt(localStorage.getItem(shareCacheKey) || '0', 10) || null;
+    if (sharedMsgId && !(await tg.shareMsgIsValid(parsedShareId, sharedMsgId))) {
+        localStorage.removeItem(shareCacheKey);
+        sharedMsgId = null;
+    }
     if (!sharedMsgId) {
         const { link } = await tg.shareTrack(parsedShareId, playerGroupId, track.id);
-        sharedMsgId = link.split('/').pop();
-        localStorage.setItem(shareCacheKey, sharedMsgId);
+        sharedMsgId = parseInt(link.split('/').pop(), 10);
+        localStorage.setItem(shareCacheKey, String(sharedMsgId));
         tg.archiveChat(parsedShareId);
     }
 
     const appUrl = window.location.origin + window.location.pathname;
     const currentSec = Math.floor(audio.currentTime || 0);
-    return `${appUrl}?track=${_encodeTrackId(parseInt(sharedMsgId, 10))}&t=${currentSec}`;
+    return `${appUrl}?track=${_encodeTrackId(sharedMsgId)}&t=${currentSec}`;
 }
 
 btnShare.addEventListener('click', async () => {

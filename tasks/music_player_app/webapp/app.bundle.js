@@ -72422,6 +72422,19 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return out;
   }
+  async function shareMsgIsValid(channelId, msgId) {
+    try {
+      await _ensureConnected();
+      const entity = await _getEntity(channelId);
+      const msgs = await client.getMessages(entity, { ids: [msgId] });
+      const m = msgs[0];
+      if (!m || m.className === "MessageEmpty") return false;
+      if (!m.media || !m.media.document) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
   function primeMsgCache(groupId, trackId, msg) {
     if (!msg) return;
     _msgCache[`${groupId}:${trackId}`] = msg;
@@ -84898,16 +84911,20 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         const parsedShareId = parseInt(shareChannelId, 10);
         const shareCacheKey = `share_${playerGroupId}_${track.id}`;
-        let sharedMsgId = localStorage.getItem(shareCacheKey);
+        let sharedMsgId = parseInt(localStorage.getItem(shareCacheKey) || "0", 10) || null;
+        if (sharedMsgId && !await shareMsgIsValid(parsedShareId, sharedMsgId)) {
+          localStorage.removeItem(shareCacheKey);
+          sharedMsgId = null;
+        }
         if (!sharedMsgId) {
           const { link } = await shareTrack(parsedShareId, playerGroupId, track.id);
-          sharedMsgId = link.split("/").pop();
-          localStorage.setItem(shareCacheKey, sharedMsgId);
+          sharedMsgId = parseInt(link.split("/").pop(), 10);
+          localStorage.setItem(shareCacheKey, String(sharedMsgId));
           archiveChat(parsedShareId);
         }
         const appUrl = window.location.origin + window.location.pathname;
         const currentSec = Math.floor(audio.currentTime || 0);
-        return `${appUrl}?track=${_encodeTrackId(parseInt(sharedMsgId, 10))}&t=${currentSec}`;
+        return `${appUrl}?track=${_encodeTrackId(sharedMsgId)}&t=${currentSec}`;
       }
       btnShare.addEventListener("click", async () => {
         if (playerTracks.length === 0 || currentTrackIndex < 0) return;
