@@ -85233,6 +85233,75 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           if (myToken === _hypAnalysisToken) _hypSetLoading(false);
         }
       }
+      function _hypMakeLowpass(fc, sr, Q = 0.707) {
+        const omega = 2 * Math.PI * fc / sr;
+        const cs = Math.cos(omega), sn = Math.sin(omega);
+        const alpha = sn / (2 * Q);
+        const a0 = 1 + alpha;
+        return {
+          b0: (1 - cs) / 2 / a0,
+          b1: (1 - cs) / a0,
+          b2: (1 - cs) / 2 / a0,
+          a1: -2 * cs / a0,
+          a2: (1 - alpha) / a0
+        };
+      }
+      function _hypMakeHighpass(fc, sr, Q = 0.707) {
+        const omega = 2 * Math.PI * fc / sr;
+        const cs = Math.cos(omega), sn = Math.sin(omega);
+        const alpha = sn / (2 * Q);
+        const a0 = 1 + alpha;
+        return {
+          b0: (1 + cs) / 2 / a0,
+          b1: -(1 + cs) / a0,
+          b2: (1 + cs) / 2 / a0,
+          a1: -2 * cs / a0,
+          a2: (1 - alpha) / a0
+        };
+      }
+      function _hypRmsSeries(mono, stride, numSamples, biquad) {
+        const out = new Float32Array(numSamples);
+        let s1 = 0, s2 = 0;
+        let outIdx = 0, sumSq = 0, count = 0;
+        for (let i = 0; i < mono.length && outIdx < numSamples; i++) {
+          const x = mono[i];
+          let y;
+          if (biquad) {
+            y = biquad.b0 * x + s1;
+            s1 = biquad.b1 * x - biquad.a1 * y + s2;
+            s2 = biquad.b2 * x - biquad.a2 * y;
+          } else {
+            y = x;
+          }
+          sumSq += y * y;
+          count++;
+          if (count === stride) {
+            out[outIdx++] = Math.sqrt(sumSq / count);
+            sumSq = 0;
+            count = 0;
+          }
+        }
+        return out;
+      }
+      function _hypAttenuate(samples, attackAlpha, decayAlpha) {
+        const out = new Float32Array(samples.length);
+        let acc = samples[0] || 0;
+        out[0] = acc;
+        for (let i = 1; i < samples.length; i++) {
+          const x = samples[i];
+          const a = x > acc ? attackAlpha : decayAlpha;
+          acc += (x - acc) * a;
+          out[i] = acc;
+        }
+        return out;
+      }
+      function _hypBandStats(samples) {
+        const sorted = Float32Array.from(samples).sort();
+        const pct = (p) => sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor(sorted.length * p)))] || 0;
+        const lo = pct(0.1);
+        const hi = Math.max(pct(0.9), lo + 1e-3);
+        return { samples, lo, hi };
+      }
       function _hypComputeEnvelope(audioBuffer) {
         const ENV_HZ = 30;
         const sr = audioBuffer.sampleRate;
@@ -85241,28 +85310,22 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
         const N = ch0.length;
         const numSamples = Math.max(1, Math.floor(N / stride));
-        const samples = new Float32Array(numSamples);
-        for (let i = 0; i < numSamples; i++) {
-          const start = i * stride;
-          let sum = 0;
-          if (ch1) {
-            for (let j = 0; j < stride; j++) {
-              const s = (ch0[start + j] + ch1[start + j]) * 0.5;
-              sum += s * s;
-            }
-          } else {
-            for (let j = 0; j < stride; j++) {
-              const s = ch0[start + j];
-              sum += s * s;
-            }
-          }
-          samples[i] = Math.sqrt(sum / stride);
-        }
-        const sorted = Float32Array.from(samples).sort();
-        const pct = (p) => sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor(sorted.length * p)))] || 0;
-        const lo = pct(0.1);
-        const hi = Math.max(pct(0.9), lo + 1e-3);
-        return { samples, hz: ENV_HZ, lo, hi };
+        const mono = new Float32Array(N);
+        if (ch1) for (let i = 0; i < N; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
+        else mono.set(ch0);
+        const lpBass = _hypMakeLowpass(200, sr);
+        const hpTreb = _hypMakeHighpass(4e3, sr);
+        const fullRaw = _hypRmsSeries(mono, stride, numSamples, null);
+        const bassRaw = _hypRmsSeries(mono, stride, numSamples, lpBass);
+        const trebRaw = _hypRmsSeries(mono, stride, numSamples, hpTreb);
+        const bassAtt = _hypAttenuate(bassRaw, 0.5, 0.04);
+        const trebAtt = _hypAttenuate(trebRaw, 0.6, 0.07);
+        return {
+          hz: ENV_HZ,
+          full: _hypBandStats(fullRaw),
+          bass: _hypBandStats(bassAtt),
+          treb: _hypBandStats(trebAtt)
+        };
       }
       var _aubioMod = null;
       async function _hypGetAubio() {
@@ -85311,11 +85374,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (!audio.paused && audio.readyState >= 2 && _hypBeats) {
           const t = audio.currentTime - _HYP_LATENCY_OFFSET;
           const env = _hypBeats.envelope;
-          if (env && env.samples.length) {
-            const idx = Math.max(0, Math.min(env.samples.length - 1, Math.floor(t * env.hz)));
-            const raw = env.samples[idx];
-            const norm = Math.max(0, Math.min(1, (raw - env.lo) / (env.hi - env.lo)));
-            target = 0.03 + 0.4 * norm;
+          if (env && env.bass) {
+            const idx = Math.max(0, Math.min(env.bass.samples.length - 1, Math.floor(t * env.hz)));
+            const bn = (b) => Math.max(0, Math.min(1, (b.samples[idx] - b.lo) / (b.hi - b.lo)));
+            const bassNorm = bn(env.bass);
+            const trebNorm = bn(env.treb);
+            target = 0.03 + 0.35 * bassNorm + 0.06 * trebNorm;
           }
           const beats = _hypBeats.beatTimes;
           const rate = _hypBeats.beatRate || 1;
