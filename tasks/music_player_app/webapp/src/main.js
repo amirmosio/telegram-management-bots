@@ -2205,12 +2205,14 @@ function _resetHalo() {
 const ARTWORK_NEGATIVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 async function fetchArtworkForTrack(track, gen) {
+    const tag = `[artwork ${track.id}]`;
+
     // 1. Embedded Telegram thumbnail
     if (track.has_thumb) {
         try {
             const thumbUrl = await tg.getThumbBlobUrl(playerGroupId, track.id);
             if (_playGeneration !== gen) return;
-            if (thumbUrl) { _showArtwork(thumbUrl, gen); return; }
+            if (thumbUrl) { console.log(tag, 'thumb hit (telegram)'); _showArtwork(thumbUrl, gen); return; }
         } catch (e) { /* fallthrough */ }
     }
     if (_playGeneration !== gen) return;
@@ -2220,7 +2222,11 @@ async function fetchArtworkForTrack(track, gen) {
     try {
         row = await tg.getCachedTrackRecord(playerGroupId, track.id);
         if (_playGeneration !== gen) return;
-        if (row?.artwork) { _showArtwork(URL.createObjectURL(row.artwork), gen); return; }
+        if (row?.artwork) {
+            console.log(tag, 'idb hit (cached blob, no network)');
+            _showArtwork(URL.createObjectURL(row.artwork), gen);
+            return;
+        }
     } catch {}
     if (_playGeneration !== gen) return;
 
@@ -2229,12 +2235,15 @@ async function fetchArtworkForTrack(track, gen) {
     // every time the track plays.
     if (row?.artworkSearchedAt
         && Date.now() - row.artworkSearchedAt < ARTWORK_NEGATIVE_TTL_MS) {
+        const ageDays = ((Date.now() - row.artworkSearchedAt) / 86400000).toFixed(1);
+        console.log(tag, `negative-ttl skip (last searched ${ageDays}d ago)`);
         return;
     }
 
     // 3. Search the internet (iTunes / Deezer / Discogs).
     try {
         const { title, artist } = parseTrackInfo(track.title, track.artist);
+        console.log(tag, 'searching iTunes/Deezer/Discogs →', title, '·', artist);
         const url = await searchArtwork(title, artist);
         if (_playGeneration !== gen) return;
         const topicIdForRow = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
@@ -2244,6 +2253,7 @@ async function fetchArtworkForTrack(track, gen) {
             track,
         };
         if (url) {
+            console.log(tag, 'search hit →', url);
             _showArtwork(url, gen);
             // Persist the bytes into the unified row so the next play
             // is offline-friendly and the sidebar thumbnail works too.
@@ -2256,6 +2266,7 @@ async function fetchArtworkForTrack(track, gen) {
                 tg.markArtworkSearched(playerGroupId, track.id, ctx);
             });
         } else {
+            console.log(tag, 'search miss — stamped, will skip for 30 days');
             // No match in any source — stamp the row so we honour the TTL.
             tg.markArtworkSearched(playerGroupId, track.id, ctx);
         }

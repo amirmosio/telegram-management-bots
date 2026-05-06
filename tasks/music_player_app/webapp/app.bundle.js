@@ -85612,11 +85612,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       }
       var ARTWORK_NEGATIVE_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
       async function fetchArtworkForTrack(track, gen) {
+        const tag = `[artwork ${track.id}]`;
         if (track.has_thumb) {
           try {
             const thumbUrl = await getThumbBlobUrl(playerGroupId, track.id);
             if (_playGeneration !== gen) return;
             if (thumbUrl) {
+              console.log(tag, "thumb hit (telegram)");
               _showArtwork(thumbUrl, gen);
               return;
             }
@@ -85629,6 +85631,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           row = await getCachedTrackRecord(playerGroupId, track.id);
           if (_playGeneration !== gen) return;
           if (row?.artwork) {
+            console.log(tag, "idb hit (cached blob, no network)");
             _showArtwork(URL.createObjectURL(row.artwork), gen);
             return;
           }
@@ -85636,10 +85639,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         if (_playGeneration !== gen) return;
         if (row?.artworkSearchedAt && Date.now() - row.artworkSearchedAt < ARTWORK_NEGATIVE_TTL_MS) {
+          const ageDays = ((Date.now() - row.artworkSearchedAt) / 864e5).toFixed(1);
+          console.log(tag, `negative-ttl skip (last searched ${ageDays}d ago)`);
           return;
         }
         try {
           const { title, artist } = parseTrackInfo(track.title, track.artist);
+          console.log(tag, "searching iTunes/Deezer/Discogs \u2192", title, "\xB7", artist);
           const url = await searchArtwork(title, artist);
           if (_playGeneration !== gen) return;
           const topicIdForRow = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
@@ -85649,6 +85655,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             track
           };
           if (url) {
+            console.log(tag, "search hit \u2192", url);
             _showArtwork(url, gen);
             fetch(url).then((r) => r.blob()).then((blob) => {
               updateTrackArtwork(playerGroupId, track.id, blob, ctx);
@@ -85656,6 +85663,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               markArtworkSearched(playerGroupId, track.id, ctx);
             });
           } else {
+            console.log(tag, "search miss \u2014 stamped, will skip for 30 days");
             markArtworkSearched(playerGroupId, track.id, ctx);
           }
         } catch (e) {
