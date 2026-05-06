@@ -5209,7 +5209,8 @@ const _PIANO_OAF_CHECKPOINT = 'https://storage.googleapis.com/magentadata/js/che
 //   v3 = Magenta Onsets & Frames (different engine entirely)
 //   v4 = Magenta + post-trim (cap + same-pitch reonset)
 //   v5 = Magenta + post-trim with 60 ms gap between same-pitch hits
-const _PIANO_NOTES_VERSION = 5;
+//   v6 = same gap also applied to ±1 semitone neighbour onsets
+const _PIANO_NOTES_VERSION = 6;
 
 function _pianoSetLoading(label) {
     if (!pianoOverlay) return;
@@ -5344,8 +5345,12 @@ async function _pianoTranscribe(audioBuffer, progressCb) {
 // looks like notes "sticking" on the falling-bar view. We can't change
 // the model, so we trim its output:
 //   • cap every note at _PIANO_MAX_NOTE_S (a typical visual beat),
-//   • end any note _PIANO_REONSET_GAP_S before the same pitch is hit
-//     again, so consecutive same-pitch bars don't kiss into one block.
+//   • end any note _PIANO_REONSET_GAP_S before the SAME pitch is hit
+//     again, so consecutive same-pitch bars don't kiss into one block,
+//   • end any note _PIANO_REONSET_GAP_S before a NEIGHBOUR pitch (±1
+//     semitone) is hit — but only if the neighbour onset arrives
+//     _PIANO_NEIGHBOR_GUARD_S after this note started, so simultaneous
+//     chord attacks (intentional minor-2nd dissonances) are preserved,
 //   • enforce a minimum bar length so the gap subtraction never
 //     shrinks a real attack to nothing.
 // Shrinks bars to feel like discrete keystrokes instead of a held-pedal
@@ -5353,6 +5358,7 @@ async function _pianoTranscribe(audioBuffer, progressCb) {
 const _PIANO_MAX_NOTE_S = 1.2;
 const _PIANO_REONSET_GAP_S = 0.06;   // visible gap (≈10 px at typical lookahead)
 const _PIANO_MIN_NOTE_S = 0.05;
+const _PIANO_NEIGHBOR_GUARD_S = 0.10; // chord-attack window
 function _pianoTrimSustain(notes) {
     if (!Array.isArray(notes) || notes.length === 0) return notes;
     const byPitch = new Map();
@@ -5362,15 +5368,29 @@ function _pianoTrimSustain(notes) {
         arr.push(n);
     }
     for (const arr of byPitch.values()) arr.sort((a, b) => a.t0 - b.t0);
+    // Onsets-per-pitch lookup for the neighbour-onset trim.
+    const onsetsByPitch = new Map();
+    for (const [p, arr] of byPitch.entries()) onsetsByPitch.set(p, arr.map(n => n.t0));
+    const firstOnsetAfter = (pitch, after) => {
+        const arr = onsetsByPitch.get(pitch);
+        if (!arr) return Infinity;
+        for (const t of arr) if (t > after) return t;
+        return Infinity;
+    };
     const out = [];
     for (const arr of byPitch.values()) {
         for (let i = 0; i < arr.length; i++) {
             const n = arr[i];
-            const next = arr[i + 1];
+            const nextSame = arr[i + 1];
             let t1 = Math.min(n.t1, n.t0 + _PIANO_MAX_NOTE_S);
-            if (next && next.t0 - n.t0 > _PIANO_MIN_NOTE_S) {
-                t1 = Math.min(t1, next.t0 - _PIANO_REONSET_GAP_S);
+            if (nextSame && nextSame.t0 - n.t0 > _PIANO_MIN_NOTE_S) {
+                t1 = Math.min(t1, nextSame.t0 - _PIANO_REONSET_GAP_S);
             }
+            const guardedAfter = n.t0 + _PIANO_NEIGHBOR_GUARD_S;
+            const nbLow = firstOnsetAfter(n.pitch - 1, guardedAfter);
+            const nbHigh = firstOnsetAfter(n.pitch + 1, guardedAfter);
+            const nb = Math.min(nbLow, nbHigh);
+            if (nb < Infinity) t1 = Math.min(t1, nb - _PIANO_REONSET_GAP_S);
             if (t1 - n.t0 < _PIANO_MIN_NOTE_S) t1 = n.t0 + _PIANO_MIN_NOTE_S;
             out.push({ t0: n.t0, t1, pitch: n.pitch });
         }

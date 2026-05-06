@@ -86741,7 +86741,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
       var _PIANO_MAGENTA_URL = "https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/dist/magentamusic.min.js";
       var _PIANO_OAF_CHECKPOINT = "https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni";
-      var _PIANO_NOTES_VERSION = 5;
+      var _PIANO_NOTES_VERSION = 6;
       function _pianoSetLoading(label) {
         if (!pianoOverlay) return;
         if (label === null) {
@@ -86851,6 +86851,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _PIANO_MAX_NOTE_S = 1.2;
       var _PIANO_REONSET_GAP_S = 0.06;
       var _PIANO_MIN_NOTE_S = 0.05;
+      var _PIANO_NEIGHBOR_GUARD_S = 0.1;
       function _pianoTrimSustain(notes) {
         if (!Array.isArray(notes) || notes.length === 0) return notes;
         const byPitch = /* @__PURE__ */ new Map();
@@ -86863,15 +86864,28 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           arr.push(n);
         }
         for (const arr of byPitch.values()) arr.sort((a, b) => a.t0 - b.t0);
+        const onsetsByPitch = /* @__PURE__ */ new Map();
+        for (const [p, arr] of byPitch.entries()) onsetsByPitch.set(p, arr.map((n) => n.t0));
+        const firstOnsetAfter = (pitch, after) => {
+          const arr = onsetsByPitch.get(pitch);
+          if (!arr) return Infinity;
+          for (const t of arr) if (t > after) return t;
+          return Infinity;
+        };
         const out = [];
         for (const arr of byPitch.values()) {
           for (let i = 0; i < arr.length; i++) {
             const n = arr[i];
-            const next = arr[i + 1];
+            const nextSame = arr[i + 1];
             let t1 = Math.min(n.t1, n.t0 + _PIANO_MAX_NOTE_S);
-            if (next && next.t0 - n.t0 > _PIANO_MIN_NOTE_S) {
-              t1 = Math.min(t1, next.t0 - _PIANO_REONSET_GAP_S);
+            if (nextSame && nextSame.t0 - n.t0 > _PIANO_MIN_NOTE_S) {
+              t1 = Math.min(t1, nextSame.t0 - _PIANO_REONSET_GAP_S);
             }
+            const guardedAfter = n.t0 + _PIANO_NEIGHBOR_GUARD_S;
+            const nbLow = firstOnsetAfter(n.pitch - 1, guardedAfter);
+            const nbHigh = firstOnsetAfter(n.pitch + 1, guardedAfter);
+            const nb = Math.min(nbLow, nbHigh);
+            if (nb < Infinity) t1 = Math.min(t1, nb - _PIANO_REONSET_GAP_S);
             if (t1 - n.t0 < _PIANO_MIN_NOTE_S) t1 = n.t0 + _PIANO_MIN_NOTE_S;
             out.push({ t0: n.t0, t1, pitch: n.pitch });
           }
