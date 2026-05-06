@@ -72422,6 +72422,28 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return out;
   }
+  function primeMsgCache(groupId, trackId, msg) {
+    if (!msg) return;
+    _msgCache[`${groupId}:${trackId}`] = msg;
+  }
+  function evictTrackCaches(groupId, trackId) {
+    const key = `${groupId}:${trackId}`;
+    if (_msgCache[key]) delete _msgCache[key];
+    if (_blobCache[key]) {
+      try {
+        URL.revokeObjectURL(_blobCache[key]);
+      } catch {
+      }
+      delete _blobCache[key];
+    }
+    if (_thumbBlobCache[key]) {
+      try {
+        URL.revokeObjectURL(_thumbBlobCache[key]);
+      } catch {
+      }
+      delete _thumbBlobCache[key];
+    }
+  }
   async function sendTrackToChat(chatId, sourceGroupId, trackId, htmlCaption) {
     await _ensureConnected();
     const toEntity = await _getEntity(chatId);
@@ -84885,12 +84907,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _coplay = _pickerState();
       var _COPLAY_KINDS = ["user"];
       var _pendingInvites = /* @__PURE__ */ new Map();
-      var _coplayLastTrackEnsureKey = null;
       function _coplayCurrentTrack() {
         if (currentTrackIndex < 0 || currentTrackIndex >= playerTracks.length) return null;
         return playerTracks[currentTrackIndex];
       }
-      function _coplayBuildState(trackMsgIdInChannel) {
+      function _coplayBuildState() {
         const t = _coplayCurrentTrack();
         return {
           v: 1,
@@ -84898,40 +84919,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           pos: Math.max(0, audio.currentTime || 0),
           anchor: Date.now() / 1e3,
           track: t ? {
-            i: trackMsgIdInChannel,
             t: t.title || "",
             a: t.artist || "",
             d: t.duration || 0
           } : null
         };
-      }
-      async function _coplayEnsureTrackInChannel() {
-        const t = _coplayCurrentTrack();
-        if (!t || !playerGroupId) return null;
-        const key = `${playerGroupId}:${t.id}`;
-        let mid = localStorage.getItem(`share_${playerGroupId}_${t.id}`);
-        if (mid) return parseInt(mid, 10);
-        if (_coplayLastTrackEnsureKey === key) return null;
-        _coplayLastTrackEnsureKey = key;
-        try {
-          const channelId = parseInt(localStorage.getItem("share_channel_id") || "0", 10);
-          if (!channelId) {
-            const channel = await findOrCreateShareChannel();
-            localStorage.setItem("share_channel_id", String(channel.id));
-            muteChat(channel.id);
-            archiveChat(channel.id);
-          }
-          const shareChannelId = parseInt(localStorage.getItem("share_channel_id"), 10);
-          const { link } = await shareTrack(shareChannelId, playerGroupId, t.id);
-          const newId = parseInt(link.split("/").pop(), 10);
-          localStorage.setItem(`share_${playerGroupId}_${t.id}`, String(newId));
-          return newId;
-        } catch (e) {
-          console.warn("[coplay] forward to share channel failed:", e?.message || e);
-          return null;
-        } finally {
-          if (_coplayLastTrackEnsureKey === key) _coplayLastTrackEnsureKey = null;
-        }
       }
       async function _coplayBroadcast() {
         const s = _coplaySession;
@@ -84944,11 +84936,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         try {
           do {
             s.broadcastQueued = false;
-            const trackMsgId = await _coplayEnsureTrackInChannel();
             const t = _coplayCurrentTrack();
             const sourceTrackId = t?.id ?? null;
             const sourceGroupId = playerGroupId;
-            const state = _coplayBuildState(trackMsgId);
+            const state = _coplayBuildState();
             const trackChanged = sourceTrackId && (sourceTrackId !== s.lastBroadcastSourceTrackId || sourceGroupId !== s.lastBroadcastSourceGroupId);
             if (trackChanged) {
               await coplayEditTrack(
@@ -84959,7 +84950,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
                 state,
                 s.invitees
               );
-              s.lastBroadcastTrackMsgId = trackMsgId;
               s.lastBroadcastSourceTrackId = sourceTrackId;
               s.lastBroadcastSourceGroupId = sourceGroupId;
             } else {
@@ -85054,12 +85044,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         try {
           const channelId = parseInt(localStorage.getItem("share_channel_id") || "0", 10) || (await findOrCreateShareChannel()).id;
           if (!localStorage.getItem("share_channel_id")) localStorage.setItem("share_channel_id", String(channelId));
-          let trackMsgId = parseInt(localStorage.getItem(`share_${playerGroupId}_${t.id}`) || "0", 10);
-          if (!trackMsgId) {
-            const { link } = await shareTrack(channelId, playerGroupId, t.id);
-            trackMsgId = parseInt(link.split("/").pop(), 10);
-            localStorage.setItem(`share_${playerGroupId}_${t.id}`, String(trackMsgId));
-          }
           const invitees = _coplayInviteList.map((c) => ({
             id: c.id,
             title: c.title,
@@ -85076,7 +85060,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             playing: !audio.paused,
             pos: Math.max(0, audio.currentTime || 0),
             anchor: Date.now() / 1e3,
-            track: { i: trackMsgId, t: t.title || "", a: t.artist || "", d: t.duration || 0 }
+            track: { t: t.title || "", a: t.artist || "", d: t.duration || 0 }
           };
           const { syncMsgId } = await coplaySendInvite(initialState, invitees, playerGroupId, t.id);
           _coplaySession = {
@@ -85090,7 +85074,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             broadcastInflight: false,
             broadcastQueued: false,
             invitees,
-            lastBroadcastTrackMsgId: trackMsgId,
             lastBroadcastSourceTrackId: t.id,
             lastBroadcastSourceGroupId: playerGroupId
           };
@@ -85205,7 +85188,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           broadcastInflight: false,
           broadcastQueued: false,
           invitees: null,
-          lastTrackKey: null
+          lastDocId: null
         };
         showToast("Joining co-play\u2026");
         await _coplayPollTick(true);
@@ -85255,18 +85238,45 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         const state = res.state;
         if (!state || !state.track) return;
-        const trackKey = `${s.channelId}:${state.track.i}`;
-        if (s.lastTrackKey !== trackKey) {
-          s.lastTrackKey = trackKey;
+        const docRaw = res.raw?.media?.document?.id;
+        const docId = docRaw == null ? null : String(typeof docRaw === "bigint" ? docRaw : docRaw.value ?? docRaw);
+        if (docId && s.lastDocId !== docId) {
+          s.lastDocId = docId;
           try {
-            const { track, groupId } = await resolveShareLink(state.track.i);
+            const doc = res.raw.media.document;
+            let title = "";
+            let artist = "";
+            let duration = 0;
+            for (const a of doc.attributes || []) {
+              if (a.className === "DocumentAttributeAudio") {
+                title = a.title || title;
+                artist = a.performer || artist;
+                duration = a.duration || duration;
+              }
+            }
+            if (!title && state.track?.t) title = state.track.t;
+            if (!artist && state.track?.a) artist = state.track.a;
+            if (!duration && state.track?.d) duration = state.track.d;
+            const track = {
+              id: s.syncMsgId,
+              title: title || "Co-play",
+              artist: artist || "",
+              duration: duration || 0,
+              file_name: "audio.mp3",
+              msg_id: s.syncMsgId,
+              has_thumb: false,
+              mime_type: doc.mimeType || "audio/mpeg",
+              file_size: Number(doc.size?.value ?? doc.size ?? 0) || 0
+            };
+            evictTrackCaches(s.channelId, s.syncMsgId);
+            primeMsgCache(s.channelId, s.syncMsgId, res.raw);
             const anchor2 = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
             const elapsed2 = Math.max(0, Date.now() / 1e3 - anchor2);
             _pendingSeekTime = Math.max(0, (state.pos || 0) + (state.playing ? elapsed2 : 0));
             _pendingSeekTrackId = track.id;
-            startPlayback([track], groupId, null, 0, false);
+            startPlayback([track], s.channelId, null, 0, false);
           } catch (e) {
-            console.warn("[coplay] resolve track failed:", e?.message || e);
+            console.warn("[coplay] track switch failed:", e?.message || e);
           }
           return;
         }

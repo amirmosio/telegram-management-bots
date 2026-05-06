@@ -2319,6 +2319,32 @@ export async function sendTextToChat(chatId, text) {
     await client.sendMessage(entity, { message: text });
 }
 
+// Drop a freshly-fetched GramJS Message into the in-memory msg cache so
+// downstream callers (getTrackBlobUrl, iterTrackDownload) skip the
+// network and use this exact reference. Pair with evictTrackCaches when
+// you also want to clear the prior blob bytes.
+export function primeMsgCache(groupId, trackId, msg) {
+    if (!msg) return;
+    _msgCache[`${groupId}:${trackId}`] = msg;
+}
+
+// Force-evict in-memory caches for a (groupId, trackId) pair so the next
+// playback fetches fresh msg metadata + audio bytes. Used when the host
+// edits the co-play sync message's media — the msg.id stays the same
+// but the underlying document changes.
+export function evictTrackCaches(groupId, trackId) {
+    const key = `${groupId}:${trackId}`;
+    if (_msgCache[key]) delete _msgCache[key];
+    if (_blobCache[key]) {
+        try { URL.revokeObjectURL(_blobCache[key]); } catch {}
+        delete _blobCache[key];
+    }
+    if (_thumbBlobCache[key]) {
+        try { URL.revokeObjectURL(_thumbBlobCache[key]); } catch {}
+        delete _thumbBlobCache[key];
+    }
+}
+
 // Send an audio track (referenced by source message) to a destination chat
 // with a custom HTML caption. Reuses the existing document — no re-upload.
 export async function sendTrackToChat(chatId, sourceGroupId, trackId, htmlCaption) {

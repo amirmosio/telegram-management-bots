@@ -3002,12 +3002,11 @@ const coplayFabAvatarImg = $('coplay-fab-avatar-img');
 const coplayFabAvatarFallback = $('coplay-fab-avatar-fallback');
 const coplayFabBadge = $('coplay-fab-badge');
 
-let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastTrackKey }
+let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastDocId }
 let _coplayInviteList = [];        // multi-select buffer, [{ id, title, _entity }]
 const _coplay = _pickerState();    // shared search state for the picker
 const _COPLAY_KINDS = ['user'];    // co-play targets are people only
 const _pendingInvites = new Map(); // syncMsgId -> { hostId, hostName, channelId, addedAt }
-let _coplayLastTrackEnsureKey = null; // dedupe _prepareShareLink calls within a host session
 
 // ──────────────────────────────────────
 //  Host
@@ -3022,8 +3021,10 @@ function _coplayCurrentTrack() {
 // host's local wall-clock (unix seconds) at the moment of broadcast, so
 // followers can extrapolate the host's *current* playback position as
 //   expected = pos + (now - anchor)   [when playing]
-// without depending on continuous re-broadcasts.
-function _coplayBuildState(trackMsgIdInChannel) {
+// without depending on continuous re-broadcasts. The audio itself lives
+// as media on this very message — followers download it from there, so
+// there's no separate track-msgId to embed.
+function _coplayBuildState() {
     const t = _coplayCurrentTrack();
     return {
         v: 1,
@@ -3031,7 +3032,6 @@ function _coplayBuildState(trackMsgIdInChannel) {
         pos: Math.max(0, audio.currentTime || 0),
         anchor: Date.now() / 1000,
         track: t ? {
-            i: trackMsgIdInChannel,
             t: t.title || '',
             a: t.artist || '',
             d: t.duration || 0,
@@ -3039,45 +3039,12 @@ function _coplayBuildState(trackMsgIdInChannel) {
     };
 }
 
-// Ensure the current track is forwarded to the share channel and return
-// its msgId there. Cached per (groupId,trackId) by _prepareShareLink's
-// localStorage entry — repeated calls are essentially free.
-async function _coplayEnsureTrackInChannel() {
-    const t = _coplayCurrentTrack();
-    if (!t || !playerGroupId) return null;
-    const key = `${playerGroupId}:${t.id}`;
-    // Reuse the existing share cache directly to avoid re-running the
-    // share-channel resolution dance every broadcast.
-    let mid = localStorage.getItem(`share_${playerGroupId}_${t.id}`);
-    if (mid) return parseInt(mid, 10);
-    if (_coplayLastTrackEnsureKey === key) return null; // in-flight
-    _coplayLastTrackEnsureKey = key;
-    try {
-        const channelId = parseInt(localStorage.getItem('share_channel_id') || '0', 10);
-        if (!channelId) {
-            const channel = await tg.findOrCreateShareChannel();
-            localStorage.setItem('share_channel_id', String(channel.id));
-            tg.muteChat(channel.id);
-            tg.archiveChat(channel.id);
-        }
-        const shareChannelId = parseInt(localStorage.getItem('share_channel_id'), 10);
-        const { link } = await tg.shareTrack(shareChannelId, playerGroupId, t.id);
-        const newId = parseInt(link.split('/').pop(), 10);
-        localStorage.setItem(`share_${playerGroupId}_${t.id}`, String(newId));
-        return newId;
-    } catch (e) {
-        console.warn('[coplay] forward to share channel failed:', e?.message || e);
-        return null;
-    } finally {
-        if (_coplayLastTrackEnsureKey === key) _coplayLastTrackEnsureKey = null;
-    }
-}
-
 // Single-flight broadcast: at most one EditMessage in flight; if more
 // state changes arrive while we're waiting, only the LATEST is applied
 // once the in-flight call resolves. When the host's current track has
 // changed since the last broadcast we also swap the message's attached
-// media; otherwise we send a caption-only edit.
+// media; otherwise we send a caption-only edit. No separate forward to
+// the share channel — the audio rides along on the sync message itself.
 async function _coplayBroadcast() {
     const s = _coplaySession;
     if (!s || s.role !== 'host') return;
@@ -3086,11 +3053,10 @@ async function _coplayBroadcast() {
     try {
         do {
             s.broadcastQueued = false;
-            const trackMsgId = await _coplayEnsureTrackInChannel();
             const t = _coplayCurrentTrack();
             const sourceTrackId = t?.id ?? null;
             const sourceGroupId = playerGroupId;
-            const state = _coplayBuildState(trackMsgId);
+            const state = _coplayBuildState();
             const trackChanged = sourceTrackId
                 && (sourceTrackId !== s.lastBroadcastSourceTrackId
                     || sourceGroupId !== s.lastBroadcastSourceGroupId);
@@ -3100,7 +3066,6 @@ async function _coplayBroadcast() {
                     sourceGroupId, sourceTrackId,
                     state, s.invitees,
                 );
-                s.lastBroadcastTrackMsgId = trackMsgId;
                 s.lastBroadcastSourceTrackId = sourceTrackId;
                 s.lastBroadcastSourceGroupId = sourceGroupId;
             } else {
@@ -3212,16 +3177,12 @@ async function _coplayStartHost() {
     coplayStartBtn.disabled = true;
     coplayStartBtn.textContent = 'Starting…';
     try {
-        // Make sure the track is in the share channel before the invitees
-        // try to play it from their follower mode.
+        // The sync message itself carries the audio media, so we don't
+        // need to forward the track to the share channel separately.
+        // Just resolve the share channel id (joining if needed) so we
+        // know where to send to and how to address future edits.
         const channelId = parseInt(localStorage.getItem('share_channel_id') || '0', 10) || (await tg.findOrCreateShareChannel()).id;
         if (!localStorage.getItem('share_channel_id')) localStorage.setItem('share_channel_id', String(channelId));
-        let trackMsgId = parseInt(localStorage.getItem(`share_${playerGroupId}_${t.id}`) || '0', 10);
-        if (!trackMsgId) {
-            const { link } = await tg.shareTrack(channelId, playerGroupId, t.id);
-            trackMsgId = parseInt(link.split('/').pop(), 10);
-            localStorage.setItem(`share_${playerGroupId}_${t.id}`, String(trackMsgId));
-        }
 
         // Resolve each invitee's full User entity (cached by listChatsForShare).
         const invitees = _coplayInviteList.map(c => ({
@@ -3242,7 +3203,7 @@ async function _coplayStartHost() {
             playing: !audio.paused,
             pos: Math.max(0, audio.currentTime || 0),
             anchor: Date.now() / 1000,
-            track: { i: trackMsgId, t: t.title || '', a: t.artist || '', d: t.duration || 0 },
+            track: { t: t.title || '', a: t.artist || '', d: t.duration || 0 },
         };
         const { syncMsgId } = await tg.coplaySendInvite(initialState, invitees, playerGroupId, t.id);
 
@@ -3257,7 +3218,6 @@ async function _coplayStartHost() {
             broadcastInflight: false,
             broadcastQueued: false,
             invitees,
-            lastBroadcastTrackMsgId: trackMsgId,
             lastBroadcastSourceTrackId: t.id,
             lastBroadcastSourceGroupId: playerGroupId,
         };
@@ -3382,7 +3342,7 @@ async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
         broadcastInflight: false,
         broadcastQueued: false,
         invitees: null,
-        lastTrackKey: null,
+        lastDocId: null,
     };
     showToast('Joining co-play…');
     await _coplayPollTick(true);
@@ -3435,12 +3395,48 @@ async function _coplayPollTick(initial) {
     const state = res.state;
     if (!state || !state.track) return;
 
-    // Track switch?
-    const trackKey = `${s.channelId}:${state.track.i}`;
-    if (s.lastTrackKey !== trackKey) {
-        s.lastTrackKey = trackKey;
+    // The audio is attached to the sync message itself, so we identify
+    // the current track by the document.id on res.raw.media.document.
+    // When the host edits the message's media, msg.id stays the same but
+    // document.id changes — we evict the in-memory blob/msg caches for
+    // that key and re-load.
+    const docRaw = res.raw?.media?.document?.id;
+    const docId = docRaw == null ? null
+        : String(typeof docRaw === 'bigint' ? docRaw : (docRaw.value ?? docRaw));
+    if (docId && s.lastDocId !== docId) {
+        s.lastDocId = docId;
         try {
-            const { track, groupId } = await tg.resolveShareLink(state.track.i);
+            // Build a track meta object straight from the sync msg's media.
+            const doc = res.raw.media.document;
+            let title = '';
+            let artist = '';
+            let duration = 0;
+            for (const a of (doc.attributes || [])) {
+                if (a.className === 'DocumentAttributeAudio') {
+                    title = a.title || title;
+                    artist = a.performer || artist;
+                    duration = a.duration || duration;
+                }
+            }
+            if (!title && state.track?.t) title = state.track.t;
+            if (!artist && state.track?.a) artist = state.track.a;
+            if (!duration && state.track?.d) duration = state.track.d;
+            const track = {
+                id: s.syncMsgId,
+                title: title || 'Co-play',
+                artist: artist || '',
+                duration: duration || 0,
+                file_name: 'audio.mp3',
+                msg_id: s.syncMsgId,
+                has_thumb: false,
+                mime_type: doc.mimeType || 'audio/mpeg',
+                file_size: Number(doc.size?.value ?? doc.size ?? 0) || 0,
+            };
+            // Cache the freshly fetched msg so getTrackBlobUrl can find
+            // it by (channelId, syncMsgId), and evict stale audio bytes
+            // from the previous track on this same syncMsgId.
+            tg.evictTrackCaches(s.channelId, s.syncMsgId);
+            tg.primeMsgCache(s.channelId, s.syncMsgId, res.raw);
             // Land at host's CURRENT position, not the stale pos baked into
             // the message. Same anchor-extrapolation as the steady-state
             // drift correction below.
@@ -3448,9 +3444,9 @@ async function _coplayPollTick(initial) {
             const elapsed = Math.max(0, (Date.now() / 1000) - anchor);
             _pendingSeekTime = Math.max(0, (state.pos || 0) + (state.playing ? elapsed : 0));
             _pendingSeekTrackId = track.id;
-            startPlayback([track], groupId, null, 0, false);
+            startPlayback([track], s.channelId, null, 0, false);
         } catch (e) {
-            console.warn('[coplay] resolve track failed:', e?.message || e);
+            console.warn('[coplay] track switch failed:', e?.message || e);
         }
         return;
     }
