@@ -5,6 +5,7 @@
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { Api } from 'telegram/tl';
+import { NewMessage } from 'telegram/events';
 import { Buffer } from 'buffer';
 import bigInt from 'big-integer';
 import { idbGet, idbPut, idbGetAllKeys, idbCount, idbDelete } from './idb-cache.js';
@@ -2861,3 +2862,217 @@ export async function getSyncState(groupId) {
 
     return null;
 }
+
+// ════════════════════════════════════════════════════════════
+//  CO-PLAY  —  one-message synced playback in @tgmusicplayer_shared
+// ────────────────────────────────────────────────────────────
+// One text message in the share channel = invite + sync state.
+//   • Magic prefix `[telemusic-coplay-v1] ` then JSON, then a
+//     human-readable line tagging invitees via mention entities.
+//   • Host edits the caption JSON on every play/pause/seek/track-change.
+//   • Followers poll the message every 1.5 s and reconcile.
+//   • Host deletes on End → followers exit on next poll.
+// ════════════════════════════════════════════════════════════
+
+const COPLAY_MARKER = '[telemusic-coplay-v1] ';
+
+function _coplayParse(msg) {
+    if (!msg || !msg.message) return null;
+    const text = msg.message;
+    if (!text.startsWith(COPLAY_MARKER)) return null;
+    // JSON ends at first newline; the rest is the human-readable line.
+    const afterMarker = text.slice(COPLAY_MARKER.length);
+    const nl = afterMarker.indexOf('\n');
+    const jsonStr = nl === -1 ? afterMarker : afterMarker.slice(0, nl);
+    let state;
+    try { state = JSON.parse(jsonStr); } catch { return null; }
+    let fromUserId = null;
+    const fromId = msg.fromId;
+    if (fromId) {
+        const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
+        if (raw != null) fromUserId = Number(typeof raw === 'bigint' ? raw : raw);
+    }
+    return { state, fromUserId, msgId: msg.id };
+}
+
+// Best-effort display-name fetch for a user id. Returns a friendly string
+// (possibly the username, or "User" as last resort) — never throws.
+export async function getUserDisplayName(userId) {
+    if (!userId) return 'Someone';
+    try {
+        await _ensureConnected();
+        const ent = await client.getEntity(userId);
+        if (ent) {
+            const first = ent.firstName || '';
+            const last = ent.lastName || '';
+            const name = (first + ' ' + last).trim();
+            return name || ent.username || 'User';
+        }
+    } catch (e) { /* offline or restricted — fall through */ }
+    return 'User';
+}
+
+// Build caption text + entities for the sync message.
+//
+//   text  = "[telemusic-coplay-v1] {json}\nCo-play with X, Y, Z"
+//   ents  = MessageEntityMentionName for each name in "X, Y, Z"
+//
+// invitees: [{ id, title, _entity }]  — _entity is the GramJS User cached in _groupsCache.
+function coplayBuildMessage(stateJson, invitees) {
+    const head = COPLAY_MARKER + JSON.stringify(stateJson);
+    if (!invitees.length) return { text: head, entities: [] };
+
+    let line = '\nCo-play with ';
+    const entities = [];
+    // UTF-16 offsets — Telegram entity offsets are counted in UTF-16 code units.
+    let cursor = head.length + line.length;
+    for (let i = 0; i < invitees.length; i++) {
+        const inv = invitees[i];
+        const name = (inv.title || 'User').slice(0, 32);
+        const lenU16 = name.length; // ASCII-ish names are fine; multi-codepoint emoji rare here
+        if (i > 0) {
+            line += ', ';
+            cursor += 2;
+        }
+        line += name;
+        const ent = inv._entity instanceof Api.User
+            ? new Api.InputMessageEntityMentionName({
+                offset: cursor,
+                length: lenU16,
+                userId: new Api.InputUser({
+                    userId: inv._entity.id,
+                    accessHash: inv._entity.accessHash || bigInt.zero,
+                }),
+            })
+            : null;
+        if (ent) entities.push(ent);
+        cursor += lenU16;
+    }
+    return { text: head + line, entities };
+}
+
+export async function coplaySendInvite(stateJson, invitees) {
+    await _ensureConnected();
+    const channel = await findOrCreateShareChannel();
+    const entity = await _getEntity(channel.id);
+    const { text, entities } = coplayBuildMessage(stateJson, invitees);
+    const sent = await client.sendMessage(entity, {
+        message: text,
+        formattingEntities: entities.length ? entities : undefined,
+    });
+    return { syncMsgId: sent.id, channelId: channel.id };
+}
+
+export async function coplayEditState(channelId, syncMsgId, stateJson, invitees) {
+    await _ensureConnected();
+    const peer = await client.getInputEntity(channelId);
+    const { text, entities } = coplayBuildMessage(stateJson, invitees);
+    await client.invoke(new Api.messages.EditMessage({
+        peer,
+        id: syncMsgId,
+        message: text,
+        entities: entities.length ? entities : undefined,
+    }));
+}
+
+export async function coplayDelete(channelId, syncMsgId) {
+    await _ensureConnected();
+    const entity = await _getEntity(channelId);
+    try {
+        await client.deleteMessages(entity, [syncMsgId], { revoke: true });
+    } catch (e) {
+        console.warn('coplayDelete failed:', e?.message || e);
+    }
+}
+
+// Fetch the sync message and parse its state. Records the wall-clock at
+// fetch as the anchor so the caller can extrapolate position locally.
+export async function coplayFetch(channelId, syncMsgId) {
+    await _ensureConnected();
+    const entity = await _getEntity(channelId);
+    const msgs = await client.getMessages(entity, { ids: [syncMsgId] });
+    const msg = msgs[0];
+    if (!msg || msg.className === 'MessageEmpty') return null;
+    const parsed = _coplayParse(msg);
+    if (!parsed) return null;
+    return { ...parsed, fetchedWallSec: Date.now() / 1000, raw: msg };
+}
+
+// Catch-up at boot: surface any unread @-mentions of this user in the
+// share channel that match the co-play marker. Returns parsed invites.
+export async function coplayCatchupMentions() {
+    await _ensureConnected();
+    const channel = await findOrCreateShareChannel();
+    const entity = await _getEntity(channel.id);
+    let result;
+    try {
+        result = await client.invoke(new Api.messages.GetUnreadMentions({
+            peer: entity,
+            offsetId: 0,
+            addOffset: 0,
+            limit: 20,
+            maxId: 0,
+            minId: 0,
+        }));
+    } catch (e) {
+        console.warn('coplayCatchupMentions failed:', e?.message || e);
+        return [];
+    }
+    const out = [];
+    for (const msg of result.messages || []) {
+        const parsed = _coplayParse(msg);
+        if (parsed) out.push({ ...parsed, channelId: channel.id });
+    }
+    return out;
+}
+
+// Register a NewMessage handler that fires for any message in the share
+// channel that mentions the logged-in user and matches the co-play marker.
+// The callback is invoked with `{ msgId, fromUserId, state, channelId }`.
+let _coplayInviteHandlerInstalled = false;
+export async function installCoplayInviteListener(callback) {
+    if (_coplayInviteHandlerInstalled) return;
+    await _ensureConnected();
+    const channel = await findOrCreateShareChannel();
+    const entity = await _getEntity(channel.id);
+    const handler = async (event) => {
+        const msg = event.message;
+        if (!msg || !msg.mentioned) return;
+        const parsed = _coplayParse(msg);
+        if (!parsed) return;
+        try { callback({ ...parsed, channelId: channel.id }); }
+        catch (e) { console.warn('coplay invite cb threw:', e?.message || e); }
+    };
+    client.addEventHandler(handler, new NewMessage({ chats: [entity] }));
+    _coplayInviteHandlerInstalled = true;
+}
+
+// Resolve a user's display name + cached entity by chat id (positive user id)
+// from the cache populated by listChatsForShare. Used by main.js to enrich
+// invitee picks with the InputUser needed for mention entities.
+export function getCachedUserEntity(userId) {
+    return _groupsCache[userId] || null;
+}
+
+// Fetch (and cache) the inviter's profile photo as a blob URL for the
+// floating button avatar. Resolves to null if the user has no photo or
+// the download fails — caller should fall back to a placeholder.
+const _coplayAvatarCache = new Map();
+export async function coplayGetUserAvatarUrl(userId) {
+    if (_coplayAvatarCache.has(userId)) return _coplayAvatarCache.get(userId);
+    await _ensureConnected();
+    let url = null;
+    try {
+        const entity = await client.getEntity(userId);
+        const buf = await client.downloadProfilePhoto(entity, { isBig: false });
+        if (buf && buf.length) {
+            const blob = new Blob([buf], { type: 'image/jpeg' });
+            url = URL.createObjectURL(blob);
+        }
+    } catch (e) {
+        console.warn('coplayGetUserAvatarUrl failed for', userId, e?.message || e);
+    }
+    _coplayAvatarCache.set(userId, url);
+    return url;
+}
+

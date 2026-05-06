@@ -1170,6 +1170,7 @@ function _updateAddButton() {
     $('btn-add-playing').style.display = 'flex';
     $('btn-move-playing').style.display = 'flex';
     $('btn-share').style.display = 'flex';
+    $('btn-coplay').style.display = 'flex';
 }
 
 function updateSidebarHighlight() {
@@ -1333,6 +1334,7 @@ async function playTrack(index) {
     fetchLyricsForTrack(track, gen);
     fetchArtworkForTrack(track, gen);
     _broadcastState('state');
+    _coplayBroadcast();
 
     try {
         if (preloaded) {
@@ -2850,6 +2852,528 @@ document.addEventListener('keydown', e => {
 });
 
 // ══════════════════════════════════════
+//  CO-PLAY  (synced live playback)
+// ══════════════════════════════════════
+//  One Telegram message in @tgmusicplayer_shared serves as invite +
+//  sync state. Host edits the JSON in its body on every play/pause/
+//  seek/track change; followers poll it every 1.5 s and reconcile.
+//  Tagged invitees see a floating button (driven by mention events),
+//  tap to enter listen-only mode. Host taps End → message deleted →
+//  followers exit on their next poll tick.
+// ══════════════════════════════════════
+
+const COPLAY_HOST_KEY = 'coplay_host_msg';
+const COPLAY_POLL_MS = 1500;
+const COPLAY_DRIFT_MAX_SEC = 0.5;
+
+const btnCoplay = $('btn-coplay');
+const coplayModal = $('coplay-modal');
+const coplaySearchInput = $('coplay-search');
+const coplayChatsEl = $('coplay-chats');
+const coplayCancelBtn = $('coplay-cancel');
+const coplayStartBtn = $('coplay-start');
+const coplayHostBanner = $('coplay-host-banner');
+const coplayHostCountEl = $('coplay-host-count');
+const coplayEndBtn = $('coplay-end-btn');
+const coplayFollowerBanner = $('coplay-follower-banner');
+const coplayHostNameEl = $('coplay-host-name');
+const coplayLeaveBtn = $('coplay-leave-btn');
+const coplayFab = $('coplay-floating-button');
+const coplayFabAvatarImg = $('coplay-fab-avatar-img');
+const coplayFabAvatarFallback = $('coplay-fab-avatar-fallback');
+const coplayFabBadge = $('coplay-fab-badge');
+
+let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastTrackKey }
+let _coplayInviteList = [];        // multi-select buffer, [{ id, title, _entity }]
+let _coplayChatsCache = [];        // contacts from listChatsForShare
+const _pendingInvites = new Map(); // syncMsgId -> { hostId, hostName, channelId, addedAt }
+let _coplayLastTrackEnsureKey = null; // dedupe _prepareShareLink calls within a host session
+
+// ──────────────────────────────────────
+//  Host
+// ──────────────────────────────────────
+
+function _coplayCurrentTrack() {
+    if (currentTrackIndex < 0 || currentTrackIndex >= playerTracks.length) return null;
+    return playerTracks[currentTrackIndex];
+}
+
+// Build the JSON state payload broadcast to followers.
+function _coplayBuildState(trackMsgIdInChannel) {
+    const t = _coplayCurrentTrack();
+    return {
+        v: 1,
+        playing: !audio.paused,
+        pos: Math.max(0, audio.currentTime || 0),
+        track: t ? {
+            i: trackMsgIdInChannel,
+            t: t.title || '',
+            a: t.artist || '',
+            d: t.duration || 0,
+        } : null,
+    };
+}
+
+// Ensure the current track is forwarded to the share channel and return
+// its msgId there. Cached per (groupId,trackId) by _prepareShareLink's
+// localStorage entry — repeated calls are essentially free.
+async function _coplayEnsureTrackInChannel() {
+    const t = _coplayCurrentTrack();
+    if (!t || !playerGroupId) return null;
+    const key = `${playerGroupId}:${t.id}`;
+    // Reuse the existing share cache directly to avoid re-running the
+    // share-channel resolution dance every broadcast.
+    let mid = localStorage.getItem(`share_${playerGroupId}_${t.id}`);
+    if (mid) return parseInt(mid, 10);
+    if (_coplayLastTrackEnsureKey === key) return null; // in-flight
+    _coplayLastTrackEnsureKey = key;
+    try {
+        const channelId = parseInt(localStorage.getItem('share_channel_id') || '0', 10);
+        if (!channelId) {
+            const channel = await tg.findOrCreateShareChannel();
+            localStorage.setItem('share_channel_id', String(channel.id));
+            tg.muteChat(channel.id);
+            tg.archiveChat(channel.id);
+        }
+        const shareChannelId = parseInt(localStorage.getItem('share_channel_id'), 10);
+        const { link } = await tg.shareTrack(shareChannelId, playerGroupId, t.id);
+        const newId = parseInt(link.split('/').pop(), 10);
+        localStorage.setItem(`share_${playerGroupId}_${t.id}`, String(newId));
+        return newId;
+    } catch (e) {
+        console.warn('[coplay] forward to share channel failed:', e?.message || e);
+        return null;
+    } finally {
+        if (_coplayLastTrackEnsureKey === key) _coplayLastTrackEnsureKey = null;
+    }
+}
+
+// Single-flight broadcast: at most one EditMessage in flight; if more
+// state changes arrive while we're waiting, only the LATEST is applied
+// once the in-flight call resolves.
+async function _coplayBroadcast() {
+    const s = _coplaySession;
+    if (!s || s.role !== 'host') return;
+    if (s.broadcastInflight) { s.broadcastQueued = true; return; }
+    s.broadcastInflight = true;
+    try {
+        do {
+            s.broadcastQueued = false;
+            const trackMsgId = await _coplayEnsureTrackInChannel();
+            const state = _coplayBuildState(trackMsgId);
+            await tg.coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
+        } while (s.broadcastQueued && _coplaySession === s);
+    } catch (e) {
+        console.warn('[coplay] broadcast failed:', e?.message || e);
+    } finally {
+        s.broadcastInflight = false;
+    }
+}
+
+// Open the multi-select modal.
+async function _coplayOpenPicker() {
+    if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+    if (_coplaySession) {
+        showToast('Already in a co-play session');
+        return;
+    }
+    _coplayInviteList = [];
+    _coplayUpdateStartButton();
+    coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Loading contacts…</div>';
+    coplaySearchInput.value = '';
+    coplayModal.style.display = 'flex';
+    try {
+        const all = await tg.listChatsForShare(80);
+        // Co-play targets are people only — group/channel mention semantics
+        // don't fit our "tagged person opens app" model.
+        _coplayChatsCache = all.filter(c => c.kind === 'user');
+        _coplayRenderChats('');
+    } catch (e) {
+        console.error('[coplay] list chats failed:', e);
+        coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Failed to load contacts</div>';
+    }
+}
+
+function _coplayCloseModal() {
+    coplayModal.style.display = 'none';
+    coplayChatsEl.innerHTML = '';
+    coplaySearchInput.value = '';
+    _coplayInviteList = [];
+}
+
+function _coplayRenderChats(filter) {
+    const q = (filter || '').trim().toLowerCase();
+    const list = q
+        ? _coplayChatsCache.filter(c => c.title.toLowerCase().includes(q))
+        : _coplayChatsCache;
+    coplayChatsEl.innerHTML = '';
+    if (list.length === 0) {
+        coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">No contacts found</div>';
+        return;
+    }
+    for (const chat of list) {
+        const selected = _coplayInviteList.find(c => c.id === chat.id);
+        const el = document.createElement('div');
+        el.className = 'coplay-chat-item' + (selected ? ' selected' : '');
+        const initial = (chat.title.trim()[0] || '?').toUpperCase();
+        el.innerHTML = `
+            <div class="coplay-chat-check">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="coplay-chat-avatar">${escapeHtml(initial)}</div>
+            <div class="coplay-chat-title">${escapeHtml(chat.title)}</div>
+        `;
+        el.addEventListener('click', () => _coplayToggleSelect(chat, el));
+        coplayChatsEl.appendChild(el);
+    }
+}
+
+function _coplayToggleSelect(chat, el) {
+    const idx = _coplayInviteList.findIndex(c => c.id === chat.id);
+    if (idx >= 0) {
+        _coplayInviteList.splice(idx, 1);
+        el.classList.remove('selected');
+    } else {
+        _coplayInviteList.push(chat);
+        el.classList.add('selected');
+    }
+    _coplayUpdateStartButton();
+}
+
+function _coplayUpdateStartButton() {
+    const n = _coplayInviteList.length;
+    coplayStartBtn.textContent = `Start co-play (${n})`;
+    coplayStartBtn.disabled = n === 0;
+}
+
+async function _coplayStartHost() {
+    if (_coplayInviteList.length === 0) return;
+    const t = _coplayCurrentTrack();
+    if (!t) return;
+
+    coplayStartBtn.disabled = true;
+    coplayStartBtn.textContent = 'Starting…';
+    try {
+        // Make sure the track is in the share channel before the invitees
+        // try to play it from their follower mode.
+        const channelId = parseInt(localStorage.getItem('share_channel_id') || '0', 10) || (await tg.findOrCreateShareChannel()).id;
+        if (!localStorage.getItem('share_channel_id')) localStorage.setItem('share_channel_id', String(channelId));
+        let trackMsgId = parseInt(localStorage.getItem(`share_${playerGroupId}_${t.id}`) || '0', 10);
+        if (!trackMsgId) {
+            const { link } = await tg.shareTrack(channelId, playerGroupId, t.id);
+            trackMsgId = parseInt(link.split('/').pop(), 10);
+            localStorage.setItem(`share_${playerGroupId}_${t.id}`, String(trackMsgId));
+        }
+
+        // Resolve each invitee's full User entity (cached by listChatsForShare).
+        const invitees = _coplayInviteList.map(c => ({
+            id: c.id,
+            title: c.title,
+            _entity: tg.getCachedUserEntity(c.id),
+        })).filter(i => i._entity);
+
+        if (invitees.length === 0) {
+            showToast('Could not resolve contacts');
+            coplayStartBtn.disabled = false;
+            _coplayUpdateStartButton();
+            return;
+        }
+
+        const initialState = {
+            v: 1,
+            playing: !audio.paused,
+            pos: Math.max(0, audio.currentTime || 0),
+            track: { i: trackMsgId, t: t.title || '', a: t.artist || '', d: t.duration || 0 },
+        };
+        const { syncMsgId } = await tg.coplaySendInvite(initialState, invitees);
+
+        _coplaySession = {
+            role: 'host',
+            syncMsgId,
+            channelId,
+            hostUserId: null,
+            hostName: null,
+            lastFetchWallSec: 0,
+            pollHandle: null,
+            broadcastInflight: false,
+            broadcastQueued: false,
+            invitees,
+        };
+        localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
+
+        _coplayShowHostBanner(invitees.length);
+        btnCoplay.classList.add('active');
+        _coplayCloseModal();
+        showToast(`Co-playing with ${invitees.length}`);
+    } catch (e) {
+        console.error('[coplay] start failed:', e);
+        showToast('Failed to start co-play');
+        coplayStartBtn.disabled = false;
+        _coplayUpdateStartButton();
+    }
+}
+
+function _coplayShowHostBanner(count) {
+    coplayHostCountEl.textContent = String(count);
+    coplayHostBanner.style.display = 'flex';
+}
+function _coplayHideHostBanner() {
+    coplayHostBanner.style.display = 'none';
+    btnCoplay.classList.remove('active');
+}
+
+async function _coplayEndHost(opts = {}) {
+    const s = _coplaySession;
+    if (!s || s.role !== 'host') return;
+    _coplaySession = null;
+    _coplayHideHostBanner();
+    localStorage.removeItem(COPLAY_HOST_KEY);
+    try {
+        await tg.coplayDelete(s.channelId, s.syncMsgId);
+    } catch (e) { /* fire-and-forget on close */ }
+    if (!opts.silent) showToast('Co-play ended');
+}
+
+// ──────────────────────────────────────
+//  Follower
+// ──────────────────────────────────────
+
+async function _coplayHandleIncomingInvite(parsed) {
+    if (!parsed || !parsed.msgId) return;
+    if (_coplaySession) return; // already in a session — ignore further invites for now
+    if (_pendingInvites.has(parsed.msgId)) return;
+
+    // Insert immediately with a placeholder name so the floating button
+    // shows up fast; refine the name + avatar in the background.
+    _pendingInvites.set(parsed.msgId, {
+        hostId: parsed.fromUserId,
+        hostName: 'Someone',
+        hostAvatarUrl: null,
+        channelId: parsed.channelId,
+        addedAt: Date.now(),
+    });
+    _coplayRenderFloatingButton();
+
+    if (parsed.fromUserId) {
+        try {
+            const name = await tg.getUserDisplayName(parsed.fromUserId);
+            const info = _pendingInvites.get(parsed.msgId);
+            if (info) info.hostName = name;
+        } catch {}
+        try {
+            const url = await tg.coplayGetUserAvatarUrl(parsed.fromUserId);
+            const info = _pendingInvites.get(parsed.msgId);
+            if (info) info.hostAvatarUrl = url;
+        } catch {}
+        if (_pendingInvites.has(parsed.msgId)) _coplayRenderFloatingButton();
+    }
+}
+
+function _coplayRenderFloatingButton() {
+    if (_pendingInvites.size === 0 || _coplaySession) {
+        coplayFab.style.display = 'none';
+        return;
+    }
+    // Pick the most recent invite.
+    let latest = null;
+    for (const [msgId, info] of _pendingInvites.entries()) {
+        if (!latest || info.addedAt > latest.info.addedAt) latest = { msgId, info };
+    }
+    if (!latest) { coplayFab.style.display = 'none'; return; }
+    const { msgId, info } = latest;
+    coplayFab.dataset.msgId = String(msgId);
+    coplayFab.dataset.channelId = String(info.channelId);
+    if (info.hostAvatarUrl) {
+        coplayFabAvatarImg.src = info.hostAvatarUrl;
+        coplayFabAvatarImg.classList.add('loaded');
+        coplayFabAvatarFallback.style.display = 'none';
+    } else {
+        coplayFabAvatarImg.classList.remove('loaded');
+        coplayFabAvatarFallback.textContent = (info.hostName.trim()[0] || '?').toUpperCase();
+        coplayFabAvatarFallback.style.display = 'flex';
+    }
+    coplayFab.querySelector('.coplay-fab-label').textContent = `Join ${info.hostName}`;
+    if (_pendingInvites.size > 1) {
+        coplayFabBadge.textContent = `+${_pendingInvites.size - 1}`;
+        coplayFabBadge.style.display = 'inline-block';
+    } else {
+        coplayFabBadge.style.display = 'none';
+    }
+    coplayFab.style.display = 'inline-flex';
+}
+
+async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
+    if (_coplaySession) return;
+    coplayFab.style.display = 'none';
+    document.body.classList.add('coplay-follower');
+    coplayFollowerBanner.style.display = 'flex';
+    coplayHostNameEl.textContent = hintHostName || 'host';
+
+    _coplaySession = {
+        role: 'follower',
+        syncMsgId,
+        channelId,
+        hostUserId: null,
+        hostName: hintHostName || null,
+        lastFetchWallSec: 0,
+        pollHandle: null,
+        broadcastInflight: false,
+        broadcastQueued: false,
+        invitees: null,
+        lastTrackKey: null,
+    };
+    showToast('Joining co-play…');
+    await _coplayPollTick(true);
+    _coplaySession.pollHandle = setInterval(_coplayPollTick, COPLAY_POLL_MS);
+}
+
+function _coplayLeaveFollower(reason) {
+    const s = _coplaySession;
+    if (!s || s.role !== 'follower') return;
+    if (s.pollHandle) clearInterval(s.pollHandle);
+    _coplaySession = null;
+    document.body.classList.remove('coplay-follower');
+    coplayFollowerBanner.style.display = 'none';
+    if (reason === 'ended') {
+        showToast('Co-play ended');
+    } else if (reason === 'left') {
+        showToast('Left co-play');
+    }
+    _coplayRenderFloatingButton();
+}
+
+async function _coplayPollTick(initial) {
+    const s = _coplaySession;
+    if (!s || s.role !== 'follower') return;
+    let res;
+    try {
+        res = await tg.coplayFetch(s.channelId, s.syncMsgId);
+    } catch (e) {
+        console.warn('[coplay] poll fetch failed:', e?.message || e);
+        return;
+    }
+    if (!res) {
+        // Host deleted the message — exit cleanly.
+        _pendingInvites.delete(s.syncMsgId);
+        _coplayLeaveFollower('ended');
+        return;
+    }
+    s.lastFetchWallSec = res.fetchedWallSec;
+    if (res.fromUserId && !s.hostUserId) {
+        s.hostUserId = res.fromUserId;
+        if (!s.hostName) {
+            tg.getUserDisplayName(res.fromUserId).then(name => {
+                if (_coplaySession === s) {
+                    s.hostName = name;
+                    coplayHostNameEl.textContent = name;
+                }
+            }).catch(() => {});
+        }
+    }
+    const state = res.state;
+    if (!state || !state.track) return;
+
+    // Track switch?
+    const trackKey = `${s.channelId}:${state.track.i}`;
+    if (s.lastTrackKey !== trackKey) {
+        s.lastTrackKey = trackKey;
+        try {
+            const { track, groupId } = await tg.resolveShareLink(state.track.i);
+            _pendingSeekTime = Math.max(0, state.pos || 0);
+            _pendingSeekTrackId = track.id;
+            startPlayback([track], groupId, null, 0, false);
+        } catch (e) {
+            console.warn('[coplay] resolve track failed:', e?.message || e);
+        }
+        return;
+    }
+
+    // Reconcile position + play/pause.
+    const elapsed = (Date.now() / 1000) - res.fetchedWallSec;
+    const expected = (state.pos || 0) + (state.playing ? elapsed : 0);
+    if (audio.duration && Math.abs(audio.currentTime - expected) > COPLAY_DRIFT_MAX_SEC) {
+        try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
+    }
+    if (state.playing && audio.paused) {
+        audio.play().catch(() => {});
+    } else if (!state.playing && !audio.paused) {
+        audio.pause();
+    }
+}
+
+// ──────────────────────────────────────
+//  Boot wiring + cleanup
+// ──────────────────────────────────────
+
+async function _coplayInstallListenerAndCatchUp() {
+    try {
+        await tg.installCoplayInviteListener(_coplayHandleIncomingInvite);
+    } catch (e) {
+        console.warn('[coplay] install listener failed:', e?.message || e);
+    }
+    try {
+        const pending = await tg.coplayCatchupMentions();
+        for (const p of pending) await _coplayHandleIncomingInvite(p);
+    } catch (e) {
+        console.warn('[coplay] catch-up failed:', e?.message || e);
+    }
+}
+
+async function _coplayBootSweep() {
+    const raw = localStorage.getItem(COPLAY_HOST_KEY);
+    if (!raw) return;
+    let saved;
+    try { saved = JSON.parse(raw); } catch { localStorage.removeItem(COPLAY_HOST_KEY); return; }
+    if (!saved?.syncMsgId || !saved?.channelId) {
+        localStorage.removeItem(COPLAY_HOST_KEY);
+        return;
+    }
+    try { await tg.coplayDelete(saved.channelId, saved.syncMsgId); } catch {}
+    localStorage.removeItem(COPLAY_HOST_KEY);
+}
+
+// Hook host broadcasts onto the audio events. The seek-bar drag, btn-play
+// toggle, MediaSession play/pause, and any other path all funnel through
+// the audio element, so listening here covers everything except track
+// changes — those go through playTrack which calls _coplayBroadcast at
+// its tail (see playTrack's _broadcastState('track') companion).
+audio.addEventListener('play', _coplayBroadcast);
+audio.addEventListener('pause', _coplayBroadcast);
+audio.addEventListener('seeked', _coplayBroadcast);
+
+// ──────────────────────────────────────
+//  Wire up DOM
+// ──────────────────────────────────────
+
+btnCoplay.addEventListener('click', _coplayOpenPicker);
+coplayCancelBtn.addEventListener('click', _coplayCloseModal);
+coplayModal.querySelector('.modal-backdrop')?.addEventListener('click', _coplayCloseModal);
+coplaySearchInput.addEventListener('input', e => _coplayRenderChats(e.target.value));
+coplayStartBtn.addEventListener('click', _coplayStartHost);
+coplayEndBtn.addEventListener('click', () => _coplayEndHost());
+coplayLeaveBtn.addEventListener('click', () => _coplayLeaveFollower('left'));
+coplayFab.addEventListener('click', () => {
+    const msgId = parseInt(coplayFab.dataset.msgId || '0', 10);
+    const channelId = parseInt(coplayFab.dataset.channelId || '0', 10);
+    if (!msgId || !channelId) return;
+    const info = _pendingInvites.get(msgId);
+    _pendingInvites.delete(msgId);
+    _coplayEnterFollower(msgId, channelId, info?.hostName);
+});
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && coplayModal.style.display === 'flex') _coplayCloseModal();
+});
+
+// Best-effort cleanup if the host force-closes the tab.
+window.addEventListener('pagehide', () => {
+    const s = _coplaySession;
+    if (s && s.role === 'host') {
+        // Fire and forget; the boot sweep covers the case where this misses.
+        try { tg.coplayDelete(s.channelId, s.syncMsgId); } catch {}
+    }
+});
+
+// ══════════════════════════════════════
 //  SLEEP TIMER
 // ══════════════════════════════════════
 btnSleepTimer.addEventListener('click', () => {
@@ -3157,6 +3681,7 @@ async function restoreSession() {
             $('btn-add-playing').style.display = 'flex';
             $('btn-move-playing').style.display = 'flex';
             $('btn-share').style.display = 'flex';
+            $('btn-coplay').style.display = 'flex';
         }
 
             if (!s.playerGroupId || !s.currentTrackId) {
@@ -3446,6 +3971,8 @@ async function initAfterLogin() {
     const trackCode = params.get('track');
     const sharedTime = parseInt(params.get('t') || '0', 10);
     const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : null;
+    const coplayCode = params.get('coplay');
+    const coplayMsgId = coplayCode ? _decodeTrackId(coplayCode) : null;
     if (sharedMsgId) {
         // Clean URL
         history.replaceState(null, '', window.location.pathname);
@@ -3466,6 +3993,20 @@ async function initAfterLogin() {
             showToast('Failed to load shared track');
         }
     }
+
+    // Boot wiring for co-play: clean up orphan host messages, then start
+    // listening for invites (NewMessage handler + unread-mention catch-up).
+    _coplayBootSweep().catch(() => {});
+    if (coplayMsgId) {
+        history.replaceState(null, '', window.location.pathname);
+        try {
+            const channel = await tg.findOrCreateShareChannel();
+            await _coplayEnterFollower(coplayMsgId, channel.id, null);
+        } catch (e) {
+            console.warn('coplay deeplink failed:', e);
+        }
+    }
+    _coplayInstallListenerAndCatchUp().catch(() => {});
 }
 
 // ══════════════════════════════════════

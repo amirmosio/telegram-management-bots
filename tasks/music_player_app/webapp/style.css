@@ -1902,3 +1902,214 @@ html, body {
     70%  { opacity: 1; }
     100% { opacity: 0; }
 }
+
+/* ── Co-play (synced live playback) ── */
+.overlay-coplay-btn {
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.85);
+    cursor: pointer;
+    width: 34px; height: 34px;
+    min-width: 34px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.overlay-coplay-btn:hover { background: rgba(255,255,255,0.25); color: #fff; }
+.overlay-coplay-btn.active {
+    background: rgba(82, 136, 193, 0.85);
+    border-color: rgba(82, 136, 193, 1);
+    color: #fff;
+}
+
+#coplay-modal {
+    position: fixed; inset: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+}
+#coplay-modal .modal-content {
+    max-width: 380px;
+    max-height: 75vh;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 18px 14px;
+}
+.coplay-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+#coplay-search-wrap { margin-bottom: 8px; }
+#coplay-search {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+}
+#coplay-search:focus { border-color: var(--accent); }
+#coplay-chats {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 12px;
+    min-height: 80px;
+    max-height: 40vh;
+}
+.coplay-chat-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.15s;
+}
+.coplay-chat-item:hover { background: var(--bg-hover); }
+.coplay-chat-item.selected { background: rgba(82, 136, 193, 0.18); }
+.coplay-chat-item .coplay-chat-check {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: transparent;
+    transition: all 0.15s;
+}
+.coplay-chat-item.selected .coplay-chat-check {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.coplay-chat-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--text-primary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+.coplay-chat-title {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.coplay-chats-placeholder {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+#coplay-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+#coplay-start[disabled] { opacity: 0.5; pointer-events: none; }
+
+/* Banners (host + follower) */
+.coplay-banner {
+    position: fixed;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 90;
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 12px 6px 14px;
+    background: rgba(82, 136, 193, 0.95);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+.coplay-banner-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    animation: coplayPulse 1.4s ease-in-out infinite;
+}
+.coplay-banner-text { font-weight: 500; }
+.coplay-banner .text-btn {
+    color: #fff;
+    background: rgba(255,255,255,0.18);
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+.coplay-banner .text-btn:hover { background: rgba(255,255,255,0.3); color: #fff; }
+.coplay-follower-banner { background: rgba(60, 130, 90, 0.95); }
+@keyframes coplayPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* Floating "join co-play" button */
+#coplay-floating-button {
+    position: fixed;
+    right: 16px;
+    bottom: 88px;
+    z-index: 95;
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px 8px 8px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+#coplay-floating-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(0,0,0,0.5);
+}
+.coplay-fab-avatar {
+    position: relative;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: rgba(255,255,255,0.25);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    font-weight: 600;
+}
+.coplay-fab-avatar img { width: 100%; height: 100%; object-fit: cover; display: none; }
+.coplay-fab-avatar img.loaded { display: block; }
+.coplay-fab-avatar img.loaded + #coplay-fab-avatar-fallback { display: none; }
+.coplay-fab-label { white-space: nowrap; }
+.coplay-fab-badge {
+    background: rgba(0,0,0,0.35);
+    color: #fff;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+/* Follower mode: lock down player controls */
+body.coplay-follower #btn-play,
+body.coplay-follower #btn-prev,
+body.coplay-follower #btn-next,
+body.coplay-follower #btn-shuffle,
+body.coplay-follower #btn-repeat,
+body.coplay-follower #btn-add-playing,
+body.coplay-follower #btn-move-playing,
+body.coplay-follower #btn-delete-playing,
+body.coplay-follower #btn-share,
+body.coplay-follower #btn-coplay,
+body.coplay-follower #progress-bar {
+    pointer-events: none;
+    opacity: 0.45;
+}

@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=146">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=146">
-    <link rel="stylesheet" href="style.css?v=146">
+    <link rel="manifest" href="/manifest.json?v=147">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=147">
+    <link rel="stylesheet" href="style.css?v=147">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -201,6 +201,13 @@
                     <button id="btn-share" class="overlay-share-btn" title="Share" style="display:none">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>
                     </button>
+                    <button id="btn-coplay" class="overlay-coplay-btn" title="Co-play" style="display:none">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="9" cy="8" r="3"/>
+                            <path d="M3 20c0-3 2.5-5 6-5s6 2 6 5"/>
+                            <path d="M16.5 9.5l4-2v8a2 2 0 1 1-2-2"/>
+                        </svg>
+                    </button>
                     <button id="btn-add-playing" class="overlay-add-btn" title="Add to playlist">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                     </button>
@@ -266,6 +273,47 @@
             <button id="share-cancel" class="text-btn">Cancel</button>
         </div>
     </div>
+
+    <!-- Co-play picker: select multiple Telegram contacts to listen along live -->
+    <div id="coplay-modal" style="display:none">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3>Start co-play</h3>
+            <p class="coplay-hint">Pick people to listen with. They'll see a button to join in their app.</p>
+            <div id="coplay-search-wrap">
+                <input id="coplay-search" type="text" placeholder="Search contacts…" autocomplete="off">
+            </div>
+            <div id="coplay-chats"></div>
+            <div id="coplay-modal-actions">
+                <button id="coplay-cancel" class="text-btn">Cancel</button>
+                <button id="coplay-start" class="text-btn accent" disabled>Start co-play (0)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Host banner shown while a co-play session is active -->
+    <div id="coplay-host-banner" class="coplay-banner" style="display:none">
+        <span class="coplay-banner-dot"></span>
+        <span class="coplay-banner-text">Co-playing with <span id="coplay-host-count">0</span></span>
+        <button id="coplay-end-btn" class="text-btn">End</button>
+    </div>
+
+    <!-- Follower banner shown while listening to a host -->
+    <div id="coplay-follower-banner" class="coplay-banner coplay-follower-banner" style="display:none">
+        <span class="coplay-banner-dot"></span>
+        <span class="coplay-banner-text">Following <span id="coplay-host-name">…</span></span>
+        <button id="coplay-leave-btn" class="text-btn">Leave</button>
+    </div>
+
+    <!-- Persistent floating button shown when there's a pending co-play invite -->
+    <button id="coplay-floating-button" type="button" style="display:none" title="Join co-play">
+        <span class="coplay-fab-avatar">
+            <img id="coplay-fab-avatar-img" alt="">
+            <span id="coplay-fab-avatar-fallback">?</span>
+        </span>
+        <span class="coplay-fab-label">Join co-play</span>
+        <span id="coplay-fab-badge" class="coplay-fab-badge" style="display:none">+0</span>
+    </button>
 
     <!-- Playlist picker modal -->
     <div id="playlist-modal" style="display:none">
@@ -405,6 +453,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=146"></script>
+    <script src="app.bundle.js?v=147"></script>
 </body>
 </html>

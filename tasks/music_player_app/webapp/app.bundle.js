@@ -68878,7 +68878,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       var common_1 = require_common4();
       var tl_1 = require_tl();
       var Logger_1 = require_Logger();
-      var NewMessage = class extends common_1.EventBuilder {
+      var NewMessage2 = class extends common_1.EventBuilder {
         constructor(newMessageParams = {}) {
           let { chats, func, incoming, outgoing, fromUsers, forwards, pattern, blacklistChats = false } = newMessageParams;
           if (incoming && outgoing) {
@@ -68991,7 +68991,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
         addAttributes(update) {
         }
       };
-      exports.NewMessage = NewMessage;
+      exports.NewMessage = NewMessage2;
       var NewMessageEvent = class extends common_1.EventCommon {
         constructor(message, originalUpdate) {
           super({
@@ -72829,7 +72829,176 @@ ${JSON.stringify(state)}`;
     }
     return null;
   }
-  var import_process3, import_telegram, import_sessions, import_tl, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _lifecycleInstalled, _reconnectPromise, _TAINT, _taintedSenders, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, TRANSLATE_CHUNK, _PART, _PART_TIMEOUT_MS, _CDN_HASH_BLOCK, _MEDIA_DC_KEY, _KEEPALIVE_MS, _PING_TIMEOUT_MS, _keepaliveTimer, _keepaliveActive, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT;
+  function _coplayParse(msg) {
+    if (!msg || !msg.message) return null;
+    const text = msg.message;
+    if (!text.startsWith(COPLAY_MARKER)) return null;
+    const afterMarker = text.slice(COPLAY_MARKER.length);
+    const nl = afterMarker.indexOf("\n");
+    const jsonStr = nl === -1 ? afterMarker : afterMarker.slice(0, nl);
+    let state;
+    try {
+      state = JSON.parse(jsonStr);
+    } catch {
+      return null;
+    }
+    let fromUserId = null;
+    const fromId = msg.fromId;
+    if (fromId) {
+      const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
+      if (raw != null) fromUserId = Number(typeof raw === "bigint" ? raw : raw);
+    }
+    return { state, fromUserId, msgId: msg.id };
+  }
+  async function getUserDisplayName(userId) {
+    if (!userId) return "Someone";
+    try {
+      await _ensureConnected();
+      const ent = await client.getEntity(userId);
+      if (ent) {
+        const first = ent.firstName || "";
+        const last = ent.lastName || "";
+        const name = (first + " " + last).trim();
+        return name || ent.username || "User";
+      }
+    } catch (e) {
+    }
+    return "User";
+  }
+  function coplayBuildMessage(stateJson, invitees) {
+    const head = COPLAY_MARKER + JSON.stringify(stateJson);
+    if (!invitees.length) return { text: head, entities: [] };
+    let line = "\nCo-play with ";
+    const entities = [];
+    let cursor = head.length + line.length;
+    for (let i = 0; i < invitees.length; i++) {
+      const inv = invitees[i];
+      const name = (inv.title || "User").slice(0, 32);
+      const lenU16 = name.length;
+      if (i > 0) {
+        line += ", ";
+        cursor += 2;
+      }
+      line += name;
+      const ent = inv._entity instanceof import_tl.Api.User ? new import_tl.Api.InputMessageEntityMentionName({
+        offset: cursor,
+        length: lenU16,
+        userId: new import_tl.Api.InputUser({
+          userId: inv._entity.id,
+          accessHash: inv._entity.accessHash || import_big_integer.default.zero
+        })
+      }) : null;
+      if (ent) entities.push(ent);
+      cursor += lenU16;
+    }
+    return { text: head + line, entities };
+  }
+  async function coplaySendInvite(stateJson, invitees) {
+    await _ensureConnected();
+    const channel = await findOrCreateShareChannel();
+    const entity = await _getEntity(channel.id);
+    const { text, entities } = coplayBuildMessage(stateJson, invitees);
+    const sent = await client.sendMessage(entity, {
+      message: text,
+      formattingEntities: entities.length ? entities : void 0
+    });
+    return { syncMsgId: sent.id, channelId: channel.id };
+  }
+  async function coplayEditState(channelId, syncMsgId, stateJson, invitees) {
+    await _ensureConnected();
+    const peer = await client.getInputEntity(channelId);
+    const { text, entities } = coplayBuildMessage(stateJson, invitees);
+    await client.invoke(new import_tl.Api.messages.EditMessage({
+      peer,
+      id: syncMsgId,
+      message: text,
+      entities: entities.length ? entities : void 0
+    }));
+  }
+  async function coplayDelete(channelId, syncMsgId) {
+    await _ensureConnected();
+    const entity = await _getEntity(channelId);
+    try {
+      await client.deleteMessages(entity, [syncMsgId], { revoke: true });
+    } catch (e) {
+      console.warn("coplayDelete failed:", e?.message || e);
+    }
+  }
+  async function coplayFetch(channelId, syncMsgId) {
+    await _ensureConnected();
+    const entity = await _getEntity(channelId);
+    const msgs = await client.getMessages(entity, { ids: [syncMsgId] });
+    const msg = msgs[0];
+    if (!msg || msg.className === "MessageEmpty") return null;
+    const parsed = _coplayParse(msg);
+    if (!parsed) return null;
+    return { ...parsed, fetchedWallSec: Date.now() / 1e3, raw: msg };
+  }
+  async function coplayCatchupMentions() {
+    await _ensureConnected();
+    const channel = await findOrCreateShareChannel();
+    const entity = await _getEntity(channel.id);
+    let result;
+    try {
+      result = await client.invoke(new import_tl.Api.messages.GetUnreadMentions({
+        peer: entity,
+        offsetId: 0,
+        addOffset: 0,
+        limit: 20,
+        maxId: 0,
+        minId: 0
+      }));
+    } catch (e) {
+      console.warn("coplayCatchupMentions failed:", e?.message || e);
+      return [];
+    }
+    const out = [];
+    for (const msg of result.messages || []) {
+      const parsed = _coplayParse(msg);
+      if (parsed) out.push({ ...parsed, channelId: channel.id });
+    }
+    return out;
+  }
+  async function installCoplayInviteListener(callback) {
+    if (_coplayInviteHandlerInstalled) return;
+    await _ensureConnected();
+    const channel = await findOrCreateShareChannel();
+    const entity = await _getEntity(channel.id);
+    const handler = async (event) => {
+      const msg = event.message;
+      if (!msg || !msg.mentioned) return;
+      const parsed = _coplayParse(msg);
+      if (!parsed) return;
+      try {
+        callback({ ...parsed, channelId: channel.id });
+      } catch (e) {
+        console.warn("coplay invite cb threw:", e?.message || e);
+      }
+    };
+    client.addEventHandler(handler, new import_events.NewMessage({ chats: [entity] }));
+    _coplayInviteHandlerInstalled = true;
+  }
+  function getCachedUserEntity(userId) {
+    return _groupsCache[userId] || null;
+  }
+  async function coplayGetUserAvatarUrl(userId) {
+    if (_coplayAvatarCache.has(userId)) return _coplayAvatarCache.get(userId);
+    await _ensureConnected();
+    let url = null;
+    try {
+      const entity = await client.getEntity(userId);
+      const buf = await client.downloadProfilePhoto(entity, { isBig: false });
+      if (buf && buf.length) {
+        const blob = new Blob([buf], { type: "image/jpeg" });
+        url = URL.createObjectURL(blob);
+      }
+    } catch (e) {
+      console.warn("coplayGetUserAvatarUrl failed for", userId, e?.message || e);
+    }
+    _coplayAvatarCache.set(userId, url);
+    return url;
+  }
+  var import_process3, import_telegram, import_sessions, import_tl, import_events, import_buffer, import_big_integer, API_ID, API_HASH, SESSION_KEY, client, _groupsCache, _topicsCache, _tracksCache, _msgCache, _blobCache, _thumbBlobCache, _drainGeneration, TRACKS_STORE, _trackKey, _downloadedRecords, ready, _initPromise, _lifecycleInstalled, _reconnectPromise, _TAINT, _taintedSenders, CACHED_USER_KEY, _phoneCodeHash, PAGE_SIZE, _totalCountCache, TRANSLATE_CHUNK, _PART, _PART_TIMEOUT_MS, _CDN_HASH_BLOCK, _MEDIA_DC_KEY, _KEEPALIVE_MS, _PING_TIMEOUT_MS, _keepaliveTimer, _keepaliveActive, SHARE_CHANNEL_USERNAME, SHARE_CHANNEL_TITLE, SEARCH_BOTS, _dlCache, SYNC_MSG_KEY, NP_TOKEN_KEY, NP_SALT, COPLAY_MARKER, _coplayInviteHandlerInstalled, _coplayAvatarCache;
   var init_telegram = __esm({
     "src/telegram.js"() {
       init_define_process_env();
@@ -72837,6 +73006,7 @@ ${JSON.stringify(state)}`;
       import_telegram = __toESM(require_telegram());
       import_sessions = __toESM(require_sessions());
       import_tl = __toESM(require_tl());
+      import_events = __toESM(require_events2());
       import_buffer = __toESM(require_buffer());
       import_big_integer = __toESM(require_BigInteger());
       init_idb_cache();
@@ -72900,6 +73070,9 @@ ${JSON.stringify(state)}`;
       SYNC_MSG_KEY = "sync_msg_id";
       NP_TOKEN_KEY = "np_token";
       NP_SALT = "musicplayer-np-v1";
+      COPLAY_MARKER = "[telemusic-coplay-v1] ";
+      _coplayInviteHandlerInstalled = false;
+      _coplayAvatarCache = /* @__PURE__ */ new Map();
     }
   });
 
@@ -83033,6 +83206,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         $("btn-add-playing").style.display = "flex";
         $("btn-move-playing").style.display = "flex";
         $("btn-share").style.display = "flex";
+        $("btn-coplay").style.display = "flex";
       }
       function updateSidebarHighlight() {
         document.querySelectorAll(".track-item").forEach((el) => {
@@ -83159,6 +83333,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         fetchLyricsForTrack(track, gen);
         fetchArtworkForTrack(track, gen);
         _broadcastState("state");
+        _coplayBroadcast();
         try {
           if (preloaded) {
             console.log("[player] preloaded \u2192", track.title);
@@ -84486,6 +84661,460 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && shareModal.style.display === "flex") _closeShareDialog();
       });
+      var COPLAY_HOST_KEY = "coplay_host_msg";
+      var COPLAY_POLL_MS = 1500;
+      var COPLAY_DRIFT_MAX_SEC = 0.5;
+      var btnCoplay = $("btn-coplay");
+      var coplayModal = $("coplay-modal");
+      var coplaySearchInput = $("coplay-search");
+      var coplayChatsEl = $("coplay-chats");
+      var coplayCancelBtn = $("coplay-cancel");
+      var coplayStartBtn = $("coplay-start");
+      var coplayHostBanner = $("coplay-host-banner");
+      var coplayHostCountEl = $("coplay-host-count");
+      var coplayEndBtn = $("coplay-end-btn");
+      var coplayFollowerBanner = $("coplay-follower-banner");
+      var coplayHostNameEl = $("coplay-host-name");
+      var coplayLeaveBtn = $("coplay-leave-btn");
+      var coplayFab = $("coplay-floating-button");
+      var coplayFabAvatarImg = $("coplay-fab-avatar-img");
+      var coplayFabAvatarFallback = $("coplay-fab-avatar-fallback");
+      var coplayFabBadge = $("coplay-fab-badge");
+      var _coplaySession = null;
+      var _coplayInviteList = [];
+      var _coplayChatsCache = [];
+      var _pendingInvites = /* @__PURE__ */ new Map();
+      var _coplayLastTrackEnsureKey = null;
+      function _coplayCurrentTrack() {
+        if (currentTrackIndex < 0 || currentTrackIndex >= playerTracks.length) return null;
+        return playerTracks[currentTrackIndex];
+      }
+      function _coplayBuildState(trackMsgIdInChannel) {
+        const t = _coplayCurrentTrack();
+        return {
+          v: 1,
+          playing: !audio.paused,
+          pos: Math.max(0, audio.currentTime || 0),
+          track: t ? {
+            i: trackMsgIdInChannel,
+            t: t.title || "",
+            a: t.artist || "",
+            d: t.duration || 0
+          } : null
+        };
+      }
+      async function _coplayEnsureTrackInChannel() {
+        const t = _coplayCurrentTrack();
+        if (!t || !playerGroupId) return null;
+        const key = `${playerGroupId}:${t.id}`;
+        let mid = localStorage.getItem(`share_${playerGroupId}_${t.id}`);
+        if (mid) return parseInt(mid, 10);
+        if (_coplayLastTrackEnsureKey === key) return null;
+        _coplayLastTrackEnsureKey = key;
+        try {
+          const channelId = parseInt(localStorage.getItem("share_channel_id") || "0", 10);
+          if (!channelId) {
+            const channel = await findOrCreateShareChannel();
+            localStorage.setItem("share_channel_id", String(channel.id));
+            muteChat(channel.id);
+            archiveChat(channel.id);
+          }
+          const shareChannelId = parseInt(localStorage.getItem("share_channel_id"), 10);
+          const { link } = await shareTrack(shareChannelId, playerGroupId, t.id);
+          const newId = parseInt(link.split("/").pop(), 10);
+          localStorage.setItem(`share_${playerGroupId}_${t.id}`, String(newId));
+          return newId;
+        } catch (e) {
+          console.warn("[coplay] forward to share channel failed:", e?.message || e);
+          return null;
+        } finally {
+          if (_coplayLastTrackEnsureKey === key) _coplayLastTrackEnsureKey = null;
+        }
+      }
+      async function _coplayBroadcast() {
+        const s = _coplaySession;
+        if (!s || s.role !== "host") return;
+        if (s.broadcastInflight) {
+          s.broadcastQueued = true;
+          return;
+        }
+        s.broadcastInflight = true;
+        try {
+          do {
+            s.broadcastQueued = false;
+            const trackMsgId = await _coplayEnsureTrackInChannel();
+            const state = _coplayBuildState(trackMsgId);
+            await coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
+          } while (s.broadcastQueued && _coplaySession === s);
+        } catch (e) {
+          console.warn("[coplay] broadcast failed:", e?.message || e);
+        } finally {
+          s.broadcastInflight = false;
+        }
+      }
+      async function _coplayOpenPicker() {
+        if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+        if (_coplaySession) {
+          showToast("Already in a co-play session");
+          return;
+        }
+        _coplayInviteList = [];
+        _coplayUpdateStartButton();
+        coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Loading contacts\u2026</div>';
+        coplaySearchInput.value = "";
+        coplayModal.style.display = "flex";
+        try {
+          const all = await listChatsForShare(80);
+          _coplayChatsCache = all.filter((c) => c.kind === "user");
+          _coplayRenderChats("");
+        } catch (e) {
+          console.error("[coplay] list chats failed:", e);
+          coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Failed to load contacts</div>';
+        }
+      }
+      function _coplayCloseModal() {
+        coplayModal.style.display = "none";
+        coplayChatsEl.innerHTML = "";
+        coplaySearchInput.value = "";
+        _coplayInviteList = [];
+      }
+      function _coplayRenderChats(filter) {
+        const q = (filter || "").trim().toLowerCase();
+        const list = q ? _coplayChatsCache.filter((c) => c.title.toLowerCase().includes(q)) : _coplayChatsCache;
+        coplayChatsEl.innerHTML = "";
+        if (list.length === 0) {
+          coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">No contacts found</div>';
+          return;
+        }
+        for (const chat of list) {
+          const selected = _coplayInviteList.find((c) => c.id === chat.id);
+          const el = document.createElement("div");
+          el.className = "coplay-chat-item" + (selected ? " selected" : "");
+          const initial = (chat.title.trim()[0] || "?").toUpperCase();
+          el.innerHTML = `
+            <div class="coplay-chat-check">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="coplay-chat-avatar">${escapeHtml(initial)}</div>
+            <div class="coplay-chat-title">${escapeHtml(chat.title)}</div>
+        `;
+          el.addEventListener("click", () => _coplayToggleSelect(chat, el));
+          coplayChatsEl.appendChild(el);
+        }
+      }
+      function _coplayToggleSelect(chat, el) {
+        const idx = _coplayInviteList.findIndex((c) => c.id === chat.id);
+        if (idx >= 0) {
+          _coplayInviteList.splice(idx, 1);
+          el.classList.remove("selected");
+        } else {
+          _coplayInviteList.push(chat);
+          el.classList.add("selected");
+        }
+        _coplayUpdateStartButton();
+      }
+      function _coplayUpdateStartButton() {
+        const n = _coplayInviteList.length;
+        coplayStartBtn.textContent = `Start co-play (${n})`;
+        coplayStartBtn.disabled = n === 0;
+      }
+      async function _coplayStartHost() {
+        if (_coplayInviteList.length === 0) return;
+        const t = _coplayCurrentTrack();
+        if (!t) return;
+        coplayStartBtn.disabled = true;
+        coplayStartBtn.textContent = "Starting\u2026";
+        try {
+          const channelId = parseInt(localStorage.getItem("share_channel_id") || "0", 10) || (await findOrCreateShareChannel()).id;
+          if (!localStorage.getItem("share_channel_id")) localStorage.setItem("share_channel_id", String(channelId));
+          let trackMsgId = parseInt(localStorage.getItem(`share_${playerGroupId}_${t.id}`) || "0", 10);
+          if (!trackMsgId) {
+            const { link } = await shareTrack(channelId, playerGroupId, t.id);
+            trackMsgId = parseInt(link.split("/").pop(), 10);
+            localStorage.setItem(`share_${playerGroupId}_${t.id}`, String(trackMsgId));
+          }
+          const invitees = _coplayInviteList.map((c) => ({
+            id: c.id,
+            title: c.title,
+            _entity: getCachedUserEntity(c.id)
+          })).filter((i) => i._entity);
+          if (invitees.length === 0) {
+            showToast("Could not resolve contacts");
+            coplayStartBtn.disabled = false;
+            _coplayUpdateStartButton();
+            return;
+          }
+          const initialState = {
+            v: 1,
+            playing: !audio.paused,
+            pos: Math.max(0, audio.currentTime || 0),
+            track: { i: trackMsgId, t: t.title || "", a: t.artist || "", d: t.duration || 0 }
+          };
+          const { syncMsgId } = await coplaySendInvite(initialState, invitees);
+          _coplaySession = {
+            role: "host",
+            syncMsgId,
+            channelId,
+            hostUserId: null,
+            hostName: null,
+            lastFetchWallSec: 0,
+            pollHandle: null,
+            broadcastInflight: false,
+            broadcastQueued: false,
+            invitees
+          };
+          localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
+          _coplayShowHostBanner(invitees.length);
+          btnCoplay.classList.add("active");
+          _coplayCloseModal();
+          showToast(`Co-playing with ${invitees.length}`);
+        } catch (e) {
+          console.error("[coplay] start failed:", e);
+          showToast("Failed to start co-play");
+          coplayStartBtn.disabled = false;
+          _coplayUpdateStartButton();
+        }
+      }
+      function _coplayShowHostBanner(count) {
+        coplayHostCountEl.textContent = String(count);
+        coplayHostBanner.style.display = "flex";
+      }
+      function _coplayHideHostBanner() {
+        coplayHostBanner.style.display = "none";
+        btnCoplay.classList.remove("active");
+      }
+      async function _coplayEndHost(opts = {}) {
+        const s = _coplaySession;
+        if (!s || s.role !== "host") return;
+        _coplaySession = null;
+        _coplayHideHostBanner();
+        localStorage.removeItem(COPLAY_HOST_KEY);
+        try {
+          await coplayDelete(s.channelId, s.syncMsgId);
+        } catch (e) {
+        }
+        if (!opts.silent) showToast("Co-play ended");
+      }
+      async function _coplayHandleIncomingInvite(parsed) {
+        if (!parsed || !parsed.msgId) return;
+        if (_coplaySession) return;
+        if (_pendingInvites.has(parsed.msgId)) return;
+        _pendingInvites.set(parsed.msgId, {
+          hostId: parsed.fromUserId,
+          hostName: "Someone",
+          hostAvatarUrl: null,
+          channelId: parsed.channelId,
+          addedAt: Date.now()
+        });
+        _coplayRenderFloatingButton();
+        if (parsed.fromUserId) {
+          try {
+            const name = await getUserDisplayName(parsed.fromUserId);
+            const info = _pendingInvites.get(parsed.msgId);
+            if (info) info.hostName = name;
+          } catch {
+          }
+          try {
+            const url = await coplayGetUserAvatarUrl(parsed.fromUserId);
+            const info = _pendingInvites.get(parsed.msgId);
+            if (info) info.hostAvatarUrl = url;
+          } catch {
+          }
+          if (_pendingInvites.has(parsed.msgId)) _coplayRenderFloatingButton();
+        }
+      }
+      function _coplayRenderFloatingButton() {
+        if (_pendingInvites.size === 0 || _coplaySession) {
+          coplayFab.style.display = "none";
+          return;
+        }
+        let latest = null;
+        for (const [msgId2, info2] of _pendingInvites.entries()) {
+          if (!latest || info2.addedAt > latest.info.addedAt) latest = { msgId: msgId2, info: info2 };
+        }
+        if (!latest) {
+          coplayFab.style.display = "none";
+          return;
+        }
+        const { msgId, info } = latest;
+        coplayFab.dataset.msgId = String(msgId);
+        coplayFab.dataset.channelId = String(info.channelId);
+        if (info.hostAvatarUrl) {
+          coplayFabAvatarImg.src = info.hostAvatarUrl;
+          coplayFabAvatarImg.classList.add("loaded");
+          coplayFabAvatarFallback.style.display = "none";
+        } else {
+          coplayFabAvatarImg.classList.remove("loaded");
+          coplayFabAvatarFallback.textContent = (info.hostName.trim()[0] || "?").toUpperCase();
+          coplayFabAvatarFallback.style.display = "flex";
+        }
+        coplayFab.querySelector(".coplay-fab-label").textContent = `Join ${info.hostName}`;
+        if (_pendingInvites.size > 1) {
+          coplayFabBadge.textContent = `+${_pendingInvites.size - 1}`;
+          coplayFabBadge.style.display = "inline-block";
+        } else {
+          coplayFabBadge.style.display = "none";
+        }
+        coplayFab.style.display = "inline-flex";
+      }
+      async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
+        if (_coplaySession) return;
+        coplayFab.style.display = "none";
+        document.body.classList.add("coplay-follower");
+        coplayFollowerBanner.style.display = "flex";
+        coplayHostNameEl.textContent = hintHostName || "host";
+        _coplaySession = {
+          role: "follower",
+          syncMsgId,
+          channelId,
+          hostUserId: null,
+          hostName: hintHostName || null,
+          lastFetchWallSec: 0,
+          pollHandle: null,
+          broadcastInflight: false,
+          broadcastQueued: false,
+          invitees: null,
+          lastTrackKey: null
+        };
+        showToast("Joining co-play\u2026");
+        await _coplayPollTick(true);
+        _coplaySession.pollHandle = setInterval(_coplayPollTick, COPLAY_POLL_MS);
+      }
+      function _coplayLeaveFollower(reason) {
+        const s = _coplaySession;
+        if (!s || s.role !== "follower") return;
+        if (s.pollHandle) clearInterval(s.pollHandle);
+        _coplaySession = null;
+        document.body.classList.remove("coplay-follower");
+        coplayFollowerBanner.style.display = "none";
+        if (reason === "ended") {
+          showToast("Co-play ended");
+        } else if (reason === "left") {
+          showToast("Left co-play");
+        }
+        _coplayRenderFloatingButton();
+      }
+      async function _coplayPollTick(initial) {
+        const s = _coplaySession;
+        if (!s || s.role !== "follower") return;
+        let res;
+        try {
+          res = await coplayFetch(s.channelId, s.syncMsgId);
+        } catch (e) {
+          console.warn("[coplay] poll fetch failed:", e?.message || e);
+          return;
+        }
+        if (!res) {
+          _pendingInvites.delete(s.syncMsgId);
+          _coplayLeaveFollower("ended");
+          return;
+        }
+        s.lastFetchWallSec = res.fetchedWallSec;
+        if (res.fromUserId && !s.hostUserId) {
+          s.hostUserId = res.fromUserId;
+          if (!s.hostName) {
+            getUserDisplayName(res.fromUserId).then((name) => {
+              if (_coplaySession === s) {
+                s.hostName = name;
+                coplayHostNameEl.textContent = name;
+              }
+            }).catch(() => {
+            });
+          }
+        }
+        const state = res.state;
+        if (!state || !state.track) return;
+        const trackKey = `${s.channelId}:${state.track.i}`;
+        if (s.lastTrackKey !== trackKey) {
+          s.lastTrackKey = trackKey;
+          try {
+            const { track, groupId } = await resolveShareLink(state.track.i);
+            _pendingSeekTime = Math.max(0, state.pos || 0);
+            _pendingSeekTrackId = track.id;
+            startPlayback([track], groupId, null, 0, false);
+          } catch (e) {
+            console.warn("[coplay] resolve track failed:", e?.message || e);
+          }
+          return;
+        }
+        const elapsed = Date.now() / 1e3 - res.fetchedWallSec;
+        const expected = (state.pos || 0) + (state.playing ? elapsed : 0);
+        if (audio.duration && Math.abs(audio.currentTime - expected) > COPLAY_DRIFT_MAX_SEC) {
+          try {
+            audio.currentTime = Math.max(0, Math.min(audio.duration, expected));
+          } catch {
+          }
+        }
+        if (state.playing && audio.paused) {
+          audio.play().catch(() => {
+          });
+        } else if (!state.playing && !audio.paused) {
+          audio.pause();
+        }
+      }
+      async function _coplayInstallListenerAndCatchUp() {
+        try {
+          await installCoplayInviteListener(_coplayHandleIncomingInvite);
+        } catch (e) {
+          console.warn("[coplay] install listener failed:", e?.message || e);
+        }
+        try {
+          const pending = await coplayCatchupMentions();
+          for (const p of pending) await _coplayHandleIncomingInvite(p);
+        } catch (e) {
+          console.warn("[coplay] catch-up failed:", e?.message || e);
+        }
+      }
+      async function _coplayBootSweep() {
+        const raw = localStorage.getItem(COPLAY_HOST_KEY);
+        if (!raw) return;
+        let saved;
+        try {
+          saved = JSON.parse(raw);
+        } catch {
+          localStorage.removeItem(COPLAY_HOST_KEY);
+          return;
+        }
+        if (!saved?.syncMsgId || !saved?.channelId) {
+          localStorage.removeItem(COPLAY_HOST_KEY);
+          return;
+        }
+        try {
+          await coplayDelete(saved.channelId, saved.syncMsgId);
+        } catch {
+        }
+        localStorage.removeItem(COPLAY_HOST_KEY);
+      }
+      audio.addEventListener("play", _coplayBroadcast);
+      audio.addEventListener("pause", _coplayBroadcast);
+      audio.addEventListener("seeked", _coplayBroadcast);
+      btnCoplay.addEventListener("click", _coplayOpenPicker);
+      coplayCancelBtn.addEventListener("click", _coplayCloseModal);
+      coplayModal.querySelector(".modal-backdrop")?.addEventListener("click", _coplayCloseModal);
+      coplaySearchInput.addEventListener("input", (e) => _coplayRenderChats(e.target.value));
+      coplayStartBtn.addEventListener("click", _coplayStartHost);
+      coplayEndBtn.addEventListener("click", () => _coplayEndHost());
+      coplayLeaveBtn.addEventListener("click", () => _coplayLeaveFollower("left"));
+      coplayFab.addEventListener("click", () => {
+        const msgId = parseInt(coplayFab.dataset.msgId || "0", 10);
+        const channelId = parseInt(coplayFab.dataset.channelId || "0", 10);
+        if (!msgId || !channelId) return;
+        const info = _pendingInvites.get(msgId);
+        _pendingInvites.delete(msgId);
+        _coplayEnterFollower(msgId, channelId, info?.hostName);
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && coplayModal.style.display === "flex") _coplayCloseModal();
+      });
+      window.addEventListener("pagehide", () => {
+        const s = _coplaySession;
+        if (s && s.role === "host") {
+          try {
+            coplayDelete(s.channelId, s.syncMsgId);
+          } catch {
+          }
+        }
+      });
       btnSleepTimer.addEventListener("click", () => {
         sleepSheet.querySelectorAll(".sleep-option").forEach((btn) => {
           btn.classList.remove("selected");
@@ -84789,6 +85418,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             $("btn-add-playing").style.display = "flex";
             $("btn-move-playing").style.display = "flex";
             $("btn-share").style.display = "flex";
+            $("btn-coplay").style.display = "flex";
           }
           if (!s.playerGroupId || !s.currentTrackId) {
             if (playlistGroupId) {
@@ -85083,6 +85713,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const trackCode = params.get("track");
         const sharedTime = parseInt(params.get("t") || "0", 10);
         const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : null;
+        const coplayCode = params.get("coplay");
+        const coplayMsgId = coplayCode ? _decodeTrackId(coplayCode) : null;
         if (sharedMsgId) {
           history.replaceState(null, "", window.location.pathname);
           try {
@@ -85101,6 +85733,19 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             showToast("Failed to load shared track");
           }
         }
+        _coplayBootSweep().catch(() => {
+        });
+        if (coplayMsgId) {
+          history.replaceState(null, "", window.location.pathname);
+          try {
+            const channel = await findOrCreateShareChannel();
+            await _coplayEnterFollower(coplayMsgId, channel.id, null);
+          } catch (e) {
+            console.warn("coplay deeplink failed:", e);
+          }
+        }
+        _coplayInstallListenerAndCatchUp().catch(() => {
+        });
       }
       var _deferredInstallPrompt = null;
       var installBanner = $("install-banner");
