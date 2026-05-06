@@ -2782,40 +2782,34 @@ function _coplayMakeDraggable(el, opts = {}) {
     el.classList.add('coplay-draggable');
 
     // Cumulative drag offset from the element's natural position,
-    // expressed in viewport pixels (i.e. matches the values for
-    // `transform: translate(x, y)`).
+    // expressed in viewport pixels.
     let offX = 0, offY = 0;
 
-    // The element's CSS-defined transform (e.g. the banner has
-    // translateX(-50%) for centering). We compose our drag translate
-    // *after* it so dragging an offset of (0,0) leaves the element
-    // exactly where the stylesheet placed it. Captured lazily on
-    // first apply() so it sees the value the stylesheet actually
-    // resolved to.
-    let cssTransform = null;
+    // Caller specifies the literal CSS transform prefix to keep on
+    // the element (e.g. 'translateX(-50%)' for banner centering).
+    // Passed verbatim — '%' stays a '%' so the browser re-resolves
+    // it as the element's width changes (chips added/removed). Empty
+    // string means no preamble (used by the FAB which is anchored
+    // via right/bottom and needs no transform of its own).
+    const prefix = opts.cssTransformPrefix || '';
 
-    const apply = () => {
-        if (cssTransform === null) {
-            const prev = el.style.transform;
-            el.style.transform = '';
-            const computed = window.getComputedStyle(el).transform;
-            cssTransform = (computed && computed !== 'none') ? computed : '';
-            el.style.transform = prev;
+    const apply = (clamp) => {
+        if (clamp) {
+            // Measure with prefix only so we can compute the natural
+            // (un-dragged) rect and clamp the offset to viewport.
+            el.style.transform = prefix;
+            const natural = el.getBoundingClientRect();
+            const w = natural.width;
+            const h = natural.height;
+            const minOX = 4 - natural.left;
+            const maxOX = (window.innerWidth - w - 4) - natural.left;
+            const minOY = 4 - natural.top;
+            const maxOY = (window.innerHeight - h - 4) - natural.top;
+            if (Number.isFinite(maxOX) && maxOX >= minOX) offX = Math.min(maxOX, Math.max(minOX, offX));
+            if (Number.isFinite(maxOY) && maxOY >= minOY) offY = Math.min(maxOY, Math.max(minOY, offY));
         }
-        // Measure with only the CSS transform applied so we know the
-        // natural position to clamp against.
-        el.style.transform = cssTransform;
-        const natural = el.getBoundingClientRect();
-        const w = natural.width;
-        const h = natural.height;
-        const minOX = 4 - natural.left;
-        const maxOX = (window.innerWidth - w - 4) - natural.left;
-        const minOY = 4 - natural.top;
-        const maxOY = (window.innerHeight - h - 4) - natural.top;
-        if (Number.isFinite(maxOX) && maxOX >= minOX) offX = Math.min(maxOX, Math.max(minOX, offX));
-        if (Number.isFinite(maxOY) && maxOY >= minOY) offY = Math.min(maxOY, Math.max(minOY, offY));
         const drag = `translate(${offX}px, ${offY}px)`;
-        el.style.transform = cssTransform ? `${cssTransform} ${drag}` : drag;
+        el.style.transform = prefix ? `${prefix} ${drag}` : drag;
     };
 
     const restore = () => {
@@ -2825,7 +2819,7 @@ function _coplayMakeDraggable(el, opts = {}) {
             if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) {
                 offX = v.x;
                 offY = v.y;
-                apply();
+                apply(true); // clamp on restore so old offsets snap back into view
             }
         } catch {}
     };
@@ -2855,7 +2849,11 @@ function _coplayMakeDraggable(el, opts = {}) {
         if (dragging) {
             offX = baseOffX + dx;
             offY = baseOffY + dy;
-            apply();
+            // Don't clamp during drag — the FAB anchors to right/bottom
+            // so the right/down clamps lock at ~12 px and ~84 px and the
+            // user feels the element refuse to follow their finger. Let
+            // it slide freely; we clamp on release.
+            apply(false);
             if (prevent) prevent();
         }
     };
@@ -2866,6 +2864,7 @@ function _coplayMakeDraggable(el, opts = {}) {
         dragging = false;
         if (wasDragged) {
             el.classList.remove('dragging');
+            apply(true); // clamp the final position back into the viewport
             if (storageKey) {
                 try { localStorage.setItem(storageKey, JSON.stringify({ x: offX, y: offY })); } catch {}
             }
@@ -2905,12 +2904,7 @@ function _coplayMakeDraggable(el, opts = {}) {
     document.addEventListener('touchcancel', finish);
 
     // Re-clamp on resize so a drag from yesterday isn't stranded.
-    window.addEventListener('resize', () => {
-        if (el.style.left) {
-            const r = el.getBoundingClientRect();
-            apply(r.left, r.top);
-        }
-    });
+    window.addEventListener('resize', () => apply(true));
     // Re-apply persisted position whenever the element transitions
     // from display:none → visible. Filtering on a transition (instead
     // of "is currently visible") is critical: apply() itself writes
@@ -3657,9 +3651,20 @@ function _coplayFabTap() {
 //   - Banners: drag from the dot / chips / empty space; the End / Leave
 //     button keeps its native click (skipSelector excludes it from drag).
 //   - FAB: any tap → join the co-play; any drag → reposition.
-_coplayMakeDraggable(coplayHostBanner, { storageKey: 'coplay_pos_host', skipSelector: '.text-btn' });
-_coplayMakeDraggable(coplayFollowerBanner, { storageKey: 'coplay_pos_follower', skipSelector: '.text-btn' });
-_coplayMakeDraggable(coplayFab, { storageKey: 'coplay_pos_fab', onTap: _coplayFabTap });
+_coplayMakeDraggable(coplayHostBanner, {
+    storageKey: 'coplay_pos_host',
+    skipSelector: '.text-btn',
+    cssTransformPrefix: 'translateX(-50%)',
+});
+_coplayMakeDraggable(coplayFollowerBanner, {
+    storageKey: 'coplay_pos_follower',
+    skipSelector: '.text-btn',
+    cssTransformPrefix: 'translateX(-50%)',
+});
+_coplayMakeDraggable(coplayFab, {
+    storageKey: 'coplay_pos_fab',
+    onTap: _coplayFabTap,
+});
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && coplayModal.style.display === 'flex') _coplayCloseModal();
 });

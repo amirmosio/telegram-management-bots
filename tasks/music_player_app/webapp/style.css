@@ -2258,6 +2258,10 @@ html, body {
 #coplay-floating-button.coplay-draggable.dragging {
     cursor: grabbing;
     box-shadow: 0 10px 26px rgba(0,0,0,0.55);
+    /* The base FAB rule has `transition: transform 0.15s` for the
+       hover bounce; that interpolation makes drag updates lag the
+       cursor. Snap-update during drag. */
+    transition: none;
 }
 
 @keyframes coplayPulse {

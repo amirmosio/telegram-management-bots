@@ -86079,27 +86079,22 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const { storageKey, skipSelector = null, onTap = null } = opts;
         el.classList.add("coplay-draggable");
         let offX = 0, offY = 0;
-        let cssTransform = null;
-        const apply = () => {
-          if (cssTransform === null) {
-            const prev = el.style.transform;
-            el.style.transform = "";
-            const computed = window.getComputedStyle(el).transform;
-            cssTransform = computed && computed !== "none" ? computed : "";
-            el.style.transform = prev;
+        const prefix = opts.cssTransformPrefix || "";
+        const apply = (clamp) => {
+          if (clamp) {
+            el.style.transform = prefix;
+            const natural = el.getBoundingClientRect();
+            const w = natural.width;
+            const h = natural.height;
+            const minOX = 4 - natural.left;
+            const maxOX = window.innerWidth - w - 4 - natural.left;
+            const minOY = 4 - natural.top;
+            const maxOY = window.innerHeight - h - 4 - natural.top;
+            if (Number.isFinite(maxOX) && maxOX >= minOX) offX = Math.min(maxOX, Math.max(minOX, offX));
+            if (Number.isFinite(maxOY) && maxOY >= minOY) offY = Math.min(maxOY, Math.max(minOY, offY));
           }
-          el.style.transform = cssTransform;
-          const natural = el.getBoundingClientRect();
-          const w = natural.width;
-          const h = natural.height;
-          const minOX = 4 - natural.left;
-          const maxOX = window.innerWidth - w - 4 - natural.left;
-          const minOY = 4 - natural.top;
-          const maxOY = window.innerHeight - h - 4 - natural.top;
-          if (Number.isFinite(maxOX) && maxOX >= minOX) offX = Math.min(maxOX, Math.max(minOX, offX));
-          if (Number.isFinite(maxOY) && maxOY >= minOY) offY = Math.min(maxOY, Math.max(minOY, offY));
           const drag = `translate(${offX}px, ${offY}px)`;
-          el.style.transform = cssTransform ? `${cssTransform} ${drag}` : drag;
+          el.style.transform = prefix ? `${prefix} ${drag}` : drag;
         };
         const restore = () => {
           if (!storageKey) return;
@@ -86108,7 +86103,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) {
               offX = v.x;
               offY = v.y;
-              apply();
+              apply(true);
             }
           } catch {
           }
@@ -86137,7 +86132,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           if (dragging) {
             offX = baseOffX + dx;
             offY = baseOffY + dy;
-            apply();
+            apply(false);
             if (prevent) prevent();
           }
         };
@@ -86148,6 +86143,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           dragging = false;
           if (wasDragged) {
             el.classList.remove("dragging");
+            apply(true);
             if (storageKey) {
               try {
                 localStorage.setItem(storageKey, JSON.stringify({ x: offX, y: offY }));
@@ -86184,12 +86180,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }, { passive: false });
         document.addEventListener("touchend", finish);
         document.addEventListener("touchcancel", finish);
-        window.addEventListener("resize", () => {
-          if (el.style.left) {
-            const r = el.getBoundingClientRect();
-            apply(r.left, r.top);
-          }
-        });
+        window.addEventListener("resize", () => apply(true));
         let lastDisplay = el.style.display;
         new MutationObserver(() => {
           const cur = el.style.display;
@@ -86812,9 +86803,20 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _pendingInvites.delete(msgId);
         _coplayEnterFollower(msgId, channelId, info?.hostName);
       }
-      _coplayMakeDraggable(coplayHostBanner, { storageKey: "coplay_pos_host", skipSelector: ".text-btn" });
-      _coplayMakeDraggable(coplayFollowerBanner, { storageKey: "coplay_pos_follower", skipSelector: ".text-btn" });
-      _coplayMakeDraggable(coplayFab, { storageKey: "coplay_pos_fab", onTap: _coplayFabTap });
+      _coplayMakeDraggable(coplayHostBanner, {
+        storageKey: "coplay_pos_host",
+        skipSelector: ".text-btn",
+        cssTransformPrefix: "translateX(-50%)"
+      });
+      _coplayMakeDraggable(coplayFollowerBanner, {
+        storageKey: "coplay_pos_follower",
+        skipSelector: ".text-btn",
+        cssTransformPrefix: "translateX(-50%)"
+      });
+      _coplayMakeDraggable(coplayFab, {
+        storageKey: "coplay_pos_fab",
+        onTap: _coplayFabTap
+      });
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && coplayModal.style.display === "flex") _coplayCloseModal();
       });
