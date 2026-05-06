@@ -5141,11 +5141,16 @@ window.addEventListener('resize', () => {
 // ════════════════════════════════════════════════════════════════════
 //  PIANO MODE — Synthesia-style falling-notes tutorial
 // ────────────────────────────────────────────────────────────────────
-//  Audio→MIDI transcription via Spotify basic-pitch (TF.js, lazy-loaded
-//  from jsdelivr on first entry). Notes cached per-track in IDB.
-//  Render: 2D canvas. NO Web Audio routing of the playing audio element
-//  — we only read audio.currentTime each frame, so iOS lock-screen
-//  playback is unaffected (preserves the v=132 invariant).
+//  Audio→MIDI transcription via Magenta Onsets & Frames (TF.js,
+//  lazy-loaded from esm.sh on first entry). Onsets & Frames is a
+//  piano-trained model that consistently scores higher onset F1 on
+//  MAESTRO than basic-pitch and produces noticeably fewer phantom
+//  notes on solo piano material. Notes cached per-track in IDB.
+//  Render: 2D canvas. NO Web Audio routing of the playing audio
+//  element — we only read audio.currentTime each frame, so iOS
+//  lock-screen playback is unaffected (preserves the v=132 invariant).
+//  Magenta does its own resampling via OfflineAudioContext — it never
+//  touches the live audio element.
 //
 //  Quality is honest only on solo / lead piano tracks. Full mixes will
 //  produce noisy transcriptions; we surface a warning footer when the
@@ -5170,7 +5175,7 @@ let _pianoKeyboardLayout = null;
 let _pianoEnginesLoading = null;
 let _pianoEnginesReady = false;
 let _pianoModelInstance = null;
-let _pianoBpModule = null;       // resolved basic-pitch module after dynamic import
+let _pianoMagentaModule = null;  // resolved @magenta/music module after dynamic import
 let _pianoHoldTimer = null;
 let _pianoHoldStart = null;
 const _PIANO_HOLD_MS = 600;
@@ -5181,15 +5186,21 @@ const _PIANO_MIDI_LOW = 21;   // A0
 const _PIANO_MIDI_HIGH = 108; // C8
 // Pitch class → white-key flag. Order: C C# D D# E F F# G G# A A# B
 const _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-// basic-pitch as ESM with deps (TF.js + @tonejs/midi) bundled by esm.sh.
-// We use dynamic import() so the engines stay lazy-loaded — they only
-// arrive on the first piano-mode entry.
-const _PIANO_BP_URL    = 'https://esm.sh/@spotify/basic-pitch@1.0.1';
-const _PIANO_MODEL_URL = 'https://cdn.jsdelivr.net/gh/spotify/basic-pitch-ts@main/model/model.json';
-// Bump this whenever the transcription parameters in _pianoTranscribe
-// change so cached IDB notes from older runs get re-transcribed instead
-// of silently using the looser thresholds. Stored next to pianoNotes.
-const _PIANO_NOTES_VERSION = 2;
+// @magenta/music as ESM with deps (TF.js) bundled by esm.sh. Dynamic
+// import() so engines stay lazy-loaded — they only arrive on first
+// piano-mode entry. The 'esm/transcription.js' subpath gives us just
+// the OnsetsAndFrames code instead of the full library.
+const _PIANO_MAGENTA_URL    = 'https://esm.sh/@magenta/music@1.23.1/esm/transcription.js';
+// Official Magenta-hosted Onsets & Frames checkpoint (universal,
+// piano-trained on MAESTRO). ~30 MB. The model fetches a manifest +
+// weights from this base URL on initialize().
+const _PIANO_OAF_CHECKPOINT = 'https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni';
+// Bump this whenever the transcription engine or its parameters
+// change so cached IDB notes from older runs get re-transcribed
+// instead of silently using stale output. Stored next to pianoNotes.
+//   v2 = basic-pitch with tightened thresholds (0.65/0.45/11+amp≥0.3)
+//   v3 = Magenta Onsets & Frames (different engine entirely)
+const _PIANO_NOTES_VERSION = 3;
 
 function _pianoSetLoading(label) {
     if (!pianoOverlay) return;
@@ -5241,24 +5252,26 @@ function _pianoApplySize() {
     _pianoKeyboardLayout = _pianoBuildKeyboardLayout(w);
 }
 
-// basic-pitch ships ESM only — no UMD bundle. We pull it via dynamic
-// import() from esm.sh, which serves a browser-ready ESM build with
-// TF.js + @tonejs/midi resolved as transitive imports. Esbuild leaves
-// dynamic import() with a non-literal argument as a runtime call, so
-// the lazy-load behaviour is preserved (engines arrive only when the
-// user actually opens piano mode).
+// @magenta/music ships ESM. We pull it via dynamic import() from
+// esm.sh, which serves a browser-ready ESM build with TF.js resolved
+// as a transitive import. Esbuild leaves dynamic import() with a
+// non-literal argument as a runtime call, so the lazy-load behaviour
+// is preserved (engines arrive only when the user actually opens
+// piano mode).
 async function _pianoLoadEngines() {
     if (_pianoEnginesReady) return true;
     if (_pianoEnginesLoading) return _pianoEnginesLoading;
     _pianoEnginesLoading = (async () => {
         _pianoSetLoading('Loading piano engine…');
-        const url = _PIANO_BP_URL;
+        const url = _PIANO_MAGENTA_URL;
         const mod = await import(url);
-        // esm.sh re-exports — module shape is { BasicPitch, noteFramesToTime, ... }
-        _pianoBpModule = mod && mod.default && !mod.BasicPitch ? mod.default : mod;
-        if (!_pianoBpModule || !_pianoBpModule.BasicPitch) {
-            throw new Error('basic-pitch module did not export BasicPitch');
+        // esm.sh re-exports — accept both flat and default-wrapped shapes.
+        const ns = mod && mod.OnsetsAndFrames ? mod
+                 : (mod && mod.default && mod.default.OnsetsAndFrames ? mod.default : null);
+        if (!ns) {
+            throw new Error('@magenta/music did not export OnsetsAndFrames');
         }
+        _pianoMagentaModule = ns;
         _pianoEnginesReady = true;
         return true;
     })();
@@ -5270,84 +5283,32 @@ async function _pianoLoadEngines() {
     }
 }
 
-function _pianoGetBasicPitchNs() {
-    return _pianoBpModule;
-}
-
 async function _pianoTranscribe(audioBuffer, progressCb) {
-    // basic-pitch wants mono float32 at 22050 Hz.
-    const targetSr = 22050;
-    let monoSamples;
-    if (audioBuffer.sampleRate === targetSr && audioBuffer.numberOfChannels === 1) {
-        monoSamples = audioBuffer.getChannelData(0);
-    } else {
-        const offCtx = new OfflineAudioContext(
-            1,
-            Math.max(1, Math.ceil(audioBuffer.duration * targetSr)),
-            targetSr,
-        );
-        const src = offCtx.createBufferSource();
-        src.buffer = audioBuffer;
-        src.connect(offCtx.destination);
-        src.start();
-        const resampled = await offCtx.startRendering();
-        monoSamples = resampled.getChannelData(0);
-    }
-
-    const bp = _pianoGetBasicPitchNs();
-    if (!bp || !bp.BasicPitch) throw new Error('basic-pitch did not load');
+    const ns = _pianoMagentaModule;
+    if (!ns || !ns.OnsetsAndFrames) throw new Error('@magenta/music did not load');
 
     if (!_pianoModelInstance) {
-        _pianoModelInstance = new bp.BasicPitch(_PIANO_MODEL_URL);
+        if (progressCb) progressCb(0.0);
+        _pianoModelInstance = new ns.OnsetsAndFrames(_PIANO_OAF_CHECKPOINT);
+        await _pianoModelInstance.initialize();
     }
+    if (progressCb) progressCb(0.05);
 
-    const frames = [], onsets = [], contours = [];
-    await _pianoModelInstance.evaluateModel(
-        monoSamples,
-        (f, o, c) => {
-            for (const x of f) frames.push(x);
-            for (const x of o) onsets.push(x);
-            for (const x of c) contours.push(x);
-        },
-        progressCb,
-    );
+    // Magenta resamples to its expected rate (16 kHz) internally via
+    // OfflineAudioContext — pass our decoded buffer through directly.
+    // Returns a NoteSequence: { notes: [{pitch, startTime, endTime, velocity}] }.
+    const seq = await _pianoModelInstance.transcribeFromAudioBuffer(audioBuffer);
+    if (progressCb) progressCb(1.0);
+    if (!seq || !Array.isArray(seq.notes)) return [];
 
-    // Convert raw model output → note events. Tighter than basic-pitch's
-    // defaults (0.5 / 0.3 / 5) — the user reported a lot of phantom notes
-    // not in the music. Higher onset/frame thresholds drop weak detections
-    // and longer minNoteLength filters out spurious blips that can't be
-    // real piano notes. Pitch range hard-clamped to the piano (A0..C8)
-    // even though basic-pitch is piano-trained, as belt-and-braces.
-    const A0_HZ = 27.5;
-    const C8_HZ = 4186.0;
-    const onsetTh = 0.65;            // was 0.5
-    const frameTh = 0.45;            // was 0.3
-    const minNoteFrames = 11;        // was 5  (each frame ≈ 11 ms → ~120 ms minimum)
-    const inferOnsets = true;
-    const melodiaTrick = true;
-    const energyTolerance = 11;
-    const poly = bp.outputToNotesPoly(
-        frames, onsets,
-        onsetTh, frameTh, minNoteFrames,
-        inferOnsets,
-        C8_HZ, A0_HZ,
-        melodiaTrick, energyTolerance,
-    );
-    const withBends = bp.addPitchBendsToNoteEvents(contours, poly);
-    const events = bp.noteFramesToTime(withBends);
-
-    // Final amplitude filter — basic-pitch attaches a 0..1 amplitude to
-    // each note; very low values are usually transcription noise rather
-    // than real notes. 0.3 is conservative; raise if user still reports
-    // false positives, lower if real notes start dropping.
-    return events
-        .filter(n => (n.amplitude ?? 1) >= 0.3)
+    return seq.notes
+        .filter(n => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH)
         .map(n => ({
-            t0: n.startTimeSeconds,
-            t1: n.startTimeSeconds + n.durationSeconds,
-            pitch: n.pitchMidi,
+            t0: Number(n.startTime) || 0,
+            t1: Number(n.endTime) || 0,
+            pitch: n.pitch,
         }))
-        .filter(n => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH);
+        .filter(n => n.t1 > n.t0);
 }
 
 function _pianoFindCurrentTrack() {
@@ -5421,10 +5382,11 @@ async function _pianoAnalyzeCurrentTrack() {
     // 5. Transcribe
     let notes;
     try {
-        _pianoSetLoading('Transcribing piano… 0%');
-        notes = await _pianoTranscribe(audioBuffer, p => {
+        // Onsets & Frames doesn't expose granular progress; show an
+        // indeterminate label and warn that this step is the slow one.
+        _pianoSetLoading('Transcribing piano…');
+        notes = await _pianoTranscribe(audioBuffer, () => {
             if (myToken !== _pianoAnalysisToken) return;
-            _pianoSetLoading(`Transcribing piano… ${Math.round((p || 0) * 100)}%`);
         });
     } catch (e) {
         if (myToken !== _pianoAnalysisToken) return;

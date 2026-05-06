@@ -86725,7 +86725,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _pianoEnginesLoading = null;
       var _pianoEnginesReady = false;
       var _pianoModelInstance = null;
-      var _pianoBpModule = null;
+      var _pianoMagentaModule = null;
       var _pianoHoldTimer = null;
       var _pianoHoldStart = null;
       var _PIANO_HOLD_MS = 600;
@@ -86735,9 +86735,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _PIANO_MIDI_LOW = 21;
       var _PIANO_MIDI_HIGH = 108;
       var _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-      var _PIANO_BP_URL = "https://esm.sh/@spotify/basic-pitch@1.0.1";
-      var _PIANO_MODEL_URL = "https://cdn.jsdelivr.net/gh/spotify/basic-pitch-ts@main/model/model.json";
-      var _PIANO_NOTES_VERSION = 2;
+      var _PIANO_MAGENTA_URL = "https://esm.sh/@magenta/music@1.23.1/esm/transcription.js";
+      var _PIANO_OAF_CHECKPOINT = "https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni";
+      var _PIANO_NOTES_VERSION = 3;
       function _pianoSetLoading(label) {
         if (!pianoOverlay) return;
         if (label === null) {
@@ -86788,12 +86788,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (_pianoEnginesLoading) return _pianoEnginesLoading;
         _pianoEnginesLoading = (async () => {
           _pianoSetLoading("Loading piano engine\u2026");
-          const url = _PIANO_BP_URL;
+          const url = _PIANO_MAGENTA_URL;
           const mod = await import(url);
-          _pianoBpModule = mod && mod.default && !mod.BasicPitch ? mod.default : mod;
-          if (!_pianoBpModule || !_pianoBpModule.BasicPitch) {
-            throw new Error("basic-pitch module did not export BasicPitch");
+          const ns = mod && mod.OnsetsAndFrames ? mod : mod && mod.default && mod.default.OnsetsAndFrames ? mod.default : null;
+          if (!ns) {
+            throw new Error("@magenta/music did not export OnsetsAndFrames");
           }
+          _pianoMagentaModule = ns;
           _pianoEnginesReady = true;
           return true;
         })();
@@ -86804,69 +86805,23 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           throw e;
         }
       }
-      function _pianoGetBasicPitchNs() {
-        return _pianoBpModule;
-      }
       async function _pianoTranscribe(audioBuffer, progressCb) {
-        const targetSr = 22050;
-        let monoSamples;
-        if (audioBuffer.sampleRate === targetSr && audioBuffer.numberOfChannels === 1) {
-          monoSamples = audioBuffer.getChannelData(0);
-        } else {
-          const offCtx = new OfflineAudioContext(
-            1,
-            Math.max(1, Math.ceil(audioBuffer.duration * targetSr)),
-            targetSr
-          );
-          const src = offCtx.createBufferSource();
-          src.buffer = audioBuffer;
-          src.connect(offCtx.destination);
-          src.start();
-          const resampled = await offCtx.startRendering();
-          monoSamples = resampled.getChannelData(0);
-        }
-        const bp = _pianoGetBasicPitchNs();
-        if (!bp || !bp.BasicPitch) throw new Error("basic-pitch did not load");
+        const ns = _pianoMagentaModule;
+        if (!ns || !ns.OnsetsAndFrames) throw new Error("@magenta/music did not load");
         if (!_pianoModelInstance) {
-          _pianoModelInstance = new bp.BasicPitch(_PIANO_MODEL_URL);
+          if (progressCb) progressCb(0);
+          _pianoModelInstance = new ns.OnsetsAndFrames(_PIANO_OAF_CHECKPOINT);
+          await _pianoModelInstance.initialize();
         }
-        const frames = [], onsets = [], contours = [];
-        await _pianoModelInstance.evaluateModel(
-          monoSamples,
-          (f, o, c) => {
-            for (const x of f) frames.push(x);
-            for (const x of o) onsets.push(x);
-            for (const x of c) contours.push(x);
-          },
-          progressCb
-        );
-        const A0_HZ = 27.5;
-        const C8_HZ = 4186;
-        const onsetTh = 0.65;
-        const frameTh = 0.45;
-        const minNoteFrames = 11;
-        const inferOnsets = true;
-        const melodiaTrick = true;
-        const energyTolerance = 11;
-        const poly = bp.outputToNotesPoly(
-          frames,
-          onsets,
-          onsetTh,
-          frameTh,
-          minNoteFrames,
-          inferOnsets,
-          C8_HZ,
-          A0_HZ,
-          melodiaTrick,
-          energyTolerance
-        );
-        const withBends = bp.addPitchBendsToNoteEvents(contours, poly);
-        const events = bp.noteFramesToTime(withBends);
-        return events.filter((n) => (n.amplitude ?? 1) >= 0.3).map((n) => ({
-          t0: n.startTimeSeconds,
-          t1: n.startTimeSeconds + n.durationSeconds,
-          pitch: n.pitchMidi
-        })).filter((n) => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH);
+        if (progressCb) progressCb(0.05);
+        const seq = await _pianoModelInstance.transcribeFromAudioBuffer(audioBuffer);
+        if (progressCb) progressCb(1);
+        if (!seq || !Array.isArray(seq.notes)) return [];
+        return seq.notes.filter((n) => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH).map((n) => ({
+          t0: Number(n.startTime) || 0,
+          t1: Number(n.endTime) || 0,
+          pitch: n.pitch
+        })).filter((n) => n.t1 > n.t0);
       }
       function _pianoFindCurrentTrack() {
         if (typeof playerTracks === "undefined") return null;
@@ -86934,10 +86889,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (myToken !== _pianoAnalysisToken) return;
         let notes;
         try {
-          _pianoSetLoading("Transcribing piano\u2026 0%");
-          notes = await _pianoTranscribe(audioBuffer, (p) => {
+          _pianoSetLoading("Transcribing piano\u2026");
+          notes = await _pianoTranscribe(audioBuffer, () => {
             if (myToken !== _pianoAnalysisToken) return;
-            _pianoSetLoading(`Transcribing piano\u2026 ${Math.round((p || 0) * 100)}%`);
           });
         } catch (e) {
           if (myToken !== _pianoAnalysisToken) return;
