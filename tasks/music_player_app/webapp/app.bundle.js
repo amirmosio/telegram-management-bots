@@ -86741,6 +86741,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _pianoEnginesLoading = null;
       var _pianoEnginesReady = false;
       var _pianoModelInstance = null;
+      var _pianoBpModule = null;
       var _pianoHoldTimer = null;
       var _pianoHoldStart = null;
       var _PIANO_HOLD_MS = 600;
@@ -86750,8 +86751,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _PIANO_MIDI_LOW = 21;
       var _PIANO_MIDI_HIGH = 108;
       var _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-      var _PIANO_TFJS_URL = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js";
-      var _PIANO_BP_URL = "https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/dist/basic-pitch.min.js";
+      var _PIANO_BP_URL = "https://esm.sh/@spotify/basic-pitch@1.0.1";
       var _PIANO_MODEL_URL = "https://cdn.jsdelivr.net/gh/spotify/basic-pitch-ts@main/model/model.json";
       function _pianoSetLoading(label) {
         if (!pianoOverlay) return;
@@ -86798,29 +86798,17 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _pianoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         _pianoKeyboardLayout = _pianoBuildKeyboardLayout(w);
       }
-      function _pianoLoadScript(src) {
-        return new Promise((resolve, reject) => {
-          if (document.querySelector(`script[data-piano-src="${src}"]`)) {
-            resolve();
-            return;
-          }
-          const s = document.createElement("script");
-          s.src = src;
-          s.async = true;
-          s.dataset.pianoSrc = src;
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error("script load failed: " + src));
-          document.head.appendChild(s);
-        });
-      }
       async function _pianoLoadEngines() {
         if (_pianoEnginesReady) return true;
         if (_pianoEnginesLoading) return _pianoEnginesLoading;
         _pianoEnginesLoading = (async () => {
-          _pianoSetLoading("Loading TensorFlow.js\u2026");
-          await _pianoLoadScript(_PIANO_TFJS_URL);
-          _pianoSetLoading("Loading basic-pitch\u2026");
-          await _pianoLoadScript(_PIANO_BP_URL);
+          _pianoSetLoading("Loading piano engine\u2026");
+          const url = _PIANO_BP_URL;
+          const mod = await import(url);
+          _pianoBpModule = mod && mod.default && !mod.BasicPitch ? mod.default : mod;
+          if (!_pianoBpModule || !_pianoBpModule.BasicPitch) {
+            throw new Error("basic-pitch module did not export BasicPitch");
+          }
           _pianoEnginesReady = true;
           return true;
         })();
@@ -86832,7 +86820,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
       }
       function _pianoGetBasicPitchNs() {
-        return window.basicPitch || window["@spotify/basic-pitch"] || null;
+        return _pianoBpModule;
       }
       async function _pianoTranscribe(audioBuffer, progressCb) {
         const targetSr = 22050;

@@ -5097,6 +5097,7 @@ let _pianoKeyboardLayout = null;
 let _pianoEnginesLoading = null;
 let _pianoEnginesReady = false;
 let _pianoModelInstance = null;
+let _pianoBpModule = null;       // resolved basic-pitch module after dynamic import
 let _pianoHoldTimer = null;
 let _pianoHoldStart = null;
 const _PIANO_HOLD_MS = 600;
@@ -5107,8 +5108,10 @@ const _PIANO_MIDI_LOW = 21;   // A0
 const _PIANO_MIDI_HIGH = 108; // C8
 // Pitch class → white-key flag. Order: C C# D D# E F F# G G# A A# B
 const _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-const _PIANO_TFJS_URL  = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js';
-const _PIANO_BP_URL    = 'https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/dist/basic-pitch.min.js';
+// basic-pitch as ESM with deps (TF.js + @tonejs/midi) bundled by esm.sh.
+// We use dynamic import() so the engines stay lazy-loaded — they only
+// arrive on the first piano-mode entry.
+const _PIANO_BP_URL    = 'https://esm.sh/@spotify/basic-pitch@1.0.1';
 const _PIANO_MODEL_URL = 'https://cdn.jsdelivr.net/gh/spotify/basic-pitch-ts@main/model/model.json';
 
 function _pianoSetLoading(label) {
@@ -5161,30 +5164,24 @@ function _pianoApplySize() {
     _pianoKeyboardLayout = _pianoBuildKeyboardLayout(w);
 }
 
-function _pianoLoadScript(src) {
-    return new Promise((resolve, reject) => {
-        if (document.querySelector(`script[data-piano-src="${src}"]`)) {
-            resolve();
-            return;
-        }
-        const s = document.createElement('script');
-        s.src = src;
-        s.async = true;
-        s.dataset.pianoSrc = src;
-        s.onload = () => resolve();
-        s.onerror = () => reject(new Error('script load failed: ' + src));
-        document.head.appendChild(s);
-    });
-}
-
+// basic-pitch ships ESM only — no UMD bundle. We pull it via dynamic
+// import() from esm.sh, which serves a browser-ready ESM build with
+// TF.js + @tonejs/midi resolved as transitive imports. Esbuild leaves
+// dynamic import() with a non-literal argument as a runtime call, so
+// the lazy-load behaviour is preserved (engines arrive only when the
+// user actually opens piano mode).
 async function _pianoLoadEngines() {
     if (_pianoEnginesReady) return true;
     if (_pianoEnginesLoading) return _pianoEnginesLoading;
     _pianoEnginesLoading = (async () => {
-        _pianoSetLoading('Loading TensorFlow.js…');
-        await _pianoLoadScript(_PIANO_TFJS_URL);
-        _pianoSetLoading('Loading basic-pitch…');
-        await _pianoLoadScript(_PIANO_BP_URL);
+        _pianoSetLoading('Loading piano engine…');
+        const url = _PIANO_BP_URL;
+        const mod = await import(url);
+        // esm.sh re-exports — module shape is { BasicPitch, noteFramesToTime, ... }
+        _pianoBpModule = mod && mod.default && !mod.BasicPitch ? mod.default : mod;
+        if (!_pianoBpModule || !_pianoBpModule.BasicPitch) {
+            throw new Error('basic-pitch module did not export BasicPitch');
+        }
         _pianoEnginesReady = true;
         return true;
     })();
@@ -5197,7 +5194,7 @@ async function _pianoLoadEngines() {
 }
 
 function _pianoGetBasicPitchNs() {
-    return window.basicPitch || window['@spotify/basic-pitch'] || null;
+    return _pianoBpModule;
 }
 
 async function _pianoTranscribe(audioBuffer, progressCb) {
