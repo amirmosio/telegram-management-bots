@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=161">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=161">
-    <link rel="stylesheet" href="style.css?v=161">
+    <link rel="manifest" href="/manifest.json?v=162">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=162">
+    <link rel="stylesheet" href="style.css?v=162">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -458,11 +458,15 @@
     </div>
     <div id="piano-overlay" aria-hidden="true">
         <canvas id="piano-canvas"></canvas>
+        <div id="piano-seekbar" aria-label="Seek">
+            <div id="piano-seekbar-fill"></div>
+            <div id="piano-seekbar-handle"></div>
+        </div>
         <div id="piano-loading" aria-hidden="true">
             <div class="piano-spinner"></div>
             <div id="piano-loading-label" class="piano-loading-label">Loading piano model…</div>
         </div>
-        <div id="piano-hint">Hold anywhere to exit</div>
+        <div id="piano-hint">Hold anywhere to exit · drag the bar to seek</div>
         <div id="piano-warning" aria-hidden="true">Transcription is unreliable on this track — best results on solo piano.</div>
     </div>
     <audio id="audio-element" preload="auto"></audio>
@@ -472,6 +476,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=161"></script>
+    <script src="app.bundle.js?v=162"></script>
 </body>
 </html>

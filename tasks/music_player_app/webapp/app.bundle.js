@@ -86745,7 +86745,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var pianoOverlay = $("piano-overlay");
       var pianoCanvas = $("piano-canvas");
       var pianoLoadingLabel = $("piano-loading-label");
+      var pianoSeekbar = $("piano-seekbar");
+      var pianoSeekbarFill = $("piano-seekbar-fill");
+      var pianoSeekbarHandle = $("piano-seekbar-handle");
       var btnPiano = $("btn-piano");
+      var _pianoSeeking = false;
       var _pianoCtx = null;
       var _pianoNotes = null;
       var _pianoCache = /* @__PURE__ */ new Map();
@@ -87047,24 +87051,20 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         bg.addColorStop(1, "#11151e");
         ctx.fillStyle = bg;
         ctx.fillRect(0, 0, w, kbTop);
-        ctx.fillStyle = "rgba(82, 136, 193, 0.55)";
-        ctx.fillRect(0, kbTop - 1.5, w, 2);
         ctx.fillStyle = "rgba(82, 136, 193, 0.10)";
         ctx.fillRect(0, kbTop - 10, w, 10);
         const activeKeys = /* @__PURE__ */ new Set();
         if (_pianoNotes && _pianoNotes.length) {
           const t = audio.currentTime;
-          const tLow = t - 0.2;
-          const tHigh = t + lookAhead;
           const layout = _pianoKeyboardLayout.layout;
           for (let i = 0; i < _pianoNotes.length; i++) {
             const n = _pianoNotes[i];
-            if (n.t1 < tLow) continue;
-            if (n.t0 > tHigh) continue;
+            if (t > n.t1 + 0.05) continue;
+            if (t < n.t0 - lookAhead) continue;
             const k = layout.get(n.pitch);
             if (!k) continue;
             if (n.t0 <= t && t <= n.t1) activeKeys.add(n.pitch);
-            const yBottom = kbTop + (t - n.t1) * pps;
+            const yBottom = kbTop + (t - n.t0) * pps;
             const yTop = yBottom - (n.t1 - n.t0) * pps;
             const drawBottom = Math.min(yBottom, kbTop);
             const drawTop = Math.max(yTop, 0);
@@ -87090,6 +87090,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
         }
         _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
+        if (audio.duration > 0 && pianoSeekbarFill) {
+          const pct = Math.max(0, Math.min(1, audio.currentTime / audio.duration));
+          const pctStr = (pct * 100).toFixed(2) + "%";
+          pianoSeekbarFill.style.width = pctStr;
+          if (pianoSeekbarHandle) pianoSeekbarHandle.style.left = pctStr;
+        }
       }
       async function enterPiano() {
         if (!pianoOverlay) return;
@@ -87163,6 +87169,41 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       window.addEventListener("resize", () => {
         if (pianoOverlay?.classList.contains("open")) _pianoApplySize();
       });
+      function _pianoSeekFromEvent(e) {
+        if (!audio.duration || !pianoSeekbar) return;
+        const rect = pianoSeekbar.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        audio.currentTime = fraction * audio.duration;
+      }
+      function _pianoOnSeekDown(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        _pianoSeeking = true;
+        try {
+          pianoSeekbar.setPointerCapture?.(e.pointerId);
+        } catch (_) {
+        }
+        _pianoSeekFromEvent(e);
+      }
+      function _pianoOnSeekMove(e) {
+        if (!_pianoSeeking) return;
+        e.stopPropagation();
+        _pianoSeekFromEvent(e);
+      }
+      function _pianoOnSeekUp(e) {
+        if (!_pianoSeeking) return;
+        e.stopPropagation();
+        _pianoSeeking = false;
+        try {
+          pianoSeekbar.releasePointerCapture?.(e.pointerId);
+        } catch (_) {
+        }
+      }
+      pianoSeekbar?.addEventListener("pointerdown", _pianoOnSeekDown);
+      pianoSeekbar?.addEventListener("pointermove", _pianoOnSeekMove);
+      pianoSeekbar?.addEventListener("pointerup", _pianoOnSeekUp);
+      pianoSeekbar?.addEventListener("pointercancel", _pianoOnSeekUp);
       var _profilePhotoRetryScheduled = false;
       function setUserProfile(user) {
         const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "User";

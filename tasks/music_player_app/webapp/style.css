@@ -2007,6 +2007,59 @@ html, body {
 }
 #piano-overlay.piano-warn #piano-warning { opacity: 1; }
 
+/* Seek bar — sits at the keyboard's strike line (canvas keyboard occupies
+   the bottom 22 % of the overlay). Generous 24px hit-zone for touch;
+   visible bar is thinner inside. */
+#piano-seekbar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 22%;
+    height: 24px;
+    margin-bottom: -12px;
+    cursor: pointer;
+    touch-action: none;
+    z-index: 3;
+}
+#piano-seekbar::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    top: 50%;
+    height: 4px;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.10);
+    border-radius: 2px;
+}
+#piano-seekbar-fill {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    height: 4px;
+    transform: translateY(-50%);
+    width: 0%;
+    background: var(--accent);
+    border-radius: 2px;
+    pointer-events: none;
+    box-shadow: 0 0 8px rgba(82, 136, 193, 0.45);
+}
+#piano-seekbar-handle {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transition: opacity 200ms ease;
+}
+#piano-overlay.open #piano-seekbar-handle { opacity: 0.85; }
+#piano-overlay.piano-loading #piano-seekbar { display: none; }
+
 /* ── Search-result source tag ── */
 .search-src-tag {
     display: inline-block;

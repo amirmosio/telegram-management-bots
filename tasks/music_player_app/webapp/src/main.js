@@ -5105,7 +5105,11 @@ window.addEventListener('resize', () => {
 const pianoOverlay = $('piano-overlay');
 const pianoCanvas = $('piano-canvas');
 const pianoLoadingLabel = $('piano-loading-label');
+const pianoSeekbar = $('piano-seekbar');
+const pianoSeekbarFill = $('piano-seekbar-fill');
+const pianoSeekbarHandle = $('piano-seekbar-handle');
 const btnPiano = $('btn-piano');
+let _pianoSeeking = false;
 
 let _pianoCtx = null;
 let _pianoNotes = null;                  // active schedule
@@ -5444,9 +5448,8 @@ function _pianoTick() {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, kbTop);
 
-    // Strike line + soft glow at the keyboard top
-    ctx.fillStyle = 'rgba(82, 136, 193, 0.55)';
-    ctx.fillRect(0, kbTop - 1.5, w, 2);
+    // Soft glow above the keyboard — the HTML seekbar overlays the line
+    // itself so we don't draw a hard strike-line in the canvas anymore.
     ctx.fillStyle = 'rgba(82, 136, 193, 0.10)';
     ctx.fillRect(0, kbTop - 10, w, 10);
 
@@ -5454,19 +5457,24 @@ function _pianoTick() {
 
     if (_pianoNotes && _pianoNotes.length) {
         const t = audio.currentTime;
-        const tLow = t - 0.2;
-        const tHigh = t + lookAhead;
         const layout = _pianoKeyboardLayout.layout;
 
         for (let i = 0; i < _pianoNotes.length; i++) {
             const n = _pianoNotes[i];
-            if (n.t1 < tLow) continue;
-            if (n.t0 > tHigh) continue;
+            // Note bar's BOTTOM reaches the keyboard at n.t0 (note start —
+            // when the matching key lights up). It then extends below the
+            // keyboard line as time advances and shrinks until the TOP
+            // reaches kbTop at n.t1 (note end). Visibility window: note
+            // appears when its TOP enters the lookahead lane and disappears
+            // shortly after its end.
+            if (t > n.t1 + 0.05) continue;
+            if (t < n.t0 - lookAhead) continue;
+
             const k = layout.get(n.pitch);
             if (!k) continue;
             if (n.t0 <= t && t <= n.t1) activeKeys.add(n.pitch);
 
-            const yBottom = kbTop + (t - n.t1) * pps;
+            const yBottom = kbTop + (t - n.t0) * pps;
             const yTop = yBottom - (n.t1 - n.t0) * pps;
             const drawBottom = Math.min(yBottom, kbTop);
             const drawTop = Math.max(yTop, 0);
@@ -5496,6 +5504,14 @@ function _pianoTick() {
     }
 
     _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
+
+    // Update HTML seek-bar fill + handle position from current playback.
+    if (audio.duration > 0 && pianoSeekbarFill) {
+        const pct = Math.max(0, Math.min(1, audio.currentTime / audio.duration));
+        const pctStr = (pct * 100).toFixed(2) + '%';
+        pianoSeekbarFill.style.width = pctStr;
+        if (pianoSeekbarHandle) pianoSeekbarHandle.style.left = pctStr;
+    }
 }
 
 async function enterPiano() {
@@ -5574,6 +5590,38 @@ btnPiano?.addEventListener('click', enterPiano);
 window.addEventListener('resize', () => {
     if (pianoOverlay?.classList.contains('open')) _pianoApplySize();
 });
+
+// Seek bar — its pointerdown/move/up handlers stop propagation so the
+// overlay's hold-to-exit timer never fires while the user is scrubbing.
+function _pianoSeekFromEvent(e) {
+    if (!audio.duration || !pianoSeekbar) return;
+    const rect = pianoSeekbar.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    audio.currentTime = fraction * audio.duration;
+}
+function _pianoOnSeekDown(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    _pianoSeeking = true;
+    try { pianoSeekbar.setPointerCapture?.(e.pointerId); } catch (_) {}
+    _pianoSeekFromEvent(e);
+}
+function _pianoOnSeekMove(e) {
+    if (!_pianoSeeking) return;
+    e.stopPropagation();
+    _pianoSeekFromEvent(e);
+}
+function _pianoOnSeekUp(e) {
+    if (!_pianoSeeking) return;
+    e.stopPropagation();
+    _pianoSeeking = false;
+    try { pianoSeekbar.releasePointerCapture?.(e.pointerId); } catch (_) {}
+}
+pianoSeekbar?.addEventListener('pointerdown', _pianoOnSeekDown);
+pianoSeekbar?.addEventListener('pointermove', _pianoOnSeekMove);
+pianoSeekbar?.addEventListener('pointerup', _pianoOnSeekUp);
+pianoSeekbar?.addEventListener('pointercancel', _pianoOnSeekUp);
 
 // ══════════════════════════════════════
 //  BOOT
