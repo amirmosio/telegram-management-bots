@@ -1253,6 +1253,11 @@ let _streamDownloadActive = false;
 //  • If a Service Worker is available, stream via the range-aware SW protocol
 //    so the user can seek to any position even during the first play.
 //  • Otherwise, fall back to a single full download + blob URL.
+//  • iOS Safari + co-play follower mode is *forced* through the full-download
+//    path because chunked Range responses out of a SW into iOS's <audio>
+//    decoder consistently produce robotic / underrun artifacts. Mac Chrome
+//    handles SW streaming fine; iOS does not. Trade-off: longer time-to-
+//    first-play, clean audio.
 async function _downloadAndPlay(track, gen) {
     const gId = playerGroupId;
     const fileSize = track.file_size || 0;
@@ -1260,7 +1265,9 @@ async function _downloadAndPlay(track, gen) {
     const sw = await _getSWController();
     if (_playGeneration !== gen) return;
 
-    if (sw && fileSize > 0) {
+    const followerOnIOS = IS_IOS && _coplaySession?.role === 'follower';
+
+    if (sw && fileSize > 0 && !followerOnIOS) {
         try {
             await _streamWithSeek(track, gen, sw);
             return;
@@ -1270,8 +1277,8 @@ async function _downloadAndPlay(track, gen) {
     }
 
     if (_playGeneration !== gen) return;
-    // ── Fallback: full download then play ──
-    console.log('[player] no SW or streaming failed, full download →', track.title);
+    // ── Fallback / iOS-follower path: full download then play ──
+    console.log('[player]', followerOnIOS ? 'iOS follower full-download →' : 'no SW or streaming failed, full download →', track.title);
     const blobUrl = await tg.getTrackBlobUrl(gId, track.id, playerTopicId);
     if (_playGeneration !== gen) return;
     audio.src = blobUrl;

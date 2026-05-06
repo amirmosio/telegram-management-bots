@@ -84814,7 +84814,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const fileSize = track.file_size || 0;
         const sw = await _getSWController();
         if (_playGeneration !== gen) return;
-        if (sw && fileSize > 0) {
+        const followerOnIOS = IS_IOS && _coplaySession?.role === "follower";
+        if (sw && fileSize > 0 && !followerOnIOS) {
           try {
             await _streamWithSeek(track, gen, sw);
             return;
@@ -84823,7 +84824,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
         }
         if (_playGeneration !== gen) return;
-        console.log("[player] no SW or streaming failed, full download \u2192", track.title);
+        console.log("[player]", followerOnIOS ? "iOS follower full-download \u2192" : "no SW or streaming failed, full download \u2192", track.title);
         const blobUrl = await getTrackBlobUrl(gId, track.id, playerTopicId);
         if (_playGeneration !== gen) return;
         audio.src = blobUrl;
