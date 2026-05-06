@@ -2755,22 +2755,25 @@ const coplayFabBadge = $('coplay-fab-badge');
 // ────────────────────────────────────────────────────────────────────
 //  Tap + drag for the three co-play overlays (host banner, follower
 //  banner, "Join" FAB). One helper, one event model, no pointer
-//  events (those have edge cases on mobile Safari that we don't need).
+//  events. Position is expressed as a `transform: translate(x, y)`
+//  offset from the element's *natural* CSS position — that way we
+//  never fight with whatever right/bottom/left/top rules the element
+//  already has (the FAB anchors to right/bottom of the viewport;
+//  the banners anchor to top-centre with a translateX(-50%)).
 //
 //  Behaviour:
 //    • Down anywhere on `el`, EXCEPT children matching `skipSelector`
 //      (e.g. the End/Leave button) — those keep their normal click
 //      handlers and are entirely outside the drag system.
-//    • If the cursor / finger moves > THRESHOLD px → we're dragging.
-//      `apply()` updates the element's left/top, persisted in
-//      `localStorage` on release, clamped to viewport.
-//    • If the cursor / finger ends without moving past threshold →
-//      it was a tap. We invoke `onTap` ourselves (used by the FAB
-//      to trigger "Join co-play").
+//    • Cursor / finger moves > THRESHOLD px → we're dragging.
+//      We update `transform: translate(...)`, persist the offset in
+//      `localStorage` on release, and clamp the resulting bounding
+//      rect to stay inside the viewport.
+//    • Press ends without moving past threshold → call `onTap`
+//      explicitly (used by the FAB so a tap = Join co-play).
 //
 //  Move + end listeners live on `document` so the drag never breaks
-//  if the cursor / finger leaves the element. The element is never
-//  the move target after the down — `document` is, always.
+//  if the cursor / finger leaves the element.
 // ────────────────────────────────────────────────────────────────────
 const _COPLAY_DRAG_THRESHOLD_PX = 6;
 function _coplayMakeDraggable(el, opts = {}) {
@@ -2778,43 +2781,67 @@ function _coplayMakeDraggable(el, opts = {}) {
     const { storageKey, skipSelector = null, onTap = null } = opts;
     el.classList.add('coplay-draggable');
 
-    const apply = (left, top) => {
-        const w = el.offsetWidth || 0;
-        const h = el.offsetHeight || 0;
-        const maxL = Math.max(0, window.innerWidth - w - 4);
-        const maxT = Math.max(0, window.innerHeight - h - 4);
-        const x = Math.min(maxL, Math.max(4, left));
-        const y = Math.min(maxT, Math.max(4, top));
-        el.style.left = x + 'px';
-        el.style.top = y + 'px';
-        el.style.right = 'auto';
-        el.style.bottom = 'auto';
-        el.style.transform = 'none';
+    // Cumulative drag offset from the element's natural position,
+    // expressed in viewport pixels (i.e. matches the values for
+    // `transform: translate(x, y)`).
+    let offX = 0, offY = 0;
+
+    // The element's CSS-defined transform (e.g. the banner has
+    // translateX(-50%) for centering). We compose our drag translate
+    // *after* it so dragging an offset of (0,0) leaves the element
+    // exactly where the stylesheet placed it. Captured lazily on
+    // first apply() so it sees the value the stylesheet actually
+    // resolved to.
+    let cssTransform = null;
+
+    const apply = () => {
+        if (cssTransform === null) {
+            const prev = el.style.transform;
+            el.style.transform = '';
+            const computed = window.getComputedStyle(el).transform;
+            cssTransform = (computed && computed !== 'none') ? computed : '';
+            el.style.transform = prev;
+        }
+        // Measure with only the CSS transform applied so we know the
+        // natural position to clamp against.
+        el.style.transform = cssTransform;
+        const natural = el.getBoundingClientRect();
+        const w = natural.width;
+        const h = natural.height;
+        const minOX = 4 - natural.left;
+        const maxOX = (window.innerWidth - w - 4) - natural.left;
+        const minOY = 4 - natural.top;
+        const maxOY = (window.innerHeight - h - 4) - natural.top;
+        if (Number.isFinite(maxOX) && maxOX >= minOX) offX = Math.min(maxOX, Math.max(minOX, offX));
+        if (Number.isFinite(maxOY) && maxOY >= minOY) offY = Math.min(maxOY, Math.max(minOY, offY));
+        const drag = `translate(${offX}px, ${offY}px)`;
+        el.style.transform = cssTransform ? `${cssTransform} ${drag}` : drag;
     };
 
     const restore = () => {
         if (!storageKey) return;
         try {
             const v = JSON.parse(localStorage.getItem(storageKey) || 'null');
-            if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) apply(v.x, v.y);
+            if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) {
+                offX = v.x;
+                offY = v.y;
+                apply();
+            }
         } catch {}
     };
 
     let active = false;     // press has started; may/may not have crossed threshold yet
     let dragging = false;   // crossed threshold → actively dragging
-    let startX = 0, startY = 0, originX = 0, originY = 0;
+    let startX = 0, startY = 0, baseOffX = 0, baseOffY = 0;
 
     const begin = (target, x, y) => {
-        // The skip selector keeps the End/Leave action button out of
-        // the drag system entirely so its native click handler runs.
         if (skipSelector && target.closest(skipSelector)) return false;
         active = true;
         dragging = false;
-        const r = el.getBoundingClientRect();
-        originX = r.left;
-        originY = r.top;
         startX = x;
         startY = y;
+        baseOffX = offX;
+        baseOffY = offY;
         return true;
     };
     const move = (x, y, prevent) => {
@@ -2826,7 +2853,9 @@ function _coplayMakeDraggable(el, opts = {}) {
             el.classList.add('dragging');
         }
         if (dragging) {
-            apply(originX + dx, originY + dy);
+            offX = baseOffX + dx;
+            offY = baseOffY + dy;
+            apply();
             if (prevent) prevent();
         }
     };
@@ -2838,13 +2867,9 @@ function _coplayMakeDraggable(el, opts = {}) {
         if (wasDragged) {
             el.classList.remove('dragging');
             if (storageKey) {
-                const r = el.getBoundingClientRect();
-                try { localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top })); } catch {}
+                try { localStorage.setItem(storageKey, JSON.stringify({ x: offX, y: offY })); } catch {}
             }
         } else if (onTap) {
-            // Pure tap (no drag). Trigger the action explicitly — we
-            // never rely on the synthetic click event that may or may
-            // not fire after a touch.
             try { onTap(); } catch (e) { console.warn('onTap threw:', e); }
         }
     };

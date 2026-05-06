@@ -86078,39 +86078,52 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (!el) return;
         const { storageKey, skipSelector = null, onTap = null } = opts;
         el.classList.add("coplay-draggable");
-        const apply = (left, top) => {
-          const w = el.offsetWidth || 0;
-          const h = el.offsetHeight || 0;
-          const maxL = Math.max(0, window.innerWidth - w - 4);
-          const maxT = Math.max(0, window.innerHeight - h - 4);
-          const x = Math.min(maxL, Math.max(4, left));
-          const y = Math.min(maxT, Math.max(4, top));
-          el.style.left = x + "px";
-          el.style.top = y + "px";
-          el.style.right = "auto";
-          el.style.bottom = "auto";
-          el.style.transform = "none";
+        let offX = 0, offY = 0;
+        let cssTransform = null;
+        const apply = () => {
+          if (cssTransform === null) {
+            const prev = el.style.transform;
+            el.style.transform = "";
+            const computed = window.getComputedStyle(el).transform;
+            cssTransform = computed && computed !== "none" ? computed : "";
+            el.style.transform = prev;
+          }
+          el.style.transform = cssTransform;
+          const natural = el.getBoundingClientRect();
+          const w = natural.width;
+          const h = natural.height;
+          const minOX = 4 - natural.left;
+          const maxOX = window.innerWidth - w - 4 - natural.left;
+          const minOY = 4 - natural.top;
+          const maxOY = window.innerHeight - h - 4 - natural.top;
+          if (Number.isFinite(maxOX) && maxOX >= minOX) offX = Math.min(maxOX, Math.max(minOX, offX));
+          if (Number.isFinite(maxOY) && maxOY >= minOY) offY = Math.min(maxOY, Math.max(minOY, offY));
+          const drag = `translate(${offX}px, ${offY}px)`;
+          el.style.transform = cssTransform ? `${cssTransform} ${drag}` : drag;
         };
         const restore = () => {
           if (!storageKey) return;
           try {
             const v = JSON.parse(localStorage.getItem(storageKey) || "null");
-            if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) apply(v.x, v.y);
+            if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) {
+              offX = v.x;
+              offY = v.y;
+              apply();
+            }
           } catch {
           }
         };
         let active = false;
         let dragging = false;
-        let startX = 0, startY = 0, originX = 0, originY = 0;
+        let startX = 0, startY = 0, baseOffX = 0, baseOffY = 0;
         const begin = (target, x, y) => {
           if (skipSelector && target.closest(skipSelector)) return false;
           active = true;
           dragging = false;
-          const r = el.getBoundingClientRect();
-          originX = r.left;
-          originY = r.top;
           startX = x;
           startY = y;
+          baseOffX = offX;
+          baseOffY = offY;
           return true;
         };
         const move = (x, y, prevent) => {
@@ -86122,7 +86135,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             el.classList.add("dragging");
           }
           if (dragging) {
-            apply(originX + dx, originY + dy);
+            offX = baseOffX + dx;
+            offY = baseOffY + dy;
+            apply();
             if (prevent) prevent();
           }
         };
@@ -86134,9 +86149,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           if (wasDragged) {
             el.classList.remove("dragging");
             if (storageKey) {
-              const r = el.getBoundingClientRect();
               try {
-                localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top }));
+                localStorage.setItem(storageKey, JSON.stringify({ x: offX, y: offY }));
               } catch {
               }
             }
