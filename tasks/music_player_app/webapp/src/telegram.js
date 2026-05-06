@@ -3112,53 +3112,26 @@ function coplayBuildMessage(stateJson, invitees) {
     return { text: head + line, entities };
 }
 
-// Pull the document off the host's source-group message (same pattern
-// `sendTrackToChat` uses) and wrap it as InputMediaDocument. Going to
-// the source rather than the share-channel forward means we don't get
-// burned when a stale `share_*` cache entry points at a deleted msg.
-async function _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId) {
-    const entity = await _getEntity(sourceGroupId);
-    const msgs = await client.getMessages(entity, { ids: [sourceTrackId] });
-    const msg = msgs[0];
-    if (!msg) throw new Error('coplay: source message not found');
-    if (!msg.media || !msg.media.document) throw new Error('coplay: source message has no audio document');
-    const doc = msg.media.document;
-    return new Api.InputMediaDocument({
-        id: new Api.InputDocument({
-            id: doc.id,
-            accessHash: doc.accessHash,
-            fileReference: doc.fileReference,
-        }),
-    });
-}
-
-// Send the sync message AS an audio post: the current track is attached
-// as media, and the caption holds the magic prefix + JSON state +
-// mentions of every invitee.
-export async function coplaySendInvite(stateJson, invitees, sourceGroupId, sourceTrackId) {
+// Send the sync message as a plain text post: the magic prefix + JSON
+// state + invitee mentions in the body. The audio for the current
+// track lives at a separate forwarded msg in the share channel,
+// referenced from the JSON via `track.cid` — Telegram's media-edit on
+// audio documents is unreliable so we don't attach media here at all.
+export async function coplaySendInvite(stateJson, invitees) {
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
     const entity = await _getEntity(channel.id);
     const { text, entities } = coplayBuildMessage(stateJson, invitees);
-    const inputMedia = await _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId);
-    const result = await client.invoke(new Api.messages.SendMedia({
-        peer: entity,
-        media: inputMedia,
+    const sent = await client.sendMessage(entity, {
         message: text,
-        entities: entities.length ? entities : undefined,
-        randomId: bigInt(Math.floor(Math.random() * 2 ** 53)),
-    }));
-    let sentId = null;
-    for (const update of result.updates || []) {
-        if (update.message && update.message.id) { sentId = update.message.id; break; }
-        if (update.id != null && update.message) { sentId = update.id; break; }
-    }
-    if (!sentId) throw new Error('coplaySendInvite: no message id in response');
-    return { syncMsgId: sentId, channelId: channel.id };
+        formattingEntities: entities.length ? entities : undefined,
+    });
+    return { syncMsgId: sent.id, channelId: channel.id };
 }
 
-// Caption-only edit (play/pause/seek). Telegram preserves the existing
-// media when the `media` field is omitted.
+// Caption-only edit. Used for every host action (play/pause/seek/
+// track change). On track change the host updates `track.cid` to point
+// at a freshly-forwarded msg in @tgmusicplayer_shared.
 export async function coplayEditState(channelId, syncMsgId, stateJson, invitees) {
     await _ensureConnected();
     const peer = await client.getInputEntity(channelId);
@@ -3168,22 +3141,6 @@ export async function coplayEditState(channelId, syncMsgId, stateJson, invitees)
         id: syncMsgId,
         message: text,
         entities: entities.length ? entities : undefined,
-    }));
-}
-
-// Track change: swap the message's media to the new track AND update the
-// caption JSON. Both happen in one EditMessage round-trip.
-export async function coplayEditTrack(channelId, syncMsgId, sourceGroupId, sourceTrackId, stateJson, invitees) {
-    await _ensureConnected();
-    const peer = await client.getInputEntity(channelId);
-    const { text, entities } = coplayBuildMessage(stateJson, invitees);
-    const inputMedia = await _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId);
-    await client.invoke(new Api.messages.EditMessage({
-        peer,
-        id: syncMsgId,
-        message: text,
-        entities: entities.length ? entities : undefined,
-        media: inputMedia,
     }));
 }
 

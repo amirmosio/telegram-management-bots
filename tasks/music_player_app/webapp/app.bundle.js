@@ -72995,47 +72995,16 @@ ${JSON.stringify(state)}`;
     }
     return { text: head + line, entities };
   }
-  async function _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId) {
-    const entity = await _getEntity(sourceGroupId);
-    const msgs = await client.getMessages(entity, { ids: [sourceTrackId] });
-    const msg = msgs[0];
-    if (!msg) throw new Error("coplay: source message not found");
-    if (!msg.media || !msg.media.document) throw new Error("coplay: source message has no audio document");
-    const doc = msg.media.document;
-    return new import_tl.Api.InputMediaDocument({
-      id: new import_tl.Api.InputDocument({
-        id: doc.id,
-        accessHash: doc.accessHash,
-        fileReference: doc.fileReference
-      })
-    });
-  }
-  async function coplaySendInvite(stateJson, invitees, sourceGroupId, sourceTrackId) {
+  async function coplaySendInvite(stateJson, invitees) {
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
     const entity = await _getEntity(channel.id);
     const { text, entities } = coplayBuildMessage(stateJson, invitees);
-    const inputMedia = await _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId);
-    const result = await client.invoke(new import_tl.Api.messages.SendMedia({
-      peer: entity,
-      media: inputMedia,
+    const sent = await client.sendMessage(entity, {
       message: text,
-      entities: entities.length ? entities : void 0,
-      randomId: (0, import_big_integer.default)(Math.floor(Math.random() * 2 ** 53))
-    }));
-    let sentId = null;
-    for (const update of result.updates || []) {
-      if (update.message && update.message.id) {
-        sentId = update.message.id;
-        break;
-      }
-      if (update.id != null && update.message) {
-        sentId = update.id;
-        break;
-      }
-    }
-    if (!sentId) throw new Error("coplaySendInvite: no message id in response");
-    return { syncMsgId: sentId, channelId: channel.id };
+      formattingEntities: entities.length ? entities : void 0
+    });
+    return { syncMsgId: sent.id, channelId: channel.id };
   }
   async function coplayEditState(channelId, syncMsgId, stateJson, invitees) {
     await _ensureConnected();
@@ -85117,7 +85086,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               d: t.duration || 0
             }
           };
-          const { syncMsgId } = await coplaySendInvite(initialState, invitees, playerGroupId, t.id);
+          const { syncMsgId } = await coplaySendInvite(initialState, invitees);
           _coplaySession = {
             role: "host",
             syncMsgId,

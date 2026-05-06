@@ -3266,7 +3266,7 @@ async function _coplayStartHost() {
                 d: t.duration || 0,
             },
         };
-        const { syncMsgId } = await tg.coplaySendInvite(initialState, invitees, playerGroupId, t.id);
+        const { syncMsgId } = await tg.coplaySendInvite(initialState, invitees);
 
         _coplaySession = {
             role: 'host',
