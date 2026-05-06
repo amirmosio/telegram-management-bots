@@ -72917,28 +72917,8 @@ ${JSON.stringify(state)}`;
       const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
       if (raw != null) fromUserId = Number(typeof raw === "bigint" ? raw : raw);
     }
-    const invitees = [];
-    const seenInvitees = /* @__PURE__ */ new Set();
-    for (const ent of msg.entities || []) {
-      const cn = ent.className || "";
-      if (cn !== "MessageEntityMentionName" && cn !== "InputMessageEntityMentionName") continue;
-      let idRaw;
-      if (cn === "InputMessageEntityMentionName") {
-        idRaw = ent.userId?.userId?.value ?? ent.userId?.userId;
-      } else {
-        idRaw = ent.userId?.value ?? ent.userId;
-      }
-      if (idRaw == null) continue;
-      const id = Number(typeof idRaw === "bigint" ? idRaw : idRaw);
-      if (!id || seenInvitees.has(id)) continue;
-      seenInvitees.add(id);
-      let name = "";
-      try {
-        name = text.substring(ent.offset, ent.offset + ent.length);
-      } catch {
-      }
-      invitees.push({ id, name: name || "User" });
-    }
+    const ids = Array.isArray(state?.inv) ? state.inv.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n !== 0) : [];
+    const invitees = ids.map((id) => ({ id, name: "" }));
     return { state, fromUserId, msgId: msg.id, invitees };
   }
   async function getMyUserId() {
@@ -72970,30 +72950,11 @@ ${JSON.stringify(state)}`;
   function coplayBuildMessage(stateJson, invitees) {
     const head = COPLAY_MARKER + JSON.stringify(stateJson);
     if (!invitees.length) return { text: head, entities: [] };
-    let line = "\nCo-play with ";
-    const entities = [];
-    let cursor = head.length + line.length;
-    for (let i = 0; i < invitees.length; i++) {
-      const inv = invitees[i];
-      const name = (inv.title || "User").slice(0, 32);
-      const lenU16 = name.length;
-      if (i > 0) {
-        line += ", ";
-        cursor += 2;
-      }
-      line += name;
-      const ent = inv._entity instanceof import_tl.Api.User ? new import_tl.Api.InputMessageEntityMentionName({
-        offset: cursor,
-        length: lenU16,
-        userId: new import_tl.Api.InputUser({
-          userId: inv._entity.id,
-          accessHash: inv._entity.accessHash || import_big_integer.default.zero
-        })
-      }) : null;
-      if (ent) entities.push(ent);
-      cursor += lenU16;
-    }
-    return { text: head + line, entities };
+    const tags = invitees.map((inv) => {
+      if (inv.username) return "@" + inv.username;
+      return (inv.title || "User").slice(0, 32);
+    });
+    return { text: head + "\nCo-play with " + tags.join(", "), entities: [] };
   }
   async function coplaySendInvite(stateJson, invitees) {
     await _ensureConnected();
@@ -73037,28 +72998,32 @@ ${JSON.stringify(state)}`;
     if (!parsed) return null;
     return { ...parsed, fetchedWallSec: Date.now() / 1e3, raw: msg };
   }
+  async function _coplayIsForMe(parsed) {
+    if (!parsed) return false;
+    const me = await getMyUserId();
+    if (!me) return false;
+    const ids = parsed.invitees?.map((x) => x.id) || [];
+    return ids.includes(me);
+  }
   async function coplayCatchupMentions() {
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
     const entity = await _getEntity(channel.id);
-    let result;
+    const out = [];
     try {
-      result = await client.invoke(new import_tl.Api.messages.GetUnreadMentions({
-        peer: entity,
-        offsetId: 0,
-        addOffset: 0,
-        limit: 20,
-        maxId: 0,
-        minId: 0
-      }));
+      const cutoff = Math.floor(Date.now() / 1e3) - 24 * 3600;
+      let count = 0;
+      for await (const msg of client.iterMessages(entity, { limit: 60 })) {
+        count++;
+        if (msg.date && msg.date < cutoff) break;
+        const parsed = _coplayParse(msg);
+        if (!parsed) continue;
+        if (!await _coplayIsForMe(parsed)) continue;
+        out.push({ ...parsed, channelId: channel.id });
+        if (count >= 60) break;
+      }
     } catch (e) {
       console.warn("coplayCatchupMentions failed:", e?.message || e);
-      return [];
-    }
-    const out = [];
-    for (const msg of result.messages || []) {
-      const parsed = _coplayParse(msg);
-      if (parsed) out.push({ ...parsed, channelId: channel.id });
     }
     return out;
   }
@@ -73069,12 +73034,13 @@ ${JSON.stringify(state)}`;
     const bareChannelId = channel.id < 0 ? Number(String(channel.id).replace(/^-100/, "")) : channel.id;
     const handler = async (event) => {
       const msg = event.message;
-      if (!msg || !msg.mentioned) return;
+      if (!msg) return;
       const peerCh = msg.peerId?.channelId;
       const ch = peerCh != null ? Number(typeof peerCh === "bigint" ? peerCh : peerCh.value ?? peerCh) : null;
       if (ch !== bareChannelId) return;
       const parsed = _coplayParse(msg);
       if (!parsed) return;
+      if (!await _coplayIsForMe(parsed)) return;
       try {
         callback({ ...parsed, channelId: channel.id });
       } catch (e) {
@@ -86111,11 +86077,17 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       }
       function _coplayBuildState(channelTrackMsgId) {
         const t = _coplayCurrentTrack();
+        const inv = (_coplaySession?.invitees || []).map((i) => i.id).filter(Boolean);
         return {
           v: 1,
           playing: !audio.paused,
           pos: Math.max(0, audio.currentTime || 0),
           anchor: Date.now() / 1e3,
+          // Authoritative invitee list lives here (id-array). The plain
+          // "@username" text in the body is purely cosmetic — we don't
+          // attach mention entities, otherwise Telegram would unmute the
+          // share channel for every invitee.
+          inv,
           track: t ? {
             tid: `${playerGroupId}:${t.id}`,
             cid: channelTrackMsgId || null,
@@ -86239,11 +86211,14 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         try {
           const channelId = parseInt(localStorage.getItem("share_channel_id") || "0", 10) || (await findOrCreateShareChannel()).id;
           if (!localStorage.getItem("share_channel_id")) localStorage.setItem("share_channel_id", String(channelId));
-          const invitees = _coplayInviteList.map((c) => ({
-            id: c.id,
-            title: c.title,
-            _entity: getCachedUserEntity(c.id)
-          })).filter((i) => i._entity);
+          const invitees = _coplayInviteList.map((c) => {
+            const ent = getCachedUserEntity(c.id);
+            return {
+              id: c.id,
+              title: c.title,
+              username: ent?.username || c.username || ""
+            };
+          });
           if (invitees.length === 0) {
             showToast("Could not resolve contacts");
             coplayStartBtn.disabled = false;
@@ -86256,6 +86231,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             playing: !audio.paused,
             pos: Math.max(0, audio.currentTime || 0),
             anchor: Date.now() / 1e3,
+            inv: invitees.map((i) => i.id),
             track: {
               tid: `${playerGroupId}:${t.id}`,
               cid: initialCid,
@@ -86297,12 +86273,23 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       function _coplayBuildChip(person, klass) {
         const el = document.createElement("span");
         el.className = "coplay-chip" + (klass ? " " + klass : "");
+        const fallbackName = person.name || "User";
         const initial = (person.name || "?").trim()[0]?.toUpperCase() || "?";
         el.innerHTML = `
         <span class="coplay-chip-avatar"><span data-init>${escapeHtml(initial)}</span></span>
-        <span class="coplay-chip-name">${escapeHtml(person.name || "User")}</span>
+        <span class="coplay-chip-name">${escapeHtml(fallbackName)}</span>
     `;
         if (person.id) {
+          if (!person.name) {
+            getUserDisplayName(person.id).then((name) => {
+              if (!name || !el.isConnected) return;
+              const nameEl = el.querySelector(".coplay-chip-name");
+              if (nameEl) nameEl.textContent = name;
+              const initEl = el.querySelector("[data-init]");
+              if (initEl) initEl.textContent = (name.trim()[0] || "?").toUpperCase();
+            }).catch(() => {
+            });
+          }
           coplayGetUserAvatarUrl(person.id).then((url) => {
             if (!url) return;
             const avatarEl = el.querySelector(".coplay-chip-avatar");

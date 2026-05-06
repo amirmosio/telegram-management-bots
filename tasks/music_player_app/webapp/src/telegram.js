@@ -3015,29 +3015,15 @@ function _coplayParse(msg) {
         if (raw != null) fromUserId = Number(typeof raw === 'bigint' ? raw : raw);
     }
 
-    // Pull invitees out of the caption's mention entities. Telegram entity
-    // offsets are UTF-16 code units; we slice the message text at those
-    // offsets to recover the displayed name (the host wrote it there at
-    // session-start).
-    const invitees = [];
-    const seenInvitees = new Set();
-    for (const ent of (msg.entities || [])) {
-        const cn = ent.className || '';
-        if (cn !== 'MessageEntityMentionName' && cn !== 'InputMessageEntityMentionName') continue;
-        let idRaw;
-        if (cn === 'InputMessageEntityMentionName') {
-            idRaw = ent.userId?.userId?.value ?? ent.userId?.userId;
-        } else {
-            idRaw = ent.userId?.value ?? ent.userId;
-        }
-        if (idRaw == null) continue;
-        const id = Number(typeof idRaw === 'bigint' ? idRaw : idRaw);
-        if (!id || seenInvitees.has(id)) continue;
-        seenInvitees.add(id);
-        let name = '';
-        try { name = text.substring(ent.offset, ent.offset + ent.length); } catch {}
-        invitees.push({ id, name: name || 'User' });
-    }
+    // Invitees are now carried as a plain id-array in the JSON state
+    // (state.inv). We deliberately stopped using MessageEntityMentionName
+    // so Telegram doesn't push notifications and pull the share channel
+    // out of the recipient's archive. Display names will be resolved
+    // lazily by the follower banner.
+    const ids = Array.isArray(state?.inv)
+        ? state.inv.map(n => Number(n)).filter(n => Number.isFinite(n) && n !== 0)
+        : [];
+    const invitees = ids.map(id => ({ id, name: '' }));
 
     return { state, fromUserId, msgId: msg.id, invitees };
 }
@@ -3073,43 +3059,26 @@ export async function getUserDisplayName(userId) {
     return 'User';
 }
 
-// Build caption text + entities for the sync message.
+// Build caption text for the sync message.
 //
-//   text  = "[telemusic-coplay-v1] {json}\nCo-play with X, Y, Z"
-//   ents  = MessageEntityMentionName for each name in "X, Y, Z"
+//   text = "[telemusic-coplay-v1] {json}\nCo-play with @user1, @user2, @user3"
 //
-// invitees: [{ id, title, _entity }]  — _entity is the GramJS User cached in _groupsCache.
+// The invitees are also carried inside `stateJson.inv` (added by the
+// caller), which is the *authoritative* discovery channel. The plain
+// "@username" text is purely cosmetic — we deliberately do NOT attach
+// MessageEntityMentionName entities, because real mentions trigger
+// Telegram notifications that pull the share channel out of the
+// recipient's archive.
+//
+// invitees: [{ id, title, username }]
 function coplayBuildMessage(stateJson, invitees) {
     const head = COPLAY_MARKER + JSON.stringify(stateJson);
     if (!invitees.length) return { text: head, entities: [] };
-
-    let line = '\nCo-play with ';
-    const entities = [];
-    // UTF-16 offsets — Telegram entity offsets are counted in UTF-16 code units.
-    let cursor = head.length + line.length;
-    for (let i = 0; i < invitees.length; i++) {
-        const inv = invitees[i];
-        const name = (inv.title || 'User').slice(0, 32);
-        const lenU16 = name.length; // ASCII-ish names are fine; multi-codepoint emoji rare here
-        if (i > 0) {
-            line += ', ';
-            cursor += 2;
-        }
-        line += name;
-        const ent = inv._entity instanceof Api.User
-            ? new Api.InputMessageEntityMentionName({
-                offset: cursor,
-                length: lenU16,
-                userId: new Api.InputUser({
-                    userId: inv._entity.id,
-                    accessHash: inv._entity.accessHash || bigInt.zero,
-                }),
-            })
-            : null;
-        if (ent) entities.push(ent);
-        cursor += lenU16;
-    }
-    return { text: head + line, entities };
+    const tags = invitees.map(inv => {
+        if (inv.username) return '@' + inv.username;
+        return (inv.title || 'User').slice(0, 32);
+    });
+    return { text: head + '\nCo-play with ' + tags.join(', '), entities: [] };
 }
 
 // Send the sync message as a plain text post: the magic prefix + JSON
@@ -3168,38 +3137,53 @@ export async function coplayFetch(channelId, syncMsgId) {
     return { ...parsed, fetchedWallSec: Date.now() / 1000, raw: msg };
 }
 
-// Catch-up at boot: surface any unread @-mentions of this user in the
-// share channel that match the co-play marker. Returns parsed invites.
+// Returns true if `parsed` (from _coplayParse) names the logged-in
+// user as an invitee. Reads state.inv (the explicit id-array stamped
+// by the host) — does NOT touch Telegram's mentions inbox, so the
+// channel can stay muted+archived for invitees.
+async function _coplayIsForMe(parsed) {
+    if (!parsed) return false;
+    const me = await getMyUserId();
+    if (!me) return false;
+    const ids = parsed.invitees?.map(x => x.id) || [];
+    return ids.includes(me);
+}
+
+// Catch-up at boot: scan the most recent messages in the share channel
+// for ones that match the co-play marker AND list me in their invitee
+// id-array. Replaces the older `messages.GetUnreadMentions` path which
+// required real mentions (and thus broke the recipient's archive mute).
 export async function coplayCatchupMentions() {
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
     const entity = await _getEntity(channel.id);
-    let result;
+    const out = [];
     try {
-        result = await client.invoke(new Api.messages.GetUnreadMentions({
-            peer: entity,
-            offsetId: 0,
-            addOffset: 0,
-            limit: 20,
-            maxId: 0,
-            minId: 0,
-        }));
+        // Scan the recent tail of the share channel. 60 entries is a
+        // generous window — the share channel is mostly forwards, plus
+        // any active sync msgs from a few hosts. Short-circuit once we
+        // have anything older than ~24 h.
+        const cutoff = Math.floor(Date.now() / 1000) - 24 * 3600;
+        let count = 0;
+        for await (const msg of client.iterMessages(entity, { limit: 60 })) {
+            count++;
+            if (msg.date && msg.date < cutoff) break;
+            const parsed = _coplayParse(msg);
+            if (!parsed) continue;
+            if (!(await _coplayIsForMe(parsed))) continue;
+            out.push({ ...parsed, channelId: channel.id });
+            if (count >= 60) break;
+        }
     } catch (e) {
         console.warn('coplayCatchupMentions failed:', e?.message || e);
-        return [];
-    }
-    const out = [];
-    for (const msg of result.messages || []) {
-        const parsed = _coplayParse(msg);
-        if (parsed) out.push({ ...parsed, channelId: channel.id });
     }
     return out;
 }
 
-// Register a NewMessage handler that fires for any message that mentions
-// the logged-in user, then narrows to the share channel inside the
-// handler (the `chats:` filter has been flaky cross-DC for channels).
-// The callback is invoked with `{ msgId, fromUserId, state, channelId }`.
+// Register a NewMessage handler that fires for any new message in the
+// share channel; we filter to co-play invites for *me* by parsing the
+// caption marker and checking state.inv. No `mentioned` flag involved,
+// so the recipient's archive/mute setting is preserved.
 let _coplayInviteHandlerInstalled = false;
 export async function installCoplayInviteListener(callback) {
     if (_coplayInviteHandlerInstalled) return;
@@ -3212,7 +3196,7 @@ export async function installCoplayInviteListener(callback) {
         : channel.id;
     const handler = async (event) => {
         const msg = event.message;
-        if (!msg || !msg.mentioned) return;
+        if (!msg) return;
         const peerCh = msg.peerId?.channelId;
         const ch = peerCh != null
             ? Number(typeof peerCh === 'bigint' ? peerCh : (peerCh.value ?? peerCh))
@@ -3220,6 +3204,7 @@ export async function installCoplayInviteListener(callback) {
         if (ch !== bareChannelId) return;
         const parsed = _coplayParse(msg);
         if (!parsed) return;
+        if (!(await _coplayIsForMe(parsed))) return;
         try { callback({ ...parsed, channelId: channel.id }); }
         catch (e) { console.warn('coplay invite cb threw:', e?.message || e); }
     };

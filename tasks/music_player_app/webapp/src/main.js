@@ -2787,11 +2787,17 @@ function _coplayPersistHostSession(s) {
 //              Followers fetch audio from THIS msg.
 function _coplayBuildState(channelTrackMsgId) {
     const t = _coplayCurrentTrack();
+    const inv = (_coplaySession?.invitees || []).map(i => i.id).filter(Boolean);
     return {
         v: 1,
         playing: !audio.paused,
         pos: Math.max(0, audio.currentTime || 0),
         anchor: Date.now() / 1000,
+        // Authoritative invitee list lives here (id-array). The plain
+        // "@username" text in the body is purely cosmetic — we don't
+        // attach mention entities, otherwise Telegram would unmute the
+        // share channel for every invitee.
+        inv,
         track: t ? {
             tid: `${playerGroupId}:${t.id}`,
             cid: channelTrackMsgId || null,
@@ -2946,12 +2952,18 @@ async function _coplayStartHost() {
         const channelId = parseInt(localStorage.getItem('share_channel_id') || '0', 10) || (await tg.findOrCreateShareChannel()).id;
         if (!localStorage.getItem('share_channel_id')) localStorage.setItem('share_channel_id', String(channelId));
 
-        // Resolve each invitee's full User entity (cached by listChatsForShare).
-        const invitees = _coplayInviteList.map(c => ({
-            id: c.id,
-            title: c.title,
-            _entity: tg.getCachedUserEntity(c.id),
-        })).filter(i => i._entity);
+        // Resolve each invitee's full User entity (cached by listChatsForShare)
+        // so we can pull a username for the cosmetic "@username" caption text.
+        // No entity is required to invite someone now — the JSON `inv`
+        // id-array is what discovery actually keys off.
+        const invitees = _coplayInviteList.map(c => {
+            const ent = tg.getCachedUserEntity(c.id);
+            return {
+                id: c.id,
+                title: c.title,
+                username: ent?.username || c.username || '',
+            };
+        });
 
         if (invitees.length === 0) {
             showToast('Could not resolve contacts');
@@ -2966,6 +2978,7 @@ async function _coplayStartHost() {
             playing: !audio.paused,
             pos: Math.max(0, audio.currentTime || 0),
             anchor: Date.now() / 1000,
+            inv: invitees.map(i => i.id),
             track: {
                 tid: `${playerGroupId}:${t.id}`,
                 cid: initialCid,
@@ -3007,18 +3020,30 @@ async function _coplayStartHost() {
     }
 }
 
-// Build a chip element. People = [{ id, name }]. `klass` is added to the
-// chip class list (e.g. 'host' for the gold host chip). Avatar is filled
-// in lazily once the profile photo has been fetched + cached.
+// Build a chip element. People = [{ id, name? }]. `klass` is added to
+// the chip class list (e.g. 'host' for the gold host chip). Both name
+// and avatar are filled in lazily — when invitees arrive only as a
+// list of ids in the JSON state, the follower has to resolve display
+// info per person.
 function _coplayBuildChip(person, klass) {
     const el = document.createElement('span');
     el.className = 'coplay-chip' + (klass ? ' ' + klass : '');
+    const fallbackName = person.name || 'User';
     const initial = (person.name || '?').trim()[0]?.toUpperCase() || '?';
     el.innerHTML = `
         <span class="coplay-chip-avatar"><span data-init>${escapeHtml(initial)}</span></span>
-        <span class="coplay-chip-name">${escapeHtml(person.name || 'User')}</span>
+        <span class="coplay-chip-name">${escapeHtml(fallbackName)}</span>
     `;
     if (person.id) {
+        if (!person.name) {
+            tg.getUserDisplayName(person.id).then(name => {
+                if (!name || !el.isConnected) return;
+                const nameEl = el.querySelector('.coplay-chip-name');
+                if (nameEl) nameEl.textContent = name;
+                const initEl = el.querySelector('[data-init]');
+                if (initEl) initEl.textContent = (name.trim()[0] || '?').toUpperCase();
+            }).catch(() => {});
+        }
         tg.coplayGetUserAvatarUrl(person.id).then(url => {
             if (!url) return;
             const avatarEl = el.querySelector('.coplay-chip-avatar');
