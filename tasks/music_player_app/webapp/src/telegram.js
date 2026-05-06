@@ -41,6 +41,7 @@ const _trackKey = (groupId, trackId) => `${groupId}:${trackId}`;
 //   audio:   Blob | null,     // downloaded music bytes
 //   lyrics:  Object | null,   // { synced, plain, source }
 //   artwork: Blob | null,     // cover art bytes
+//   artworkSearchedAt: number | null, // last iTunes/Deezer/Discogs lookup ts; suppresses re-search until TTL expires
 //   cachedAt: number
 //
 // Rows are upserted — a row may exist with only lyrics / artwork if
@@ -231,10 +232,24 @@ export async function updateTrackLyrics(groupId, trackId, lyrics, context = {}) 
     try { await _upsertTrackRow(groupId, trackId, patch); } catch {}
 }
 
-// Artwork upsert — same shape.
+// Artwork upsert — same shape. Always stamps artworkSearchedAt so the
+// negative-result skip in fetchArtworkForTrack stays consistent: if we
+// found bytes, we still know "we searched at time X".
 export async function updateTrackArtwork(groupId, trackId, artworkBlob, context = {}) {
     const ctx = _deriveTopicContext(groupId, trackId, context);
-    const patch = { artwork: artworkBlob };
+    const patch = { artwork: artworkBlob, artworkSearchedAt: Date.now() };
+    if (context.track) patch.track = context.track;
+    if (ctx.topicId != null) patch.topicId = ctx.topicId;
+    if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;
+    try { await _upsertTrackRow(groupId, trackId, patch); } catch {}
+}
+
+// Negative-result marker: search ran, found nothing. Lets the caller
+// suppress the next iTunes/Deezer/Discogs lookups until the TTL expires.
+// Same upsert path so a row gets created if the track was never cached.
+export async function markArtworkSearched(groupId, trackId, context = {}) {
+    const ctx = _deriveTopicContext(groupId, trackId, context);
+    const patch = { artworkSearchedAt: Date.now() };
     if (context.track) patch.track = context.track;
     if (ctx.topicId != null) patch.topicId = ctx.topicId;
     if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;

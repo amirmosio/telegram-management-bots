@@ -70623,7 +70623,18 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function updateTrackArtwork(groupId, trackId, artworkBlob, context = {}) {
     const ctx = _deriveTopicContext(groupId, trackId, context);
-    const patch = { artwork: artworkBlob };
+    const patch = { artwork: artworkBlob, artworkSearchedAt: Date.now() };
+    if (context.track) patch.track = context.track;
+    if (ctx.topicId != null) patch.topicId = ctx.topicId;
+    if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;
+    try {
+      await _upsertTrackRow(groupId, trackId, patch);
+    } catch {
+    }
+  }
+  async function markArtworkSearched(groupId, trackId, context = {}) {
+    const ctx = _deriveTopicContext(groupId, trackId, context);
+    const patch = { artworkSearchedAt: Date.now() };
     if (context.track) patch.track = context.track;
     if (ctx.topicId != null) patch.topicId = ctx.topicId;
     if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;
@@ -85599,6 +85610,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const themeMeta = document.querySelector('meta[name="theme-color"]');
         if (themeMeta) themeMeta.setAttribute("content", "#0a0a0a");
       }
+      var ARTWORK_NEGATIVE_TTL_MS = 30 * 24 * 60 * 60 * 1e3;
       async function fetchArtworkForTrack(track, gen) {
         if (track.has_thumb) {
           try {
@@ -85612,8 +85624,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
         }
         if (_playGeneration !== gen) return;
+        let row = null;
         try {
-          const row = await getCachedTrackRecord(playerGroupId, track.id);
+          row = await getCachedTrackRecord(playerGroupId, track.id);
           if (_playGeneration !== gen) return;
           if (row?.artwork) {
             _showArtwork(URL.createObjectURL(row.artwork), gen);
@@ -85622,21 +85635,28 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         } catch {
         }
         if (_playGeneration !== gen) return;
+        if (row?.artworkSearchedAt && Date.now() - row.artworkSearchedAt < ARTWORK_NEGATIVE_TTL_MS) {
+          return;
+        }
         try {
           const { title, artist } = parseTrackInfo(track.title, track.artist);
           const url = await searchArtwork(title, artist);
           if (_playGeneration !== gen) return;
+          const topicIdForRow = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
+          const ctx = {
+            topicId: playerTopicId ?? topicIdForRow,
+            topicTitle: panelTitle?.textContent || null,
+            track
+          };
           if (url) {
             _showArtwork(url, gen);
             fetch(url).then((r) => r.blob()).then((blob) => {
-              const topicIdForRow = currentPlaylistTopicId === "__all__" ? null : currentPlaylistTopicId;
-              updateTrackArtwork(playerGroupId, track.id, blob, {
-                topicId: playerTopicId ?? topicIdForRow,
-                topicTitle: panelTitle?.textContent || null,
-                track
-              });
+              updateTrackArtwork(playerGroupId, track.id, blob, ctx);
             }).catch(() => {
+              markArtworkSearched(playerGroupId, track.id, ctx);
             });
+          } else {
+            markArtworkSearched(playerGroupId, track.id, ctx);
           }
         } catch (e) {
         }

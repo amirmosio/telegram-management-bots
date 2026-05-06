@@ -2198,6 +2198,12 @@ function _resetHalo() {
     if (themeMeta) themeMeta.setAttribute('content', '#0a0a0a');
 }
 
+// Negative-result TTL: when iTunes/Deezer/Discogs all returned nothing,
+// suppress re-search for this long. Long enough that we don't hammer the
+// APIs every play; short enough that newly-uploaded artwork eventually
+// gets picked up. Positive results (we have bytes) are kept forever.
+const ARTWORK_NEGATIVE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
 async function fetchArtworkForTrack(track, gen) {
     // 1. Embedded Telegram thumbnail
     if (track.has_thumb) {
@@ -2210,30 +2216,48 @@ async function fetchArtworkForTrack(track, gen) {
     if (_playGeneration !== gen) return;
 
     // 2. Artwork already stored on the track row from a previous play
+    let row = null;
     try {
-        const row = await tg.getCachedTrackRecord(playerGroupId, track.id);
+        row = await tg.getCachedTrackRecord(playerGroupId, track.id);
         if (_playGeneration !== gen) return;
         if (row?.artwork) { _showArtwork(URL.createObjectURL(row.artwork), gen); return; }
     } catch {}
     if (_playGeneration !== gen) return;
+
+    // 2b. Recent negative result — we searched within the TTL and found
+    // nothing in any source. Skip the lookup so we don't hit the APIs
+    // every time the track plays.
+    if (row?.artworkSearchedAt
+        && Date.now() - row.artworkSearchedAt < ARTWORK_NEGATIVE_TTL_MS) {
+        return;
+    }
 
     // 3. Search the internet (iTunes / Deezer / Discogs).
     try {
         const { title, artist } = parseTrackInfo(track.title, track.artist);
         const url = await searchArtwork(title, artist);
         if (_playGeneration !== gen) return;
+        const topicIdForRow = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+        const ctx = {
+            topicId: playerTopicId ?? topicIdForRow,
+            topicTitle: panelTitle?.textContent || null,
+            track,
+        };
         if (url) {
             _showArtwork(url, gen);
             // Persist the bytes into the unified row so the next play
             // is offline-friendly and the sidebar thumbnail works too.
+            // updateTrackArtwork stamps artworkSearchedAt internally.
             fetch(url).then(r => r.blob()).then(blob => {
-                const topicIdForRow = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
-                tg.updateTrackArtwork(playerGroupId, track.id, blob, {
-                    topicId: playerTopicId ?? topicIdForRow,
-                    topicTitle: panelTitle?.textContent || null,
-                    track,
-                });
-            }).catch(() => {});
+                tg.updateTrackArtwork(playerGroupId, track.id, blob, ctx);
+            }).catch(() => {
+                // Bytes fetch failed but the search did succeed — record
+                // the timestamp so we don't keep retrying instantly.
+                tg.markArtworkSearched(playerGroupId, track.id, ctx);
+            });
+        } else {
+            // No match in any source — stamp the row so we honour the TTL.
+            tg.markArtworkSearched(playerGroupId, track.id, ctx);
         }
     } catch (e) { /* no artwork */ }
 }
