@@ -2969,11 +2969,22 @@ async function _coplayBroadcast() {
         do {
             s.broadcastQueued = false;
             const trackMsgId = await _coplayEnsureTrackInChannel();
+            const t = _coplayCurrentTrack();
+            const sourceTrackId = t?.id ?? null;
+            const sourceGroupId = playerGroupId;
             const state = _coplayBuildState(trackMsgId);
-            const trackChanged = trackMsgId && trackMsgId !== s.lastBroadcastTrackMsgId;
+            const trackChanged = sourceTrackId
+                && (sourceTrackId !== s.lastBroadcastSourceTrackId
+                    || sourceGroupId !== s.lastBroadcastSourceGroupId);
             if (trackChanged) {
-                await tg.coplayEditTrack(s.channelId, s.syncMsgId, trackMsgId, state, s.invitees);
+                await tg.coplayEditTrack(
+                    s.channelId, s.syncMsgId,
+                    sourceGroupId, sourceTrackId,
+                    state, s.invitees,
+                );
                 s.lastBroadcastTrackMsgId = trackMsgId;
+                s.lastBroadcastSourceTrackId = sourceTrackId;
+                s.lastBroadcastSourceGroupId = sourceGroupId;
             } else {
                 await tg.coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
             }
@@ -3176,7 +3187,7 @@ async function _coplayStartHost() {
             anchor: Date.now() / 1000,
             track: { i: trackMsgId, t: t.title || '', a: t.artist || '', d: t.duration || 0 },
         };
-        const { syncMsgId } = await tg.coplaySendInvite(initialState, invitees, trackMsgId);
+        const { syncMsgId } = await tg.coplaySendInvite(initialState, invitees, playerGroupId, t.id);
 
         _coplaySession = {
             role: 'host',
@@ -3190,6 +3201,8 @@ async function _coplayStartHost() {
             broadcastQueued: false,
             invitees,
             lastBroadcastTrackMsgId: trackMsgId,
+            lastBroadcastSourceTrackId: t.id,
+            lastBroadcastSourceGroupId: playerGroupId,
         };
         localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
 

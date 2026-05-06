@@ -72924,13 +72924,12 @@ ${JSON.stringify(state)}`;
     }
     return { text: head + line, entities };
   }
-  async function _coplayBuildInputMediaFromChannelMsg(channelId, trackMsgIdInChannel) {
-    const entity = await _getEntity(channelId);
-    const msgs = await client.getMessages(entity, { ids: [trackMsgIdInChannel] });
+  async function _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId) {
+    const entity = await _getEntity(sourceGroupId);
+    const msgs = await client.getMessages(entity, { ids: [sourceTrackId] });
     const msg = msgs[0];
-    if (!msg || !msg.media || !msg.media.document) {
-      throw new Error("Track media not found in share channel");
-    }
+    if (!msg) throw new Error("coplay: source message not found");
+    if (!msg.media || !msg.media.document) throw new Error("coplay: source message has no audio document");
     const doc = msg.media.document;
     return new import_tl.Api.InputMediaDocument({
       id: new import_tl.Api.InputDocument({
@@ -72940,12 +72939,12 @@ ${JSON.stringify(state)}`;
       })
     });
   }
-  async function coplaySendInvite(stateJson, invitees, trackMsgIdInChannel) {
+  async function coplaySendInvite(stateJson, invitees, sourceGroupId, sourceTrackId) {
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
     const entity = await _getEntity(channel.id);
     const { text, entities } = coplayBuildMessage(stateJson, invitees);
-    const inputMedia = await _coplayBuildInputMediaFromChannelMsg(channel.id, trackMsgIdInChannel);
+    const inputMedia = await _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId);
     const result = await client.invoke(new import_tl.Api.messages.SendMedia({
       peer: entity,
       media: inputMedia,
@@ -72978,11 +72977,11 @@ ${JSON.stringify(state)}`;
       entities: entities.length ? entities : void 0
     }));
   }
-  async function coplayEditTrack(channelId, syncMsgId, newTrackMsgIdInChannel, stateJson, invitees) {
+  async function coplayEditTrack(channelId, syncMsgId, sourceGroupId, sourceTrackId, stateJson, invitees) {
     await _ensureConnected();
     const peer = await client.getInputEntity(channelId);
     const { text, entities } = coplayBuildMessage(stateJson, invitees);
-    const inputMedia = await _coplayBuildInputMediaFromChannelMsg(channelId, newTrackMsgIdInChannel);
+    const inputMedia = await _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId);
     await client.invoke(new import_tl.Api.messages.EditMessage({
       peer,
       id: syncMsgId,
@@ -84823,11 +84822,23 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           do {
             s.broadcastQueued = false;
             const trackMsgId = await _coplayEnsureTrackInChannel();
+            const t = _coplayCurrentTrack();
+            const sourceTrackId = t?.id ?? null;
+            const sourceGroupId = playerGroupId;
             const state = _coplayBuildState(trackMsgId);
-            const trackChanged = trackMsgId && trackMsgId !== s.lastBroadcastTrackMsgId;
+            const trackChanged = sourceTrackId && (sourceTrackId !== s.lastBroadcastSourceTrackId || sourceGroupId !== s.lastBroadcastSourceGroupId);
             if (trackChanged) {
-              await coplayEditTrack(s.channelId, s.syncMsgId, trackMsgId, state, s.invitees);
+              await coplayEditTrack(
+                s.channelId,
+                s.syncMsgId,
+                sourceGroupId,
+                sourceTrackId,
+                state,
+                s.invitees
+              );
               s.lastBroadcastTrackMsgId = trackMsgId;
+              s.lastBroadcastSourceTrackId = sourceTrackId;
+              s.lastBroadcastSourceGroupId = sourceGroupId;
             } else {
               await coplayEditState(s.channelId, s.syncMsgId, state, s.invitees);
             }
@@ -85002,7 +85013,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             anchor: Date.now() / 1e3,
             track: { i: trackMsgId, t: t.title || "", a: t.artist || "", d: t.duration || 0 }
           };
-          const { syncMsgId } = await coplaySendInvite(initialState, invitees, trackMsgId);
+          const { syncMsgId } = await coplaySendInvite(initialState, invitees, playerGroupId, t.id);
           _coplaySession = {
             role: "host",
             syncMsgId,
@@ -85014,7 +85025,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             broadcastInflight: false,
             broadcastQueued: false,
             invitees,
-            lastBroadcastTrackMsgId: trackMsgId
+            lastBroadcastTrackMsgId: trackMsgId,
+            lastBroadcastSourceTrackId: t.id,
+            lastBroadcastSourceGroupId: playerGroupId
           };
           localStorage.setItem(COPLAY_HOST_KEY, JSON.stringify({ syncMsgId, channelId }));
           _coplayShowHostBanner(invitees.length);

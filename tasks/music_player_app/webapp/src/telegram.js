@@ -2989,15 +2989,16 @@ function coplayBuildMessage(stateJson, invitees) {
     return { text: head + line, entities };
 }
 
-// Fetch a share-channel msg's document and wrap it as InputMediaDocument
-// so we can re-use it as media on a NEW or EDITED message.
-async function _coplayBuildInputMediaFromChannelMsg(channelId, trackMsgIdInChannel) {
-    const entity = await _getEntity(channelId);
-    const msgs = await client.getMessages(entity, { ids: [trackMsgIdInChannel] });
+// Pull the document off the host's source-group message (same pattern
+// `sendTrackToChat` uses) and wrap it as InputMediaDocument. Going to
+// the source rather than the share-channel forward means we don't get
+// burned when a stale `share_*` cache entry points at a deleted msg.
+async function _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId) {
+    const entity = await _getEntity(sourceGroupId);
+    const msgs = await client.getMessages(entity, { ids: [sourceTrackId] });
     const msg = msgs[0];
-    if (!msg || !msg.media || !msg.media.document) {
-        throw new Error('Track media not found in share channel');
-    }
+    if (!msg) throw new Error('coplay: source message not found');
+    if (!msg.media || !msg.media.document) throw new Error('coplay: source message has no audio document');
     const doc = msg.media.document;
     return new Api.InputMediaDocument({
         id: new Api.InputDocument({
@@ -3011,14 +3012,12 @@ async function _coplayBuildInputMediaFromChannelMsg(channelId, trackMsgIdInChann
 // Send the sync message AS an audio post: the current track is attached
 // as media, and the caption holds the magic prefix + JSON state +
 // mentions of every invitee.
-export async function coplaySendInvite(stateJson, invitees, trackMsgIdInChannel) {
+export async function coplaySendInvite(stateJson, invitees, sourceGroupId, sourceTrackId) {
     await _ensureConnected();
     const channel = await findOrCreateShareChannel();
     const entity = await _getEntity(channel.id);
     const { text, entities } = coplayBuildMessage(stateJson, invitees);
-    const inputMedia = await _coplayBuildInputMediaFromChannelMsg(channel.id, trackMsgIdInChannel);
-    // Use messages.SendMedia directly so we can control the entities array
-    // (sendFile would force its own caption parsing).
+    const inputMedia = await _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId);
     const result = await client.invoke(new Api.messages.SendMedia({
         peer: entity,
         media: inputMedia,
@@ -3051,11 +3050,11 @@ export async function coplayEditState(channelId, syncMsgId, stateJson, invitees)
 
 // Track change: swap the message's media to the new track AND update the
 // caption JSON. Both happen in one EditMessage round-trip.
-export async function coplayEditTrack(channelId, syncMsgId, newTrackMsgIdInChannel, stateJson, invitees) {
+export async function coplayEditTrack(channelId, syncMsgId, sourceGroupId, sourceTrackId, stateJson, invitees) {
     await _ensureConnected();
     const peer = await client.getInputEntity(channelId);
     const { text, entities } = coplayBuildMessage(stateJson, invitees);
-    const inputMedia = await _coplayBuildInputMediaFromChannelMsg(channelId, newTrackMsgIdInChannel);
+    const inputMedia = await _coplayBuildInputMediaFromSource(sourceGroupId, sourceTrackId);
     await client.invoke(new Api.messages.EditMessage({
         peer,
         id: syncMsgId,
