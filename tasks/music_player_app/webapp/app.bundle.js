@@ -72918,6 +72918,9 @@ ${JSON.stringify(state)}`;
       const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
       if (raw != null) fromUserId = Number(typeof raw === "bigint" ? raw : raw);
     }
+    if (fromUserId && msg.sender instanceof import_tl.Api.User && !_groupsCache[fromUserId]) {
+      _groupsCache[fromUserId] = msg.sender;
+    }
     const ids = Array.isArray(state?.inv) ? state.inv.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n !== 0) : [];
     const invitees = ids.map((id) => ({ id, name: "" }));
     return { state, fromUserId, msgId: msg.id, invitees };
@@ -72935,15 +72938,20 @@ ${JSON.stringify(state)}`;
   }
   async function getUserDisplayName(userId) {
     if (!userId) return "Someone";
+    const fromEntity = (ent) => {
+      if (!ent) return null;
+      const first = ent.firstName || "";
+      const last = ent.lastName || "";
+      const name = (first + " " + last).trim();
+      return name || ent.username || null;
+    };
+    const cached = _groupsCache[userId];
+    const cachedName = fromEntity(cached);
+    if (cachedName) return cachedName;
     try {
       await _ensureConnected();
-      const ent = await client.getEntity(userId);
-      if (ent) {
-        const first = ent.firstName || "";
-        const last = ent.lastName || "";
-        const name = (first + " " + last).trim();
-        return name || ent.username || "User";
-      }
+      const name = fromEntity(await client.getEntity(userId));
+      if (name) return name;
     } catch (e) {
     }
     return "User";
@@ -73056,11 +73064,19 @@ ${JSON.stringify(state)}`;
     await _ensureConnected();
     let url = null;
     try {
-      const entity = await client.getEntity(userId);
-      const buf = await client.downloadProfilePhoto(entity, { isBig: false });
-      if (buf && buf.length) {
-        const blob = new Blob([buf], { type: "image/jpeg" });
-        url = URL.createObjectURL(blob);
+      let entity = _groupsCache[userId];
+      if (!entity) {
+        try {
+          entity = await client.getEntity(userId);
+        } catch {
+        }
+      }
+      if (entity) {
+        const buf = await client.downloadProfilePhoto(entity, { isBig: false });
+        if (buf && buf.length) {
+          const blob = new Blob([buf], { type: "image/jpeg" });
+          url = URL.createObjectURL(blob);
+        }
       }
     } catch (e) {
       console.warn("coplayGetUserAvatarUrl failed for", userId, e?.message || e);
@@ -86030,7 +86046,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var coplayFabAvatarFallback = $("coplay-fab-avatar-fallback");
       var coplayFabBadge = $("coplay-fab-badge");
       var _COPLAY_DRAG_THRESHOLD_PX = 6;
-      function _coplayMakeDraggable(el, storageKey) {
+      function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
         if (!el) return;
         el.classList.add("coplay-draggable");
         const apply = (left, top) => {
@@ -86058,6 +86074,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         let pointerDown = false, dragging = false;
         let startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
         el.addEventListener("pointerdown", (e) => {
+          if (skipSelector && e.target.closest(skipSelector)) return;
           pointerDown = true;
           dragging = false;
           pid = e.pointerId;
@@ -86123,8 +86140,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           if (el.style.display !== "none") restore();
         }).observe(el, { attributes: true, attributeFilter: ["style"] });
       }
-      _coplayMakeDraggable(coplayHostBanner, "coplay_pos_host");
-      _coplayMakeDraggable(coplayFollowerBanner, "coplay_pos_follower");
+      _coplayMakeDraggable(coplayHostBanner, "coplay_pos_host", ".text-btn");
+      _coplayMakeDraggable(coplayFollowerBanner, "coplay_pos_follower", ".text-btn");
       _coplayMakeDraggable(coplayFab, "coplay_pos_fab");
       var _coplaySession = null;
       var _coplayInviteList = [];

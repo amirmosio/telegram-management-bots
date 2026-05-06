@@ -2717,15 +2717,15 @@ const coplayFabAvatarImg = $('coplay-fab-avatar-img');
 const coplayFabAvatarFallback = $('coplay-fab-avatar-fallback');
 const coplayFabBadge = $('coplay-fab-badge');
 
-// Make an element draggable. Uses a movement threshold so it can sit
-// on top of native click handlers (banner action buttons, the FAB
-// itself) without breaking taps — the pointerdown is treated as a
-// drag only after the pointer moves more than DRAG_THRESHOLD pixels;
-// the trailing `click` event is suppressed if a drag actually
-// happened. Position is persisted per `storageKey` and re-applied
-// when the element becomes visible. Clamped to viewport.
+// Make an element draggable. Drag fires for any pointerdown anywhere
+// on the element EXCEPT targets matching `skipSelector` (e.g. the
+// End/Leave button on a banner — those should remain pure click
+// handlers). Movement threshold keeps short taps as clicks; trailing
+// click is suppressed when an actual drag happened. Position is
+// persisted per `storageKey` and re-applied when the element becomes
+// visible. Clamped to viewport.
 const _COPLAY_DRAG_THRESHOLD_PX = 6;
-function _coplayMakeDraggable(el, storageKey) {
+function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
     if (!el) return;
     el.classList.add('coplay-draggable');
 
@@ -2756,6 +2756,10 @@ function _coplayMakeDraggable(el, storageKey) {
     let startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
 
     el.addEventListener('pointerdown', (e) => {
+        // Children matching the skip selector (e.g. End/Leave action
+        // buttons inside a banner) are excluded from drag entirely so
+        // they remain pure click targets.
+        if (skipSelector && e.target.closest(skipSelector)) return;
         pointerDown = true;
         dragging = false;
         pid = e.pointerId;
@@ -2820,8 +2824,8 @@ function _coplayMakeDraggable(el, storageKey) {
         if (el.style.display !== 'none') restore();
     }).observe(el, { attributes: true, attributeFilter: ['style'] });
 }
-_coplayMakeDraggable(coplayHostBanner, 'coplay_pos_host');
-_coplayMakeDraggable(coplayFollowerBanner, 'coplay_pos_follower');
+_coplayMakeDraggable(coplayHostBanner, 'coplay_pos_host', '.text-btn');
+_coplayMakeDraggable(coplayFollowerBanner, 'coplay_pos_follower', '.text-btn');
 _coplayMakeDraggable(coplayFab, 'coplay_pos_fab');
 
 let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastTid }

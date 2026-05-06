@@ -3020,6 +3020,14 @@ function _coplayParse(msg) {
         if (raw != null) fromUserId = Number(typeof raw === 'bigint' ? raw : raw);
     }
 
+    // Cache the sender's User entity if GramJS attached one to the
+    // message — followers who don't have the host as a contact would
+    // otherwise fail on `client.getEntity(hostId)` (no access_hash) and
+    // never get the avatar / display name.
+    if (fromUserId && msg.sender instanceof Api.User && !_groupsCache[fromUserId]) {
+        _groupsCache[fromUserId] = msg.sender;
+    }
+
     // Invitees are now carried as a plain id-array in the JSON state
     // (state.inv). We deliberately stopped using MessageEntityMentionName
     // so Telegram doesn't push notifications and pull the share channel
@@ -3049,17 +3057,26 @@ export async function getMyUserId() {
 
 // Best-effort display-name fetch for a user id. Returns a friendly string
 // (possibly the username, or "User" as last resort) — never throws.
+// Prefers the locally cached entity (populated when GramJS sees the user
+// in any incoming message) over calling getEntity, since the latter
+// throws if the host isn't in our contact list and we never got a fresh
+// access_hash.
 export async function getUserDisplayName(userId) {
     if (!userId) return 'Someone';
+    const fromEntity = (ent) => {
+        if (!ent) return null;
+        const first = ent.firstName || '';
+        const last = ent.lastName || '';
+        const name = (first + ' ' + last).trim();
+        return name || ent.username || null;
+    };
+    const cached = _groupsCache[userId];
+    const cachedName = fromEntity(cached);
+    if (cachedName) return cachedName;
     try {
         await _ensureConnected();
-        const ent = await client.getEntity(userId);
-        if (ent) {
-            const first = ent.firstName || '';
-            const last = ent.lastName || '';
-            const name = (first + ' ' + last).trim();
-            return name || ent.username || 'User';
-        }
+        const name = fromEntity(await client.getEntity(userId));
+        if (name) return name;
     } catch (e) { /* offline or restricted — fall through */ }
     return 'User';
 }
@@ -3228,17 +3245,24 @@ export function getCachedUserEntity(userId) {
 // Fetch (and cache) the inviter's profile photo as a blob URL for the
 // floating button avatar. Resolves to null if the user has no photo or
 // the download fails — caller should fall back to a placeholder.
+// Prefers the locally cached entity over getEntity for the same reason
+// as getUserDisplayName above (host may not be a contact of follower).
 const _coplayAvatarCache = new Map();
 export async function coplayGetUserAvatarUrl(userId) {
     if (_coplayAvatarCache.has(userId)) return _coplayAvatarCache.get(userId);
     await _ensureConnected();
     let url = null;
     try {
-        const entity = await client.getEntity(userId);
-        const buf = await client.downloadProfilePhoto(entity, { isBig: false });
-        if (buf && buf.length) {
-            const blob = new Blob([buf], { type: 'image/jpeg' });
-            url = URL.createObjectURL(blob);
+        let entity = _groupsCache[userId];
+        if (!entity) {
+            try { entity = await client.getEntity(userId); } catch {}
+        }
+        if (entity) {
+            const buf = await client.downloadProfilePhoto(entity, { isBig: false });
+            if (buf && buf.length) {
+                const blob = new Blob([buf], { type: 'image/jpeg' });
+                url = URL.createObjectURL(blob);
+            }
         }
     } catch (e) {
         console.warn('coplayGetUserAvatarUrl failed for', userId, e?.message || e);
