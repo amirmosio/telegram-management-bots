@@ -85318,8 +85318,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const fullRaw = _hypRmsSeries(mono, stride, numSamples, null);
         const bassRaw = _hypRmsSeries(mono, stride, numSamples, lpBass);
         const trebRaw = _hypRmsSeries(mono, stride, numSamples, hpTreb);
-        const bassAtt = _hypAttenuate(bassRaw, 0.5, 0.04);
-        const trebAtt = _hypAttenuate(trebRaw, 0.6, 0.07);
+        const bassAtt = _hypAttenuate(bassRaw, 0.25, 0.04);
+        const trebAtt = _hypAttenuate(trebRaw, 0.3, 0.07);
         return {
           hz: ENV_HZ,
           full: _hypBandStats(fullRaw),
@@ -85379,7 +85379,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             const bn = (b) => Math.max(0, Math.min(1, (b.samples[idx] - b.lo) / (b.hi - b.lo)));
             const bassNorm = bn(env.bass);
             const trebNorm = bn(env.treb);
-            target = 0.03 + 0.35 * bassNorm + 0.06 * trebNorm;
+            target = 0.03 + 0.22 * bassNorm + 0.03 * trebNorm;
           }
           const beats = _hypBeats.beatTimes;
           const rate = _hypBeats.beatRate || 1;

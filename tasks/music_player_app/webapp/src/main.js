@@ -3769,10 +3769,13 @@ function _hypComputeEnvelope(audioBuffer) {
     const bassRaw = _hypRmsSeries(mono, stride, numSamples, lpBass);
     const trebRaw = _hypRmsSeries(mono, stride, numSamples, hpTreb);
 
-    // Attack / decay tuned per band. Bass settles slowest (boom should
-    // linger), treble snaps fastest (cymbal splash is short by nature).
-    const bassAtt = _hypAttenuate(bassRaw, 0.5, 0.04);
-    const trebAtt = _hypAttenuate(trebRaw, 0.6, 0.07);
+    // Attack / decay tuned per band. Both attacks were too fast at first —
+    // the bands popped on every transient and combined into a busy strobe.
+    // Slower attack here means the baseline pulse rolls with the music
+    // instead of snapping to it; the onset spikes (aubio) still carry
+    // the actual beat hits.
+    const bassAtt = _hypAttenuate(bassRaw, 0.25, 0.04);
+    const trebAtt = _hypAttenuate(trebRaw, 0.30, 0.07);
 
     return {
         hz: ENV_HZ,
@@ -3866,7 +3869,9 @@ function _hypTick() {
             const bn = (b) => Math.max(0, Math.min(1, (b.samples[idx] - b.lo) / (b.hi - b.lo)));
             const bassNorm = bn(env.bass);
             const trebNorm = bn(env.treb);
-            target = 0.03 + 0.35 * bassNorm + 0.06 * trebNorm;
+            // Lower weights than v=145 — the baseline pulse should stay
+            // ambient, not compete with the onset spikes for attention.
+            target = 0.03 + 0.22 * bassNorm + 0.03 * trebNorm;
         }
 
         // ── Onset-driven flash spikes (adaptive to onset density) ──
