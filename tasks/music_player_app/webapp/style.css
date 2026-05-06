@@ -2312,13 +2312,15 @@ html, body {
     font-weight: 600;
 }
 
-/* Follower mode: lock down player controls */
+/* Follower mode: lock down playback / share / co-play controls so the
+   listener can't take over the host's session, but keep "add to my
+   playlist" enabled — useful to bookmark a track you like during a
+   co-play without taking control of playback. */
 body.coplay-follower #btn-play,
 body.coplay-follower #btn-prev,
 body.coplay-follower #btn-next,
 body.coplay-follower #btn-shuffle,
 body.coplay-follower #btn-repeat,
-body.coplay-follower #btn-add-playing,
 body.coplay-follower #btn-move-playing,
 body.coplay-follower #btn-delete-playing,
 body.coplay-follower #btn-share,
