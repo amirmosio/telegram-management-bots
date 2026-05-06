@@ -83053,6 +83053,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           searchResultsContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
         }
       }
+      function _searchSourceBadge(source) {
+        if (source === "moozikestan") return '<span class="search-src-tag src-moozikestan" title="@moozikestan_bot">moozikestan</span>';
+        if (source === "music-armenian") return '<span class="search-src-tag src-armenian" title="@MusicArmenian_Bot">MusicArmenian</span>';
+        return "";
+      }
       function renderSearchResults(results, searchRef) {
         searchResultsContainer.innerHTML = "";
         for (const item of results) {
@@ -83064,9 +83069,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             item.sizeMB ? `${item.sizeMB.toFixed(1)} MB` : ""
           ].filter(Boolean);
           const subtitle = subtitleParts.join(" \xB7 ");
+          const badge = _searchSourceBadge(item.source);
           el.innerHTML = `
             <div class="track-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg></div>
-            <div class="track-info"><div class="track-name">${item.title}</div><div class="track-artist">${subtitle}</div></div>
+            <div class="track-info">
+                <div class="track-name">${item.title}${badge}</div>
+                <div class="track-artist">${subtitle}</div>
+            </div>
             <span class="track-duration">${item.bitrate ? item.bitrate + "k" : ""}</span>`;
           el.addEventListener("click", () => downloadAndPlay(item, searchRef));
           searchResultsContainer.appendChild(el);

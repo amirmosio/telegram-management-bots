@@ -1903,6 +1903,31 @@ html, body {
     100% { opacity: 0; }
 }
 
+/* ── Search-result source tag ── */
+.search-src-tag {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.4;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+    border: 1px solid transparent;
+}
+.search-src-tag.src-moozikestan {
+    background: rgba(82, 136, 193, 0.18);
+    color: #6fb0e6;
+    border-color: rgba(82, 136, 193, 0.5);
+}
+.search-src-tag.src-armenian {
+    background: rgba(193, 96, 82, 0.18);
+    color: #e89c8a;
+    border-color: rgba(193, 96, 82, 0.5);
+}
+
 /* ── Co-play (synced live playback) ── */
 .overlay-coplay-btn {
     display: flex; align-items: center; justify-content: center;
