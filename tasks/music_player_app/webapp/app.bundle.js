@@ -86029,6 +86029,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var coplayFabAvatarImg = $("coplay-fab-avatar-img");
       var coplayFabAvatarFallback = $("coplay-fab-avatar-fallback");
       var coplayFabBadge = $("coplay-fab-badge");
+      var _COPLAY_DRAG_THRESHOLD_PX = 6;
       function _coplayMakeDraggable(el, storageKey) {
         if (!el) return;
         el.classList.add("coplay-draggable");
@@ -86041,6 +86042,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           const y = Math.min(maxT, Math.max(4, top));
           el.style.left = x + "px";
           el.style.top = y + "px";
+          el.style.right = "auto";
+          el.style.bottom = "auto";
           el.style.transform = "none";
         };
         const restore = () => {
@@ -86052,41 +86055,61 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           } catch {
           }
         };
-        let dragging = false, startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
+        let pointerDown = false, dragging = false;
+        let startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
         el.addEventListener("pointerdown", (e) => {
-          if (e.target.closest("button, .coplay-chip, a, input")) return;
-          dragging = true;
+          pointerDown = true;
+          dragging = false;
           pid = e.pointerId;
-          try {
-            el.setPointerCapture(pid);
-          } catch {
-          }
           const r = el.getBoundingClientRect();
           originX = r.left;
           originY = r.top;
           startX = e.clientX;
           startY = e.clientY;
-          el.classList.add("dragging");
-          e.preventDefault();
         });
         el.addEventListener("pointermove", (e) => {
-          if (!dragging || e.pointerId !== pid) return;
-          apply(originX + (e.clientX - startX), originY + (e.clientY - startY));
+          if (!pointerDown || e.pointerId !== pid) return;
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          if (!dragging && Math.hypot(dx, dy) >= _COPLAY_DRAG_THRESHOLD_PX) {
+            dragging = true;
+            try {
+              el.setPointerCapture(pid);
+            } catch {
+            }
+            el.classList.add("dragging");
+          }
+          if (dragging) {
+            apply(originX + dx, originY + dy);
+            e.preventDefault();
+          }
         });
         const end = (e) => {
-          if (!dragging || pid !== null && e.pointerId !== pid) return;
-          dragging = false;
-          try {
-            el.releasePointerCapture(pid);
-          } catch {
+          if (!pointerDown || pid !== null && e.pointerId !== pid) return;
+          pointerDown = false;
+          if (dragging) {
+            try {
+              el.releasePointerCapture(pid);
+            } catch {
+            }
+            el.classList.remove("dragging");
+            const r = el.getBoundingClientRect();
+            try {
+              localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top }));
+            } catch {
+            }
+            const swallow = (clickEvt) => {
+              clickEvt.preventDefault();
+              clickEvt.stopImmediatePropagation();
+              el.removeEventListener("click", swallow, true);
+            };
+            el.addEventListener("click", swallow, true);
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              el.removeEventListener("click", swallow, true);
+            }));
+            dragging = false;
           }
           pid = null;
-          el.classList.remove("dragging");
-          const r = el.getBoundingClientRect();
-          try {
-            localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top }));
-          } catch {
-          }
         };
         el.addEventListener("pointerup", end);
         el.addEventListener("pointercancel", end);
@@ -86102,6 +86125,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       }
       _coplayMakeDraggable(coplayHostBanner, "coplay_pos_host");
       _coplayMakeDraggable(coplayFollowerBanner, "coplay_pos_follower");
+      _coplayMakeDraggable(coplayFab, "coplay_pos_fab");
       var _coplaySession = null;
       var _coplayInviteList = [];
       var _coplay = pickerState();

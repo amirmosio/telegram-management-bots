@@ -2245,6 +2245,15 @@ html, body {
 .coplay-banner.coplay-draggable .text-btn,
 .coplay-banner.coplay-draggable .coplay-chip { cursor: pointer; }
 
+#coplay-floating-button.coplay-draggable {
+    cursor: grab;
+    touch-action: none;
+}
+#coplay-floating-button.coplay-draggable.dragging {
+    cursor: grabbing;
+    box-shadow: 0 10px 26px rgba(0,0,0,0.55);
+}
+
 @keyframes coplayPulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50%      { opacity: 0.4; transform: scale(0.7); }

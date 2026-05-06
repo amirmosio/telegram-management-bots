@@ -2717,10 +2717,14 @@ const coplayFabAvatarImg = $('coplay-fab-avatar-img');
 const coplayFabAvatarFallback = $('coplay-fab-avatar-fallback');
 const coplayFabBadge = $('coplay-fab-badge');
 
-// Make a banner draggable. Pointerdown anywhere on the banner (except
-// its action buttons) starts a drag; the new position is persisted to
-// localStorage and re-applied on the next render. Clamped to viewport
-// so a window resize after a drag can't strand the banner offscreen.
+// Make an element draggable. Uses a movement threshold so it can sit
+// on top of native click handlers (banner action buttons, the FAB
+// itself) without breaking taps — the pointerdown is treated as a
+// drag only after the pointer moves more than DRAG_THRESHOLD pixels;
+// the trailing `click` event is suppressed if a drag actually
+// happened. Position is persisted per `storageKey` and re-applied
+// when the element becomes visible. Clamped to viewport.
+const _COPLAY_DRAG_THRESHOLD_PX = 6;
 function _coplayMakeDraggable(el, storageKey) {
     if (!el) return;
     el.classList.add('coplay-draggable');
@@ -2734,7 +2738,9 @@ function _coplayMakeDraggable(el, storageKey) {
         const y = Math.min(maxT, Math.max(4, top));
         el.style.left = x + 'px';
         el.style.top = y + 'px';
-        el.style.transform = 'none';   // override the centring translateX
+        el.style.right = 'auto';
+        el.style.bottom = 'auto';
+        el.style.transform = 'none';
     };
 
     const restore = () => {
@@ -2746,35 +2752,62 @@ function _coplayMakeDraggable(el, storageKey) {
         } catch {}
     };
 
-    let dragging = false, startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
+    let pointerDown = false, dragging = false;
+    let startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
+
     el.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('button, .coplay-chip, a, input')) return;
-        dragging = true;
+        pointerDown = true;
+        dragging = false;
         pid = e.pointerId;
-        try { el.setPointerCapture(pid); } catch {}
         const r = el.getBoundingClientRect();
         originX = r.left;
         originY = r.top;
         startX = e.clientX;
         startY = e.clientY;
-        el.classList.add('dragging');
-        e.preventDefault();
     });
     el.addEventListener('pointermove', (e) => {
-        if (!dragging || e.pointerId !== pid) return;
-        apply(originX + (e.clientX - startX), originY + (e.clientY - startY));
+        if (!pointerDown || e.pointerId !== pid) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (!dragging && Math.hypot(dx, dy) >= _COPLAY_DRAG_THRESHOLD_PX) {
+            dragging = true;
+            try { el.setPointerCapture(pid); } catch {}
+            el.classList.add('dragging');
+        }
+        if (dragging) {
+            apply(originX + dx, originY + dy);
+            e.preventDefault();
+        }
     });
     const end = (e) => {
-        if (!dragging || (pid !== null && e.pointerId !== pid)) return;
-        dragging = false;
-        try { el.releasePointerCapture(pid); } catch {}
+        if (!pointerDown || (pid !== null && e.pointerId !== pid)) return;
+        pointerDown = false;
+        if (dragging) {
+            try { el.releasePointerCapture(pid); } catch {}
+            el.classList.remove('dragging');
+            const r = el.getBoundingClientRect();
+            try { localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top })); } catch {}
+            // Suppress the trailing click that the OS will fire on the
+            // pointerdown target — otherwise dragging the FAB would
+            // trigger "Join co-play".
+            const swallow = (clickEvt) => {
+                clickEvt.preventDefault();
+                clickEvt.stopImmediatePropagation();
+                el.removeEventListener('click', swallow, true);
+            };
+            el.addEventListener('click', swallow, true);
+            // Defensive: also drop the swallow after the next frame so
+            // we don't intercept a genuine subsequent click.
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                el.removeEventListener('click', swallow, true);
+            }));
+            dragging = false;
+        }
         pid = null;
-        el.classList.remove('dragging');
-        const r = el.getBoundingClientRect();
-        try { localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top })); } catch {}
     };
     el.addEventListener('pointerup', end);
     el.addEventListener('pointercancel', end);
+
     window.addEventListener('resize', () => {
         if (el.style.left) {
             const r = el.getBoundingClientRect();
@@ -2782,13 +2815,14 @@ function _coplayMakeDraggable(el, storageKey) {
         }
     });
 
-    // Re-apply persisted position whenever the banner becomes visible.
+    // Re-apply persisted position whenever the element becomes visible.
     new MutationObserver(() => {
         if (el.style.display !== 'none') restore();
     }).observe(el, { attributes: true, attributeFilter: ['style'] });
 }
 _coplayMakeDraggable(coplayHostBanner, 'coplay_pos_host');
 _coplayMakeDraggable(coplayFollowerBanner, 'coplay_pos_follower');
+_coplayMakeDraggable(coplayFab, 'coplay_pos_fab');
 
 let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastTid }
 let _coplayInviteList = [];        // multi-select buffer, [{ id, title, _entity }]
