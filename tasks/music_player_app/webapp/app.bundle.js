@@ -72367,7 +72367,9 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
     return chats;
   }
-  async function searchContactsForCoplay(q, limit = 20) {
+  async function searchContactsByQuery(q, opts = {}) {
+    const limit = opts.limit ?? 20;
+    const allowed = new Set(opts.kinds || ["user", "bot", "group", "channel"]);
     if (!q || q.trim().length < 2) return [];
     await _ensureConnected();
     if (!client.connected) return [];
@@ -72375,27 +72377,38 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     try {
       result = await client.invoke(new import_tl.Api.contacts.Search({ q: q.trim(), limit }));
     } catch (e) {
-      console.warn("searchContactsForCoplay failed:", e?.message || e);
+      console.warn("searchContactsByQuery failed:", e?.message || e);
       return [];
     }
     const out = [];
     const seen = /* @__PURE__ */ new Set();
-    const collect = (users) => {
-      for (const u of users || []) {
-        if (!(u instanceof import_tl.Api.User)) continue;
-        if (u.self || u.deleted || u.bot) continue;
-        const raw = u.id?.value ?? u.id;
-        const id = Number(typeof raw === "bigint" ? raw : raw);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        const first = u.firstName || "";
-        const last = u.lastName || "";
-        const title = (first + " " + last).trim() || u.username || "User";
-        _groupsCache[id] = u;
-        out.push({ id, title, kind: "user", username: u.username || "" });
-      }
-    };
-    collect(result.users);
+    for (const u of result.users || []) {
+      if (!(u instanceof import_tl.Api.User)) continue;
+      if (u.self || u.deleted) continue;
+      const kind = u.bot ? "bot" : "user";
+      if (!allowed.has(kind)) continue;
+      const raw = u.id?.value ?? u.id;
+      const id = Number(typeof raw === "bigint" ? raw : raw);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const first = u.firstName || "";
+      const last = u.lastName || "";
+      const title = (first + " " + last).trim() || u.username || "User";
+      _groupsCache[id] = u;
+      out.push({ id, title, kind, username: u.username || "" });
+    }
+    for (const c of result.chats || []) {
+      if (!_isGroup(c)) continue;
+      if (c.username === SHARE_CHANNEL_USERNAME) continue;
+      if (_isChannel(c) && c.broadcast && !(c.creator || c.adminRights)) continue;
+      const kind = _isChannel(c) ? c.broadcast ? "channel" : "group" : "group";
+      if (!allowed.has(kind)) continue;
+      const id = _entityId(c);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      _groupsCache[id] = c;
+      out.push({ id, title: c.title || "Group", kind, username: c.username || "" });
+    }
     return out;
   }
   async function sendTrackToChat(chatId, sourceGroupId, trackId, htmlCaption) {
@@ -84617,6 +84630,68 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         } catch {
         }
       }
+      function _pickerState() {
+        return {
+          chatsCache: [],
+          // recent dialogs preloaded by the modal opener
+          remoteHits: [],
+          // server-side search results for `remoteQuery`
+          remoteQuery: "",
+          // the lower-cased query those hits came from
+          searching: false,
+          // true while a debounced API call is in flight
+          debounce: null,
+          token: 0
+        };
+      }
+      function _pickerVisibleList(state, query) {
+        const q = (query || "").trim().toLowerCase();
+        if (!q) return state.chatsCache;
+        if (state.remoteQuery === q) return state.remoteHits;
+        return [];
+      }
+      function _pickerReset(state) {
+        state.remoteHits = [];
+        state.remoteQuery = "";
+        state.searching = false;
+        if (state.debounce) {
+          clearTimeout(state.debounce);
+          state.debounce = null;
+        }
+        state.token = 0;
+      }
+      function _pickerOnSearchInput(state, value, kinds, render) {
+        if (state.debounce) clearTimeout(state.debounce);
+        const q = (value || "").trim();
+        if (!q) {
+          state.remoteHits = [];
+          state.remoteQuery = "";
+          state.searching = false;
+          state.token = 0;
+          render();
+          return;
+        }
+        state.searching = true;
+        render();
+        const token = ++state.token;
+        state.debounce = setTimeout(async () => {
+          try {
+            const hits = await searchContactsByQuery(q, { kinds, limit: 30 });
+            if (token !== state.token) return;
+            state.remoteHits = hits;
+            state.remoteQuery = q.toLowerCase();
+          } catch (e) {
+            if (token !== state.token) return;
+            state.remoteHits = [];
+            state.remoteQuery = q.toLowerCase();
+          } finally {
+            if (token === state.token) {
+              state.searching = false;
+              render();
+            }
+          }
+        }, 220);
+      }
       var btnShare = $("btn-share");
       var shareModal = $("share-modal");
       var shareLinkRow = $("share-link-row");
@@ -84626,16 +84701,18 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var shareCancelBtn = $("share-cancel");
       var _shareCurrentLink = null;
       var _shareCurrentTrack = null;
-      var _shareChatsCache = [];
+      var _share = _pickerState();
+      var _SHARE_KINDS = ["user", "bot", "group", "channel"];
       function _shareCaption() {
         return `<a href="${escapeHtml(_shareCurrentLink)}">Listen on Telemusic app</a>`;
       }
-      function _renderShareChats(filter) {
-        const q = (filter || "").trim().toLowerCase();
-        const list = q ? _shareChatsCache.filter((c) => c.title.toLowerCase().includes(q)) : _shareChatsCache;
+      function _renderShareChats() {
+        const rawQ = (shareChatSearch?.value || "").trim();
+        const list = _pickerVisibleList(_share, rawQ);
         shareChatsEl.innerHTML = "";
         if (list.length === 0) {
-          shareChatsEl.innerHTML = '<div class="share-chats-placeholder">No chats found</div>';
+          const text = rawQ ? _share.searching ? "Searching\u2026" : "No chats found" : "No chats found";
+          shareChatsEl.innerHTML = `<div class="share-chats-placeholder">${text}</div>`;
           return;
         }
         for (const chat of list) {
@@ -84646,7 +84723,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           el.innerHTML = `
             <div class="share-chat-avatar">${escapeHtml(initial)}</div>
             <div class="share-chat-title">${escapeHtml(chat.title)}</div>
-            <div class="share-chat-type">${typeLabel}</div>
+            <div class="share-chat-type">${escapeHtml(typeLabel)}</div>
         `;
           el.addEventListener("click", () => _sendShareToChat(chat, el));
           shareChatsEl.appendChild(el);
@@ -84682,6 +84759,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         shareChatsEl.innerHTML = "";
         _shareCurrentLink = null;
         _shareCurrentTrack = null;
+        _pickerReset(_share);
+        _share.chatsCache = [];
       }
       async function _copyShareLink() {
         if (!_shareCurrentLink) return;
@@ -84734,8 +84813,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           localStorage.removeItem("share_channel_id");
         });
         try {
-          _shareChatsCache = await listChatsForShare(80);
-          if (_shareCurrentTrack === track) _renderShareChats("");
+          _share.chatsCache = await listChatsForShare(200);
+          if (_shareCurrentTrack === track) _renderShareChats();
         } catch (e) {
           console.error("List chats failed:", e);
           shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Failed to load chats</div>';
@@ -84744,7 +84823,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       shareLinkRow.addEventListener("click", _copyShareLink);
       shareCancelBtn.addEventListener("click", _closeShareDialog);
       shareModal.querySelector(".modal-backdrop")?.addEventListener("click", _closeShareDialog);
-      shareChatSearch.addEventListener("input", (e) => _renderShareChats(e.target.value));
+      shareChatSearch.addEventListener("input", (e) => _pickerOnSearchInput(_share, e.target.value, _SHARE_KINDS, _renderShareChats));
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && shareModal.style.display === "flex") _closeShareDialog();
       });
@@ -84769,7 +84848,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var coplayFabBadge = $("coplay-fab-badge");
       var _coplaySession = null;
       var _coplayInviteList = [];
-      var _coplayChatsCache = [];
+      var _coplay = _pickerState();
+      var _COPLAY_KINDS = ["user"];
       var _pendingInvites = /* @__PURE__ */ new Map();
       var _coplayLastTrackEnsureKey = null;
       function _coplayCurrentTrack() {
@@ -84871,7 +84951,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         coplayModal.style.display = "flex";
         try {
           const all = await listChatsForShare(200);
-          _coplayChatsCache = all.filter((c) => c.kind === "user");
+          _coplay.chatsCache = all.filter((c) => c.kind === "user");
           _coplayRenderChats();
         } catch (e) {
           console.error("[coplay] list chats failed:", e);
@@ -84883,34 +84963,17 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         coplayChatsEl.innerHTML = "";
         coplaySearchInput.value = "";
         _coplayInviteList = [];
-        _coplayRemoteHits = [];
-        if (_coplaySearchDebounce) {
-          clearTimeout(_coplaySearchDebounce);
-          _coplaySearchDebounce = null;
-        }
-        _coplaySearchToken = 0;
+        _pickerReset(_coplay);
+        _coplay.chatsCache = [];
       }
-      var _coplayRemoteHits = [];
-      var _coplayRemoteQuery = "";
-      var _coplaySearching = false;
-      var _coplaySearchDebounce = null;
-      var _coplaySearchToken = 0;
       function _coplayRenderChats() {
         const rawQ = (coplaySearchInput?.value || "").trim();
-        const q = rawQ.toLowerCase();
-        let list;
-        if (!q) {
-          list = _coplayChatsCache;
-        } else if (_coplayRemoteQuery === q) {
-          list = _coplayRemoteHits;
-        } else {
-          list = [];
-        }
+        const list = _pickerVisibleList(_coplay, rawQ);
         const visibleIds = new Set(list.map((c) => c.id));
         const stickySelected = _coplayInviteList.filter((c) => !visibleIds.has(c.id));
         coplayChatsEl.innerHTML = "";
         if (list.length === 0 && stickySelected.length === 0) {
-          const text = q ? _coplaySearching ? "Searching\u2026" : "No contacts found" : "No contacts found";
+          const text = rawQ ? _coplay.searching ? "Searching\u2026" : "No contacts found" : "No contacts found";
           coplayChatsEl.innerHTML = `<div class="coplay-chats-placeholder">${text}</div>`;
           return;
         }
@@ -84940,38 +85003,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           coplayChatsEl.appendChild(sep);
         }
         for (const chat of list) renderRow(chat);
-      }
-      function _coplayOnSearchInput(value) {
-        if (_coplaySearchDebounce) clearTimeout(_coplaySearchDebounce);
-        const q = (value || "").trim();
-        if (!q) {
-          _coplayRemoteHits = [];
-          _coplayRemoteQuery = "";
-          _coplaySearching = false;
-          _coplaySearchToken = 0;
-          _coplayRenderChats();
-          return;
-        }
-        _coplaySearching = true;
-        _coplayRenderChats();
-        const token = ++_coplaySearchToken;
-        _coplaySearchDebounce = setTimeout(async () => {
-          try {
-            const hits = await searchContactsForCoplay(q, 30);
-            if (token !== _coplaySearchToken) return;
-            _coplayRemoteHits = hits;
-            _coplayRemoteQuery = q.toLowerCase();
-          } catch (e) {
-            if (token !== _coplaySearchToken) return;
-            _coplayRemoteHits = [];
-            _coplayRemoteQuery = q.toLowerCase();
-          } finally {
-            if (token === _coplaySearchToken) {
-              _coplaySearching = false;
-              _coplayRenderChats();
-            }
-          }
-        }, 220);
       }
       function _coplayToggleSelect(chat, el) {
         const idx = _coplayInviteList.findIndex((c) => c.id === chat.id);
@@ -85278,7 +85309,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       btnCoplay.addEventListener("click", _coplayOpenPicker);
       coplayCancelBtn.addEventListener("click", _coplayCloseModal);
       coplayModal.querySelector(".modal-backdrop")?.addEventListener("click", _coplayCloseModal);
-      coplaySearchInput.addEventListener("input", (e) => _coplayOnSearchInput(e.target.value));
+      coplaySearchInput.addEventListener("input", (e) => _pickerOnSearchInput(_coplay, e.target.value, _COPLAY_KINDS, _coplayRenderChats));
       coplayStartBtn.addEventListener("click", _coplayStartHost);
       coplayEndBtn.addEventListener("click", () => _coplayEndHost());
       coplayLeaveBtn.addEventListener("click", () => _coplayLeaveFollower("left"));

@@ -2240,11 +2240,16 @@ export async function listChatsForShare(limit = 80) {
     return chats;
 }
 
-// Telegram-side contact search for the co-play picker. Used as a fallback
-// when the local dialog list doesn't contain the typed query. Returns
-// user-only results in the same shape as listChatsForShare; entities are
-// cached so getCachedUserEntity works for picks.
-export async function searchContactsForCoplay(q, limit = 20) {
+// Telegram-side contact / chat search shared by both the share modal
+// (single-select, all kinds) and the co-play picker (multi-select,
+// users-only). Returns hits in the same shape as listChatsForShare;
+// entities are cached so getCachedUserEntity works for picks.
+//
+//   searchContactsByQuery('amir', { kinds: ['user'] })
+//   searchContactsByQuery('amir', { kinds: ['user','group','channel','bot'] })
+export async function searchContactsByQuery(q, opts = {}) {
+    const limit = opts.limit ?? 20;
+    const allowed = new Set(opts.kinds || ['user', 'bot', 'group', 'channel']);
     if (!q || q.trim().length < 2) return [];
     await _ensureConnected();
     if (!client.connected) return [];
@@ -2252,29 +2257,45 @@ export async function searchContactsForCoplay(q, limit = 20) {
     try {
         result = await client.invoke(new Api.contacts.Search({ q: q.trim(), limit }));
     } catch (e) {
-        console.warn('searchContactsForCoplay failed:', e?.message || e);
+        console.warn('searchContactsByQuery failed:', e?.message || e);
         return [];
     }
     const out = [];
     const seen = new Set();
-    const collect = (users) => {
-        for (const u of users || []) {
-            if (!(u instanceof Api.User)) continue;
-            if (u.self || u.deleted || u.bot) continue;
-            const raw = u.id?.value ?? u.id;
-            const id = Number(typeof raw === 'bigint' ? raw : raw);
-            if (seen.has(id)) continue;
-            seen.add(id);
-            const first = u.firstName || '';
-            const last = u.lastName || '';
-            const title = (first + ' ' + last).trim() || u.username || 'User';
-            _groupsCache[id] = u;
-            out.push({ id, title, kind: 'user', username: u.username || '' });
-        }
-    };
-    // Telegram returns hits split across `myResults` (own contacts) and
-    // `results` (broader directory). Merge with own contacts ranked first.
-    collect(result.users);
+
+    for (const u of result.users || []) {
+        if (!(u instanceof Api.User)) continue;
+        if (u.self || u.deleted) continue;
+        const kind = u.bot ? 'bot' : 'user';
+        if (!allowed.has(kind)) continue;
+        const raw = u.id?.value ?? u.id;
+        const id = Number(typeof raw === 'bigint' ? raw : raw);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const first = u.firstName || '';
+        const last = u.lastName || '';
+        const title = (first + ' ' + last).trim() || u.username || 'User';
+        _groupsCache[id] = u;
+        out.push({ id, title, kind, username: u.username || '' });
+    }
+
+    for (const c of result.chats || []) {
+        if (!_isGroup(c)) continue;
+        if (c.username === SHARE_CHANNEL_USERNAME) continue;
+        // Only surface places the user can actually post to: skip
+        // broadcast channels they're not an admin of.
+        if (_isChannel(c) && c.broadcast && !(c.creator || c.adminRights)) continue;
+        const kind = _isChannel(c)
+            ? (c.broadcast ? 'channel' : 'group')
+            : 'group';
+        if (!allowed.has(kind)) continue;
+        const id = _entityId(c);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        _groupsCache[id] = c;
+        out.push({ id, title: c.title || 'Group', kind, username: c.username || '' });
+    }
+
     return out;
 }
 
