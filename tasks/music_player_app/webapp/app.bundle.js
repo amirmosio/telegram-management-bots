@@ -85897,7 +85897,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _share = pickerState();
       var _SHARE_KINDS = ["user", "bot", "group", "channel"];
       function _shareCaption() {
-        return `<a href="${escapeHtml(_shareCurrentLink)}">Listen on Telemusic app</a>`;
+        const appUrl = window.location.origin + window.location.pathname;
+        return `<a href="${escapeHtml(appUrl)}">Listen on Telemusic app</a>`;
       }
       function _renderShareChats() {
         const rawQ = (shareChatSearch?.value || "").trim();
@@ -85919,23 +85920,16 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
       }
       async function _sendShareToChat(chat, rowEl) {
-        if (!_shareCurrentLink || !_shareCurrentTrack) {
-          showToast("Link not ready yet");
-          return;
-        }
+        if (!_shareCurrentTrack) return;
         const destLabel = chat.kind === "user" ? "this contact" : chat.kind === "bot" ? "this bot" : chat.kind === "channel" ? "this channel" : "this group";
         const ok = await showConfirmModal(
           `Send to ${chat.title}?`,
-          `The track and link will be sent to ${destLabel}.`
+          `The track will be sent to ${destLabel}.`
         );
         if (!ok) return;
         const track = _shareCurrentTrack;
         rowEl.classList.add("sending");
         try {
-          if (!_shareCurrentLink) {
-            _shareCurrentLink = await _prepareShareLink(track);
-            if (_shareCurrentTrack !== track) return;
-          }
           await sendTrackToChat(chat.id, playerGroupId, track.id, _shareCaption());
           showToast(`Sent to ${chat.title}`);
           _closeShareDialog();

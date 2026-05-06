@@ -2476,7 +2476,10 @@ const _share = pickerState();
 const _SHARE_KINDS = ['user', 'bot', 'group', 'channel'];
 
 function _shareCaption() {
-    return `<a href="${escapeHtml(_shareCurrentLink)}">Listen on Telemusic app</a>`;
+    // Send-to-chat already attaches the audio directly, so the caption
+    // just advertises the webapp — no per-track deep link needed.
+    const appUrl = window.location.origin + window.location.pathname;
+    return `<a href="${escapeHtml(appUrl)}">Listen on Telemusic app</a>`;
 }
 
 function _renderShareChats() {
@@ -2503,10 +2506,7 @@ function _renderShareChats() {
 }
 
 async function _sendShareToChat(chat, rowEl) {
-    if (!_shareCurrentLink || !_shareCurrentTrack) {
-        showToast('Link not ready yet');
-        return;
-    }
+    if (!_shareCurrentTrack) return;
     // Always confirm before sending — regardless of destination kind.
     // Tap-on-row was sending immediately for groups/channels/bots and
     // people were posting tracks by accident.
@@ -2516,19 +2516,15 @@ async function _sendShareToChat(chat, rowEl) {
         : 'this group';
     const ok = await showConfirmModal(
         `Send to ${chat.title}?`,
-        `The track and link will be sent to ${destLabel}.`
+        `The track will be sent to ${destLabel}.`,
     );
     if (!ok) return;
     const track = _shareCurrentTrack;
     rowEl.classList.add('sending');
     try {
-        // Lazy-forward to the share channel only now (so the link in the
-        // caption resolves to a real msg). Skipped if the user already
-        // tapped copy and we cached the link.
-        if (!_shareCurrentLink) {
-            _shareCurrentLink = await _prepareShareLink(track);
-            if (_shareCurrentTrack !== track) return;
-        }
+        // The caption is just the static webapp URL now, so we don't
+        // need to forward to @tgmusicplayer_shared at all on send —
+        // the audio is attached directly to the chat message.
         await tg.sendTrackToChat(chat.id, playerGroupId, track.id, _shareCaption());
         showToast(`Sent to ${chat.title}`);
         _closeShareDialog();
