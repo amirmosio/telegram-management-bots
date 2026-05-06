@@ -1758,6 +1758,11 @@ async function _prewarmMediaDc() {
 // caller passes the playback context (`context.topicId`, `topicTitle`)
 // so the resulting row can be grouped offline.
 export async function getTrackBlobUrl(groupId, trackId, context = {}) {
+    // Be defensive: callers have historically passed `null` or even a
+    // bare topicId (number) here. Coerce anything that isn't a real
+    // object to {} so context.track / context.topicId don't throw.
+    const ctx = (context && typeof context === 'object') ? context : {};
+
     const url = await getCachedTrackUrl(groupId, trackId);
     if (url) return url;
 
@@ -1768,16 +1773,16 @@ export async function getTrackBlobUrl(groupId, trackId, context = {}) {
     const buffer = await client.downloadMedia(msg);
     if (!buffer) throw new Error('Download failed');
 
-    const track = context.track
-        || getCachedTracks(groupId, context.topicId ?? null).find(t => t.id === trackId)
+    const track = ctx.track
+        || getCachedTracks(groupId, ctx.topicId ?? null).find(t => t.id === trackId)
         || _extractAudioMeta(msg);
     const mime = track?.mime_type || 'audio/mpeg';
     const blob = new Blob([buffer], { type: mime });
 
     return cacheTrack(groupId, trackId, {
         blob, track,
-        topicId: context.topicId,
-        topicTitle: context.topicTitle,
+        topicId: ctx.topicId,
+        topicTitle: ctx.topicTitle,
     });
 }
 

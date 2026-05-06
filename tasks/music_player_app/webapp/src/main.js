@@ -1279,7 +1279,7 @@ async function _downloadAndPlay(track, gen) {
     if (_playGeneration !== gen) return;
     // ── Fallback / iOS-follower path: full download then play ──
     console.log('[player]', followerOnIOS ? 'iOS follower full-download →' : 'no SW or streaming failed, full download →', track.title);
-    const blobUrl = await tg.getTrackBlobUrl(gId, track.id, playerTopicId);
+    const blobUrl = await tg.getTrackBlobUrl(gId, track.id, { track, topicId: playerTopicId });
     if (_playGeneration !== gen) return;
     audio.src = blobUrl;
     _playWithRetry(gen);
@@ -2713,6 +2713,79 @@ const coplayFab = $('coplay-floating-button');
 const coplayFabAvatarImg = $('coplay-fab-avatar-img');
 const coplayFabAvatarFallback = $('coplay-fab-avatar-fallback');
 const coplayFabBadge = $('coplay-fab-badge');
+
+// Make a banner draggable. Pointerdown anywhere on the banner (except
+// its action buttons) starts a drag; the new position is persisted to
+// localStorage and re-applied on the next render. Clamped to viewport
+// so a window resize after a drag can't strand the banner offscreen.
+function _coplayMakeDraggable(el, storageKey) {
+    if (!el) return;
+    el.classList.add('coplay-draggable');
+
+    const apply = (left, top) => {
+        const w = el.offsetWidth || 0;
+        const h = el.offsetHeight || 0;
+        const maxL = Math.max(0, window.innerWidth - w - 4);
+        const maxT = Math.max(0, window.innerHeight - h - 4);
+        const x = Math.min(maxL, Math.max(4, left));
+        const y = Math.min(maxT, Math.max(4, top));
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.style.transform = 'none';   // override the centring translateX
+    };
+
+    const restore = () => {
+        const raw = localStorage.getItem(storageKey);
+        if (!raw) return;
+        try {
+            const { x, y } = JSON.parse(raw);
+            if (Number.isFinite(x) && Number.isFinite(y)) apply(x, y);
+        } catch {}
+    };
+
+    let dragging = false, startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
+    el.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button, .coplay-chip, a, input')) return;
+        dragging = true;
+        pid = e.pointerId;
+        try { el.setPointerCapture(pid); } catch {}
+        const r = el.getBoundingClientRect();
+        originX = r.left;
+        originY = r.top;
+        startX = e.clientX;
+        startY = e.clientY;
+        el.classList.add('dragging');
+        e.preventDefault();
+    });
+    el.addEventListener('pointermove', (e) => {
+        if (!dragging || e.pointerId !== pid) return;
+        apply(originX + (e.clientX - startX), originY + (e.clientY - startY));
+    });
+    const end = (e) => {
+        if (!dragging || (pid !== null && e.pointerId !== pid)) return;
+        dragging = false;
+        try { el.releasePointerCapture(pid); } catch {}
+        pid = null;
+        el.classList.remove('dragging');
+        const r = el.getBoundingClientRect();
+        try { localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top })); } catch {}
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+    window.addEventListener('resize', () => {
+        if (el.style.left) {
+            const r = el.getBoundingClientRect();
+            apply(r.left, r.top);
+        }
+    });
+
+    // Re-apply persisted position whenever the banner becomes visible.
+    new MutationObserver(() => {
+        if (el.style.display !== 'none') restore();
+    }).observe(el, { attributes: true, attributeFilter: ['style'] });
+}
+_coplayMakeDraggable(coplayHostBanner, 'coplay_pos_host');
+_coplayMakeDraggable(coplayFollowerBanner, 'coplay_pos_follower');
 
 let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastTid }
 let _coplayInviteList = [];        // multi-select buffer, [{ id, title, _entity }]

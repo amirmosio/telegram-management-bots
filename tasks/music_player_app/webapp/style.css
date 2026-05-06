@@ -2230,6 +2230,21 @@ html, body {
 }
 .coplay-banner .text-btn:hover { background: rgba(255,255,255,0.3); color: #fff; }
 .coplay-follower-banner { background: rgba(60, 130, 90, 0.95); }
+
+/* Drag affordance. Buttons + chips inside still get pointer cursor;
+   the drag handler skips those targets. */
+.coplay-banner.coplay-draggable {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+.coplay-banner.coplay-draggable.dragging {
+    cursor: grabbing;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.5);
+}
+.coplay-banner.coplay-draggable .text-btn,
+.coplay-banner.coplay-draggable .coplay-chip { cursor: pointer; }
+
 @keyframes coplayPulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50%      { opacity: 0.4; transform: scale(0.7); }

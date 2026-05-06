@@ -71829,6 +71829,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     }
   }
   async function getTrackBlobUrl(groupId, trackId, context = {}) {
+    const ctx = context && typeof context === "object" ? context : {};
     const url = await getCachedTrackUrl(groupId, trackId);
     if (url) return url;
     const msg = _msgCache[_trackKey(groupId, trackId)];
@@ -71836,14 +71837,14 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     await _ensureConnected();
     const buffer = await client.downloadMedia(msg);
     if (!buffer) throw new Error("Download failed");
-    const track = context.track || getCachedTracks(groupId, context.topicId ?? null).find((t) => t.id === trackId) || _extractAudioMeta(msg);
+    const track = ctx.track || getCachedTracks(groupId, ctx.topicId ?? null).find((t) => t.id === trackId) || _extractAudioMeta(msg);
     const mime = track?.mime_type || "audio/mpeg";
     const blob = new Blob([buffer], { type: mime });
     return cacheTrack(groupId, trackId, {
       blob,
       track,
-      topicId: context.topicId,
-      topicTitle: context.topicTitle
+      topicId: ctx.topicId,
+      topicTitle: ctx.topicTitle
     });
   }
   async function getThumbBlobUrl(groupId, trackId) {
@@ -84788,7 +84789,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         if (_playGeneration !== gen) return;
         console.log("[player]", followerOnIOS ? "iOS follower full-download \u2192" : "no SW or streaming failed, full download \u2192", track.title);
-        const blobUrl = await getTrackBlobUrl(gId, track.id, playerTopicId);
+        const blobUrl = await getTrackBlobUrl(gId, track.id, { track, topicId: playerTopicId });
         if (_playGeneration !== gen) return;
         audio.src = blobUrl;
         _playWithRetry(gen);
@@ -86026,6 +86027,79 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var coplayFabAvatarImg = $("coplay-fab-avatar-img");
       var coplayFabAvatarFallback = $("coplay-fab-avatar-fallback");
       var coplayFabBadge = $("coplay-fab-badge");
+      function _coplayMakeDraggable(el, storageKey) {
+        if (!el) return;
+        el.classList.add("coplay-draggable");
+        const apply = (left, top) => {
+          const w = el.offsetWidth || 0;
+          const h = el.offsetHeight || 0;
+          const maxL = Math.max(0, window.innerWidth - w - 4);
+          const maxT = Math.max(0, window.innerHeight - h - 4);
+          const x = Math.min(maxL, Math.max(4, left));
+          const y = Math.min(maxT, Math.max(4, top));
+          el.style.left = x + "px";
+          el.style.top = y + "px";
+          el.style.transform = "none";
+        };
+        const restore = () => {
+          const raw = localStorage.getItem(storageKey);
+          if (!raw) return;
+          try {
+            const { x, y } = JSON.parse(raw);
+            if (Number.isFinite(x) && Number.isFinite(y)) apply(x, y);
+          } catch {
+          }
+        };
+        let dragging = false, startX = 0, startY = 0, originX = 0, originY = 0, pid = null;
+        el.addEventListener("pointerdown", (e) => {
+          if (e.target.closest("button, .coplay-chip, a, input")) return;
+          dragging = true;
+          pid = e.pointerId;
+          try {
+            el.setPointerCapture(pid);
+          } catch {
+          }
+          const r = el.getBoundingClientRect();
+          originX = r.left;
+          originY = r.top;
+          startX = e.clientX;
+          startY = e.clientY;
+          el.classList.add("dragging");
+          e.preventDefault();
+        });
+        el.addEventListener("pointermove", (e) => {
+          if (!dragging || e.pointerId !== pid) return;
+          apply(originX + (e.clientX - startX), originY + (e.clientY - startY));
+        });
+        const end = (e) => {
+          if (!dragging || pid !== null && e.pointerId !== pid) return;
+          dragging = false;
+          try {
+            el.releasePointerCapture(pid);
+          } catch {
+          }
+          pid = null;
+          el.classList.remove("dragging");
+          const r = el.getBoundingClientRect();
+          try {
+            localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top }));
+          } catch {
+          }
+        };
+        el.addEventListener("pointerup", end);
+        el.addEventListener("pointercancel", end);
+        window.addEventListener("resize", () => {
+          if (el.style.left) {
+            const r = el.getBoundingClientRect();
+            apply(r.left, r.top);
+          }
+        });
+        new MutationObserver(() => {
+          if (el.style.display !== "none") restore();
+        }).observe(el, { attributes: true, attributeFilter: ["style"] });
+      }
+      _coplayMakeDraggable(coplayHostBanner, "coplay_pos_host");
+      _coplayMakeDraggable(coplayFollowerBanner, "coplay_pos_follower");
       var _coplaySession = null;
       var _coplayInviteList = [];
       var _coplay = pickerState();
