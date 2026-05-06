@@ -2911,9 +2911,17 @@ function _coplayMakeDraggable(el, opts = {}) {
             apply(r.left, r.top);
         }
     });
-    // Re-apply persisted position whenever the element becomes visible.
+    // Re-apply persisted position whenever the element transitions
+    // from display:none → visible. Filtering on a transition (instead
+    // of "is currently visible") is critical: apply() itself writes
+    // `el.style.transform`, which fires a style mutation that would
+    // otherwise re-enter restore() → apply() in an infinite loop.
+    let lastDisplay = el.style.display;
     new MutationObserver(() => {
-        if (el.style.display !== 'none') restore();
+        const cur = el.style.display;
+        if (cur === lastDisplay) return;
+        lastDisplay = cur;
+        if (cur !== 'none') restore();
     }).observe(el, { attributes: true, attributeFilter: ['style'] });
 }
 

@@ -86190,8 +86190,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             apply(r.left, r.top);
           }
         });
+        let lastDisplay = el.style.display;
         new MutationObserver(() => {
-          if (el.style.display !== "none") restore();
+          const cur = el.style.display;
+          if (cur === lastDisplay) return;
+          lastDisplay = cur;
+          if (cur !== "none") restore();
         }).observe(el, { attributes: true, attributeFilter: ["style"] });
       }
       var _coplaySession = null;
