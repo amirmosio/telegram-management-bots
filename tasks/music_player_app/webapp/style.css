@@ -1595,6 +1595,10 @@ html, body {
 
 /* ── Mobile ── */
 @media (max-width: 700px) {
+    /* Magenta Onsets & Frames is a ~30 MB model that runs at roughly
+       half-realtime on desktop Chrome. On phones it either OOMs the
+       tab or takes minutes per track, so the feature is desktop-only. */
+    #btn-piano { display: none !important; }
     #search-overlay,
     #recognize-overlay {
         top: 56px; right: 8px; left: 8px;

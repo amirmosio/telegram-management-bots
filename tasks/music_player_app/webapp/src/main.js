@@ -5,7 +5,12 @@
 import * as tg from './telegram.js';
 import { searchLyrics, parseTrackInfo } from './lyrics.js';
 import { searchArtwork } from './artwork.js';
-import aubio from 'aubiojs';
+import { formatTime, escapeHtml, showToast, formatBytes, encodeTrackId, decodeTrackId } from './utils.js';
+import { pickerState, pickerVisibleList, pickerReset, pickerRenderRow, pickerOnSearchInput } from './picker.js';
+import { installRecognize } from './recognize.js';
+import { installHypnotise } from './visualizers/hypnotise.js';
+import { installButterchurn } from './visualizers/butterchurn.js';
+import { installPiano } from './visualizers/piano-roll.js';
 
 // ══════════════════════════════════════
 //  STATE
@@ -49,22 +54,6 @@ let searchTracks = [];
 let _searchAbort = null;
 
 let pendingAddTrack = null;
-
-// ══════════════════════════════════════
-//  SHARE LINK ENCODING
-// ══════════════════════════════════════
-// Encodes a Telegram message ID into an opaque-looking string (reversible, no DB needed).
-// XOR with a fixed key + base36 encoding. e.g. msgId 4 → "a1b2c3" instead of "4".
-const _SHARE_XOR_KEY = 0x5A3C7E;
-function _encodeTrackId(msgId) {
-    const encoded = (msgId ^ _SHARE_XOR_KEY) >>> 0; // XOR + unsigned
-    return encoded.toString(36);
-}
-function _decodeTrackId(code) {
-    const decoded = parseInt(code, 36);
-    if (isNaN(decoded)) return null;
-    return (decoded ^ _SHARE_XOR_KEY) >>> 0;
-}
 
 // ══════════════════════════════════════
 //  DOM REFS
@@ -381,13 +370,6 @@ function _isIOS() {
     return /iPad|iPhone|iPod/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
 }
 
-function _formatBytes(n) {
-    if (!n) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
-    return (n / Math.pow(1024, i)).toFixed(i >= 2 ? 1 : 0) + ' ' + units[i];
-}
-
 const storageUsageEl = $('storage-usage');
 const WARN_ICON = '<svg class="storage-warn-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2L1 21h22L12 2zm0 15h-.01M12 9v5"/></svg>';
 
@@ -403,12 +385,12 @@ async function updateStorageUsage() {
         try {
             const { usage = 0, quota = 0 } = await navigator.storage.estimate();
             if (quota) {
-                parts.push(`${_formatBytes(usage)} / ${_formatBytes(quota)}`);
+                parts.push(`${formatBytes(usage)} / ${formatBytes(quota)}`);
                 const pct = usage / quota;
                 storageUsageEl.classList.toggle('warn', pct >= 0.7 && pct < 0.9);
                 storageUsageEl.classList.toggle('crit', pct >= 0.9);
             } else {
-                parts.push(_formatBytes(usage));
+                parts.push(formatBytes(usage));
             }
         } catch {}
     }
@@ -618,228 +600,7 @@ document.addEventListener('click', (e) => {
     if (searchOverlay.classList.contains('open') && !searchOverlay.contains(e.target) && !btnSearch.contains(e.target)) closeSearch();
 });
 
-// ══════════════════════════════════════
-//  RECOGNIZE (Shazam-style mic capture)
-// ══════════════════════════════════════
-const btnRecognize = $('btn-recognize');
-const recognizeOverlay = $('recognize-overlay');
-const btnRecognizeRecord = $('btn-recognize-record');
-const recognizeStatus = $('recognize-status');
-const recognizeResult = $('recognize-result');
-
-let _recMediaRec = null;
-let _recStream = null;
-let _recAutoStopTimer = null;
-
-function openRecognize() {
-    recognizeResult.innerHTML = '';
-    recognizeStatus.textContent = 'Tap to listen';
-    btnRecognizeRecord.classList.remove('recording');
-    recognizeOverlay.classList.add('open');
-}
-function closeRecognize() {
-    recognizeOverlay.classList.remove('open');
-    _recStopRecording(true);
-}
-btnRecognize.addEventListener('click', () => {
-    if (recognizeOverlay.classList.contains('open')) {
-        closeRecognize();
-        return;
-    }
-    openRecognize();
-    // Start listening immediately — no second tap required.
-    _recStartRecording();
-});
-$('recognize-overlay-close').addEventListener('click', closeRecognize);
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && recognizeOverlay.classList.contains('open')) closeRecognize();
-});
-document.addEventListener('click', (e) => {
-    if (recognizeOverlay.classList.contains('open') &&
-        !recognizeOverlay.contains(e.target) &&
-        !btnRecognize.contains(e.target)) closeRecognize();
-});
-
-btnRecognizeRecord.addEventListener('click', async () => {
-    if (_recMediaRec?.state === 'recording') { _recStopRecording(); return; }
-    await _recStartRecording();
-});
-
-async function _recStartRecording() {
-    recognizeResult.innerHTML = '';
-    recognizeStatus.textContent = 'Listening…';
-    btnRecognizeRecord.classList.add('recording');
-
-    // Fast-path: if the browser already has a persisted "deny" decision for
-    // this origin, getUserMedia will reject silently without showing a
-    // prompt. Detect that up-front via the Permissions API so we can skip
-    // the doomed call and show actionable steps instead.
-    let permState = null;
-    try {
-        const status = await navigator.permissions.query({ name: 'microphone' });
-        permState = status.state; // 'granted' | 'denied' | 'prompt'
-    } catch { /* not supported (Safari < 16, some Android WebViews) — fall through */ }
-
-    if (permState === 'denied') {
-        _showMicBlockedHelp();
-        btnRecognizeRecord.classList.remove('recording');
-        return;
-    }
-
-    try {
-        _recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (e) {
-        const name = e && e.name;
-        if (name === 'NotAllowedError' || name === 'SecurityError') {
-            // User just blocked it, or the browser had a persisted deny we
-            // couldn't detect (Permissions API not available).
-            _showMicBlockedHelp();
-        } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-            recognizeStatus.textContent = 'No microphone found on this device.';
-        } else {
-            recognizeStatus.textContent = 'Could not access microphone. Tap to try again.';
-        }
-        btnRecognizeRecord.classList.remove('recording');
-        return;
-    }
-    const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
-    _recMediaRec = new MediaRecorder(_recStream, mime ? { mimeType: mime } : {});
-    const chunks = [];
-    _recMediaRec.ondataavailable = (e) => { if (e.data?.size > 0) chunks.push(e.data); };
-    _recMediaRec.onstop = () => _recUpload(chunks, mime || (chunks[0]?.type || 'audio/webm'));
-    _recMediaRec.start();
-    // Auto-stop after 7 seconds
-    clearTimeout(_recAutoStopTimer);
-    _recAutoStopTimer = setTimeout(() => {
-        if (_recMediaRec?.state === 'recording') _recMediaRec.stop();
-    }, 7000);
-}
-
-// Render platform-tailored steps for clearing a persisted mic block. There
-// is no API to programmatically re-prompt: once the user picks "Block",
-// every subsequent getUserMedia rejects silently. So the best we can do is
-// tell them exactly where to click + give them a Try again button so the
-// moment they fix it, one tap reconnects without reloading.
-function _showMicBlockedHelp() {
-    const ua = navigator.userAgent || '';
-    const standalone = window.matchMedia('(display-mode: standalone)').matches
-        || window.navigator.standalone === true;
-    let steps;
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-        steps = standalone
-            ? 'iOS Settings &rarr; <b>Music Player</b> &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>.'
-            : 'Safari &rarr; tap <b>aA</b> in the address bar &rarr; <b>Website Settings</b> &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.';
-    } else if (/Android/i.test(ua)) {
-        steps = standalone
-            ? 'Android Settings &rarr; Apps &rarr; <b>Music Player</b> &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>.'
-            : 'Chrome &rarr; tap the <b>lock icon</b> next to the URL &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.';
-    } else {
-        steps = 'Click the <b>lock icon</b> in the address bar &rarr; Site settings &rarr; Microphone &rarr; <b>Allow</b>, then click <b>Try again</b>.';
-    }
-    recognizeStatus.innerHTML = '';
-    recognizeResult.innerHTML = `
-        <div class="mic-blocked">
-            <div class="mic-blocked-title">Microphone is blocked</div>
-            <div class="mic-blocked-steps">${steps}</div>
-            <button id="mic-blocked-retry" class="text-btn accent">Try again</button>
-        </div>
-    `;
-    const btn = document.getElementById('mic-blocked-retry');
-    if (btn) btn.addEventListener('click', () => {
-        recognizeResult.innerHTML = '';
-        _recStartRecording();
-    });
-}
-
-function _recStopRecording(silent = false) {
-    clearTimeout(_recAutoStopTimer);
-    _recAutoStopTimer = null;
-    if (_recMediaRec && _recMediaRec.state === 'recording') {
-        if (silent) {
-            // Discard the current recording.
-            _recMediaRec.onstop = null;
-            _recMediaRec.stop();
-        } else {
-            _recMediaRec.stop();
-        }
-    }
-    _recStream?.getTracks().forEach(t => t.stop());
-    _recStream = null;
-    if (silent) {
-        btnRecognizeRecord.classList.remove('recording');
-        _recMediaRec = null;
-    }
-}
-
-async function _recUpload(chunks, mime) {
-    btnRecognizeRecord.classList.remove('recording');
-    _recStream?.getTracks().forEach(t => t.stop());
-    _recStream = null;
-    _recMediaRec = null;
-    if (chunks.length === 0) {
-        recognizeStatus.textContent = 'No audio captured. Tap to try again.';
-        return;
-    }
-    const blob = new Blob(chunks, { type: mime });
-    recognizeStatus.textContent = 'Identifying…';
-    try {
-        const fd = new FormData();
-        fd.append('audio', blob, 'recording.webm');
-        const res = await fetch('/api/recognize', { method: 'POST', body: fd });
-        if (!res.ok) {
-            if (res.status === 429) {
-                recognizeStatus.textContent = 'Too many requests. Wait a moment and try again.';
-                return;
-            }
-            throw new Error(`server ${res.status}`);
-        }
-        const json = await res.json();
-        if (!json.recognized) {
-            recognizeStatus.textContent = 'No match found. Tap to try again.';
-            return;
-        }
-        recognizeStatus.textContent = '';
-        _renderRecognizeResult(json);
-    } catch (e) {
-        console.warn('[recognize] upload failed', e);
-        recognizeStatus.textContent = 'Recognition failed. Tap to try again.';
-    }
-}
-
-function _renderRecognizeResult(json) {
-    const title = json.title || '';
-    const artist = json.artist || '';
-    const cover = json.cover ? `<img class="recognize-cover" src="${json.cover}" alt="">` : '';
-    // The whole block is a tap target — tapping it closes recognize,
-    // opens the search overlay with "title artist" pre-filled, and
-    // fires performSearch() so the user lands on matching library
-    // results immediately.
-    recognizeResult.innerHTML = `
-        <div class="recognize-tap" role="button" tabindex="0">
-            ${cover}
-            <div class="recognize-title">${escapeHtml(title)}</div>
-            <div class="recognize-artist">${escapeHtml(artist)}</div>
-            <div class="recognize-hint">Tap to search in your library</div>
-        </div>
-    `;
-    const tap = recognizeResult.querySelector('.recognize-tap');
-    const runSearch = (e) => {
-        // Stop the click from bubbling to the document-level outside-click
-        // handler, which would otherwise immediately close the search overlay
-        // we're about to open.
-        if (e) e.stopPropagation();
-        const q = `${title} ${artist}`.trim();
-        closeRecognize();
-        openSearch();
-        searchQuery.value = q;
-        // Let the open animation start, then fire the search.
-        setTimeout(() => performSearch(), 50);
-    };
-    tap.addEventListener('click', runSearch);
-    tap.addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(e); });
-}
+// Recognize feature lives in src/recognize.js. installRecognize() is called near boot.
 
 searchQuery.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); performSearch(); }
@@ -2696,114 +2457,7 @@ function _removeTrackFromRenderedLists(groupId, trackId) {
     } catch { /* non-fatal */ }
 }
 
-// ══════════════════════════════════════
-//  CONTACT PICKER PRIMITIVES
-// ══════════════════════════════════════
-//  Shared search/debounce machinery used by both the share modal
-//  (single-select) and the co-play picker (multi-select). The picker
-//  keeps a small state object; on each keystroke it kicks off (debounced)
-//  a Telegram contacts.Search and re-renders. Empty query → render the
-//  recent-dialogs cache the modal preloaded. The picker does NOT own the
-//  rendering — each caller renders its own row markup so share rows can
-//  show the destination kind label and co-play rows can show checkboxes.
-
-function _pickerState() {
-    return {
-        chatsCache: [],   // recent dialogs preloaded by the modal opener
-        remoteHits: [],   // server-side search results for `remoteQuery`
-        remoteQuery: '',  // the lower-cased query those hits came from
-        searching: false, // true while a debounced API call is in flight
-        debounce: null,
-        token: 0,
-    };
-}
-
-function _pickerVisibleList(state, query) {
-    const q = (query || '').trim().toLowerCase();
-    if (!q) return state.chatsCache;
-    if (state.remoteQuery === q) return state.remoteHits;
-    return []; // search in flight or hasn't started yet
-}
-
-function _pickerReset(state) {
-    state.remoteHits = [];
-    state.remoteQuery = '';
-    state.searching = false;
-    if (state.debounce) { clearTimeout(state.debounce); state.debounce = null; }
-    state.token = 0;
-}
-
-// Build one chat row. Shared between the share modal (single-select,
-// shows the destination kind tag) and the co-play picker (multi-select,
-// shows a checkbox circle). Markup for avatar + name + @username is
-// identical so both pickers stay visually consistent.
-function _pickerRenderRow(chat, opts) {
-    const { multiSelect, isSelected, showTypeTag, onClick } = opts;
-    const el = document.createElement('div');
-    el.className = (multiSelect ? 'coplay-chat-item' : 'share-chat-item')
-        + (isSelected ? ' selected' : '');
-    const initial = (chat.title.trim()[0] || '?').toUpperCase();
-    const sub = chat.username ? `@${chat.username}` : '';
-    const checkbox = multiSelect ? `
-        <div class="coplay-chat-check">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>` : '';
-    let typeTag = '';
-    if (showTypeTag) {
-        const label = chat.kind === 'user' ? 'DM'
-            : chat.kind === 'bot' ? 'Bot'
-            : chat.kind === 'channel' ? 'Channel'
-            : 'Group';
-        typeTag = `<div class="picker-row-type">${escapeHtml(label)}</div>`;
-    }
-    el.innerHTML = `
-        ${checkbox}
-        <div class="picker-row-avatar">${escapeHtml(initial)}</div>
-        <div class="picker-row-title">
-            <div class="picker-row-name">${escapeHtml(chat.title)}</div>
-            ${sub ? `<div class="picker-row-sub">${escapeHtml(sub)}</div>` : ''}
-        </div>
-        ${typeTag}
-    `;
-    el.addEventListener('click', () => onClick(chat, el));
-    return el;
-}
-
-// Debounced search-input handler. `kinds` filters server-side results
-// (e.g. ['user'] for co-play, all kinds for share). `render` redraws
-// the UI off the picker state.
-function _pickerOnSearchInput(state, value, kinds, render) {
-    if (state.debounce) clearTimeout(state.debounce);
-    const q = (value || '').trim();
-    if (!q) {
-        state.remoteHits = [];
-        state.remoteQuery = '';
-        state.searching = false;
-        state.token = 0;
-        render();
-        return;
-    }
-    state.searching = true;
-    render();
-    const token = ++state.token;
-    state.debounce = setTimeout(async () => {
-        try {
-            const hits = await tg.searchContactsByQuery(q, { kinds, limit: 30 });
-            if (token !== state.token) return; // a newer keystroke superseded us
-            state.remoteHits = hits;
-            state.remoteQuery = q.toLowerCase();
-        } catch (e) {
-            if (token !== state.token) return;
-            state.remoteHits = [];
-            state.remoteQuery = q.toLowerCase();
-        } finally {
-            if (token === state.token) {
-                state.searching = false;
-                render();
-            }
-        }
-    }, 220);
-}
+// Contact picker primitives live in src/picker.js. Shared by share + co-play.
 
 // ══════════════════════════════════════
 //  SHARE
@@ -2818,7 +2472,7 @@ const shareCancelBtn = $('share-cancel');
 
 let _shareCurrentLink = null;
 let _shareCurrentTrack = null;
-const _share = _pickerState();
+const _share = pickerState();
 const _SHARE_KINDS = ['user', 'bot', 'group', 'channel'];
 
 function _shareCaption() {
@@ -2827,7 +2481,7 @@ function _shareCaption() {
 
 function _renderShareChats() {
     const rawQ = (shareChatSearch?.value || '').trim();
-    const list = _pickerVisibleList(_share, rawQ);
+    const list = pickerVisibleList(_share, rawQ);
 
     shareChatsEl.innerHTML = '';
     if (list.length === 0) {
@@ -2838,7 +2492,7 @@ function _renderShareChats() {
         return;
     }
     for (const chat of list) {
-        const el = _pickerRenderRow(chat, {
+        const el = pickerRenderRow(chat, {
             multiSelect: false,
             isSelected: false,
             showTypeTag: true,
@@ -2892,7 +2546,7 @@ function _closeShareDialog() {
     shareChatsEl.innerHTML = '';
     _shareCurrentLink = null;
     _shareCurrentTrack = null;
-    _pickerReset(_share);
+    pickerReset(_share);
     _share.chatsCache = [];
 }
 
@@ -2952,7 +2606,7 @@ async function _prepareShareLink(track) {
 
     const appUrl = window.location.origin + window.location.pathname;
     const currentSec = Math.floor(audio.currentTime || 0);
-    return `${appUrl}?track=${_encodeTrackId(sharedMsgId)}&t=${currentSec}`;
+    return `${appUrl}?track=${encodeTrackId(sharedMsgId)}&t=${currentSec}`;
 }
 
 btnShare.addEventListener('click', async () => {
@@ -2983,7 +2637,7 @@ shareLinkRow.addEventListener('click', _copyShareLink);
 shareCancelBtn.addEventListener('click', _closeShareDialog);
 shareModal.querySelector('.modal-backdrop')?.addEventListener('click', _closeShareDialog);
 shareChatSearch.addEventListener('input', e =>
-    _pickerOnSearchInput(_share, e.target.value, _SHARE_KINDS, _renderShareChats));
+    pickerOnSearchInput(_share, e.target.value, _SHARE_KINDS, _renderShareChats));
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && shareModal.style.display === 'flex') _closeShareDialog();
 });
@@ -3030,7 +2684,7 @@ const coplayFabBadge = $('coplay-fab-badge');
 
 let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastTid }
 let _coplayInviteList = [];        // multi-select buffer, [{ id, title, _entity }]
-const _coplay = _pickerState();    // shared search state for the picker
+const _coplay = pickerState();    // shared search state for the picker
 const _COPLAY_KINDS = ['user'];    // co-play targets are people only
 const _pendingInvites = new Map(); // syncMsgId -> { hostId, hostName, channelId, addedAt }
 let _coplayMyUserId = null;        // logged-in user's id, used to hide self chip
@@ -3186,13 +2840,13 @@ function _coplayCloseModal() {
     coplayChatsEl.innerHTML = '';
     coplaySearchInput.value = '';
     _coplayInviteList = [];
-    _pickerReset(_coplay);
+    pickerReset(_coplay);
     _coplay.chatsCache = [];
 }
 
 function _coplayRenderChats() {
     const rawQ = (coplaySearchInput?.value || '').trim();
-    const list = _pickerVisibleList(_coplay, rawQ);
+    const list = pickerVisibleList(_coplay, rawQ);
 
     // Always render the currently-selected invitees too — even if a query
     // would have hidden them — so picks aren't lost when the user types.
@@ -3211,7 +2865,7 @@ function _coplayRenderChats() {
 
     const renderRow = (chat) => {
         const selected = !!_coplayInviteList.find(c => c.id === chat.id);
-        const el = _pickerRenderRow(chat, {
+        const el = pickerRenderRow(chat, {
             multiSelect: true,
             isSelected: selected,
             showTypeTag: false,
@@ -3685,7 +3339,7 @@ btnCoplay.addEventListener('click', _coplayOpenPicker);
 coplayCancelBtn.addEventListener('click', _coplayCloseModal);
 coplayModal.querySelector('.modal-backdrop')?.addEventListener('click', _coplayCloseModal);
 coplaySearchInput.addEventListener('input', e =>
-    _pickerOnSearchInput(_coplay, e.target.value, _COPLAY_KINDS, _coplayRenderChats));
+    pickerOnSearchInput(_coplay, e.target.value, _COPLAY_KINDS, _coplayRenderChats));
 coplayStartBtn.addEventListener('click', _coplayStartHost);
 coplayEndBtn.addEventListener('click', () => _coplayEndHost());
 coplayLeaveBtn.addEventListener('click', () => _coplayLeaveFollower('left'));
@@ -3856,26 +3510,7 @@ document.addEventListener('keydown', (e) => {
     else if (e.code === 'ArrowUp' || e.code === 'KeyP') prevTrack();
 });
 
-// ══════════════════════════════════════
-//  HELPERS
-// ══════════════════════════════════════
-function formatTime(s) {
-    if (!s || isNaN(s)) return '0:00';
-    s = Math.floor(s);
-    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-}
-function escapeHtml(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-}
-function showToast(msg) {
-    let toast = document.getElementById('toast');
-    if (!toast) { toast = document.createElement('div'); toast.id = 'toast'; document.body.appendChild(toast); }
-    toast.textContent = msg;
-    toast.classList.add('visible');
-    setTimeout(() => toast.classList.remove('visible'), 2000);
-}
+// formatTime / escapeHtml / showToast live in src/utils.js.
 
 // ══════════════════════════════════════
 //  SESSION PERSISTENCE
@@ -4316,9 +3951,9 @@ async function initAfterLogin() {
     const params = new URLSearchParams(window.location.search);
     const trackCode = params.get('track');
     const sharedTime = parseInt(params.get('t') || '0', 10);
-    const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : null;
+    const sharedMsgId = trackCode ? decodeTrackId(trackCode) : null;
     const coplayCode = params.get('coplay');
-    const coplayMsgId = coplayCode ? _decodeTrackId(coplayCode) : null;
+    const coplayMsgId = coplayCode ? decodeTrackId(coplayCode) : null;
     if (sharedMsgId) {
         // Clean URL
         history.replaceState(null, '', window.location.pathname);
@@ -4435,1320 +4070,32 @@ function _maybeShowInstallBanner() {
 }
 
 // ══════════════════════════════════════
-//  HYPNOTISE MODE — onset-synced fullscreen flash
+//  MODE INSTALLS
 // ══════════════════════════════════════
-//
-// We don't assume constant tempo (would be wrong for classical / rubato).
-// Instead, on entry / track change we run an offline onset detector over
-// the decoded AudioBuffer and produce a list of *actual* note-attack times.
-// Flashes fire at those times, so density follows the music's dynamics —
-// dense passages → rapid flashes, sustained / sparse passages → calmer.
-//
-// Layered on top of the discrete flashes is a continuous amplitude pulse
-// from the live AnalyserNode, so even silent gaps and sustained tones still
-// breathe with the loudness curve. Cached per trackId; live pulse alone
-// runs while the offline analysis is in flight.
-const btnHypnotise = $('btn-hypnotise');
-const hypnotiseOverlay = $('hypnotise-overlay');
-const hypnotiseFlashEl = $('hypnotise-flash');
-
-let _hypRafId = null;
-let _hypFlash = 0;
-
-// Pre-analysed onset schedule for the currently playing track.
-const _hypBeatCache = new Map(); // trackId → { beatTimes: number[], envelope: { samples, hz } }
-let _hypAnalysisToken = 0;       // bumps to invalidate stale in-flight analyses
-let _hypBeats = null;            // active schedule, or null = not ready
-let _hypNextBeatIdx = 0;
-// Audio output adds a small lag between audio.currentTime (decoder position)
-// and what the speaker actually emits. Used to be read from
-// AudioContext.outputLatency, but we deliberately don't route audio through
-// Web Audio anymore (see comment block at top), so use a typical default.
-const _HYP_LATENCY_OFFSET = 0.06;
-const _HYP_BEAT_DECAY = 0.18;
-// WCAG 2.3.1: no more than three flashes per second. 333 ms gap caps the
-// onset stream at 3 Hz so dense drum tracks can't strobe into the seizure-
-// risk band (commonly cited as 3–60 Hz, peak risk around 15–25 Hz).
-const _HYP_MIN_BEAT_GAP_S = 0.333;
-
-function _hypThinOnsets(times, minGapS) {
-    if (!times || times.length === 0) return times;
-    const out = [times[0]];
-    for (let i = 1; i < times.length; i++) {
-        if (times[i] - out[out.length - 1] >= minGapS) out.push(times[i]);
-    }
-    return out;
-}
-
-// Hold-to-exit gesture state
-let _hypHoldTimer = null;
-let _hypHoldStart = null;
-const _HYP_HOLD_MS = 600;
-const _HYP_HOLD_MOVE_PX = 10;
-
-function _hypSetLoading(on) {
-    if (!hypnotiseOverlay) return;
-    // Name must avoid colliding with the generic .loading rule in style.css
-    // (which paints a 20px circular spinner via border + border-radius +
-    // accent top-color); on the fullscreen overlay it scaled into a giant
-    // rotating ellipse.
-    hypnotiseOverlay.classList.toggle('hyp-loading', !!on);
-}
-
-async function _hypAnalyzeCurrentTrack() {
-    const trackId = currentTrackId;
-    if (trackId == null) { _hypSetLoading(false); return; }
-
-    const cached = _hypBeatCache.get(trackId);
-    if (cached) { _hypInstallSchedule(trackId, cached); _hypSetLoading(false); return; }
-
-    const myToken = ++_hypAnalysisToken;
-    const src = audio.currentSrc || audio.src;
-    if (!src) { _hypSetLoading(false); return; }
-
-    // Throwaway AudioContext used ONLY for decodeAudioData. We never connect
-    // anything to its destination and close it as soon as we have the buffer,
-    // so the `<audio>` element keeps playing through the browser's native
-    // audio path (which survives backgrounding; Web Audio doesn't on mobile).
-    let ctx = null;
-    try {
-        const res = await fetch(src);
-        if (!res.ok) throw new Error('fetch ' + res.status);
-        const buf = await res.arrayBuffer();
-        if (myToken !== _hypAnalysisToken) return;
-
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const audioBuffer = await ctx.decodeAudioData(buf);
-        if (myToken !== _hypAnalysisToken) return;
-
-        const rawBeatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
-        if (myToken !== _hypAnalysisToken) return;
-
-        // Thin onsets to <=3 Hz: faster strobing risks photosensitive
-        // seizures (WCAG 2.3.1 caps at 3 flashes/second). Greedy keep-then-
-        // skip preserves the FIRST onset of any tight cluster, dropping the
-        // rest, which keeps the visual on the strong beats and discards the
-        // sub-beat fills.
-        const beatTimes = _hypThinOnsets(rawBeatTimes, _HYP_MIN_BEAT_GAP_S);
-        const envelope = _hypComputeEnvelope(audioBuffer);
-
-        const dur = audioBuffer.duration;
-        const beatRate = beatTimes.length / Math.max(1, dur);
-        const data = { beatTimes, envelope, beatRate };
-        _hypBeatCache.set(trackId, data);
-        if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
-        console.log('[hypnotise] analyzed track', trackId, '→', rawBeatTimes.length, 'onsets,', beatTimes.length, 'after thinning over', dur.toFixed(1), 's (avg', beatRate.toFixed(2), '/s)');
-    } catch (e) {
-        console.warn('[hypnotise] analysis failed for track', trackId, e);
-    } finally {
-        if (ctx && ctx.close) ctx.close().catch(() => {});
-        // Hide the spinner only if this run is still the current one — a
-        // newer analysis (track change while loading) owns the indicator.
-        if (myToken === _hypAnalysisToken) _hypSetLoading(false);
-    }
-}
-
-// Robert Bristow-Johnson audio cookbook biquad coefficients.
-// Direct Form II Transposed application uses two state variables s1, s2
-// (more numerically stable than DFI / DFII).
-function _hypMakeLowpass(fc, sr, Q = 0.707) {
-    const omega = 2 * Math.PI * fc / sr;
-    const cs = Math.cos(omega), sn = Math.sin(omega);
-    const alpha = sn / (2 * Q);
-    const a0 = 1 + alpha;
-    return {
-        b0: ((1 - cs) / 2) / a0,
-        b1: (1 - cs) / a0,
-        b2: ((1 - cs) / 2) / a0,
-        a1: (-2 * cs) / a0,
-        a2: (1 - alpha) / a0,
-    };
-}
-function _hypMakeHighpass(fc, sr, Q = 0.707) {
-    const omega = 2 * Math.PI * fc / sr;
-    const cs = Math.cos(omega), sn = Math.sin(omega);
-    const alpha = sn / (2 * Q);
-    const a0 = 1 + alpha;
-    return {
-        b0: ((1 + cs) / 2) / a0,
-        b1: (-(1 + cs)) / a0,
-        b2: ((1 + cs) / 2) / a0,
-        a1: (-2 * cs) / a0,
-        a2: (1 - alpha) / a0,
-    };
-}
-
-// Compute the RMS-per-window series after optionally applying a biquad
-// (or no filter, for full-band). Single pass over the mono signal.
-function _hypRmsSeries(mono, stride, numSamples, biquad) {
-    const out = new Float32Array(numSamples);
-    let s1 = 0, s2 = 0;
-    let outIdx = 0, sumSq = 0, count = 0;
-    for (let i = 0; i < mono.length && outIdx < numSamples; i++) {
-        const x = mono[i];
-        let y;
-        if (biquad) {
-            y = biquad.b0 * x + s1;
-            s1 = biquad.b1 * x - biquad.a1 * y + s2;
-            s2 = biquad.b2 * x - biquad.a2 * y;
-        } else {
-            y = x;
-        }
-        sumSq += y * y;
-        count++;
-        if (count === stride) {
-            out[outIdx++] = Math.sqrt(sumSq / count);
-            sumSq = 0; count = 0;
-        }
-    }
-    return out;
-}
-
-// MilkDrop-style asymmetric one-pole smoother — fast attack, slow decay.
-// Produces the "_att" feel where the level snaps up on a transient and
-// drifts back down between hits, instead of jittering with every spike.
-function _hypAttenuate(samples, attackAlpha, decayAlpha) {
-    const out = new Float32Array(samples.length);
-    let acc = samples[0] || 0;
-    out[0] = acc;
-    for (let i = 1; i < samples.length; i++) {
-        const x = samples[i];
-        const a = x > acc ? attackAlpha : decayAlpha;
-        acc += (x - acc) * a;
-        out[i] = acc;
-    }
-    return out;
-}
-
-function _hypBandStats(samples) {
-    const sorted = Float32Array.from(samples).sort();
-    const pct = (p) => sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor(sorted.length * p)))] || 0;
-    const lo = pct(0.10);
-    const hi = Math.max(pct(0.90), lo + 0.001);
-    return { samples, lo, hi };
-}
-
-// Three-band loudness envelope sampled at ~30 Hz.
-//   bass  — biquad LP @ 200 Hz, captures kick / sub
-//   treb  — biquad HP @ 4 kHz, captures hi-hats / cymbal sizzle / sibilance
-//   full  — unfiltered RMS, kept for diagnostics / future use
-// Each band is then run through asymmetric attack/decay smoothing so it
-// settles between transients (mirrors Butterchurn's bass_att / treb_att).
-// Storage: ~3 × 30 fps × 4 bytes × duration ≈ 90 KB for a 4-min track.
-function _hypComputeEnvelope(audioBuffer) {
-    const ENV_HZ = 30;
-    const sr = audioBuffer.sampleRate;
-    const stride = Math.max(1, Math.floor(sr / ENV_HZ));
-    const ch0 = audioBuffer.getChannelData(0);
-    const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
-    const N = ch0.length;
-    const numSamples = Math.max(1, Math.floor(N / stride));
-
-    // Pre-mix to mono so each filter pass sees the same signal.
-    const mono = new Float32Array(N);
-    if (ch1) for (let i = 0; i < N; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
-    else mono.set(ch0);
-
-    const lpBass = _hypMakeLowpass(200, sr);
-    const hpTreb = _hypMakeHighpass(4000, sr);
-
-    const fullRaw = _hypRmsSeries(mono, stride, numSamples, null);
-    const bassRaw = _hypRmsSeries(mono, stride, numSamples, lpBass);
-    const trebRaw = _hypRmsSeries(mono, stride, numSamples, hpTreb);
-
-    // Attack / decay tuned per band. Both attacks were too fast at first —
-    // the bands popped on every transient and combined into a busy strobe.
-    // Slower attack here means the baseline pulse rolls with the music
-    // instead of snapping to it; the onset spikes (aubio) still carry
-    // the actual beat hits.
-    const bassAtt = _hypAttenuate(bassRaw, 0.25, 0.04);
-    const trebAtt = _hypAttenuate(trebRaw, 0.30, 0.07);
-
-    return {
-        hz: ENV_HZ,
-        full: _hypBandStats(fullRaw),
-        bass: _hypBandStats(bassAtt),
-        treb: _hypBandStats(trebAtt),
-    };
-}
-
-// Onset detector backed by aubio (WASM). aubio's HFC algorithm is the
-// reference implementation in libaubio — battle-tested across percussion
-// and tonal music. We feed mono hopSize-sample chunks; aubio handles
-// windowing, FFT, peak picking, silence gating internally.
-let _aubioMod = null;
-async function _hypGetAubio() {
-    if (_aubioMod) return _aubioMod;
-    _aubioMod = await aubio();
-    return _aubioMod;
-}
-
-async function _hypDetectOnsets(audioBuffer, stillValid) {
-    const sr = audioBuffer.sampleRate;
-    const Aubio = await _hypGetAubio();
-    if (stillValid && !stillValid()) return [];
-
-    const bufferSize = 1024;
-    const hopSize = 512;
-
-    // Method: 'specflux' (spectral flux) is libaubio's most robust
-    // general-purpose detector — works for both percussive (electronic,
-    // drums) and tonal (piano, strings) attacks. Other options: 'hfc',
-    // 'complex', 'energy', 'phase', 'mkl', 'kl', 'specdiff'.
-    // Note: index.d.ts (3-arg) is wrong; the C binding takes 4 args.
-    const onset = new Aubio.Onset('specflux', bufferSize, hopSize, sr);
-    onset.setThreshold(0.25);   // 0 = most sensitive, 1 = strict
-    onset.setSilence(-45);      // dB; ignore peaks in near-silence
-    // Silence floor was -55 dBFS but reverb tails and faint ambience were
-    // still triggering flashes during quiet passages. -45 is louder than
-    // typical noise/decay but well below any real musical beat.
-
-    const ch0 = audioBuffer.getChannelData(0);
-    const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
-    const N = ch0.length;
-
-    const onsets = [];
-    const chunk = new Float32Array(hopSize);
-    let hopCount = 0;
-    const yieldEvery = 2048;
-
-    for (let pos = 0; pos + hopSize <= N; pos += hopSize) {
-        if (ch1) {
-            for (let i = 0; i < hopSize; i++) chunk[i] = (ch0[pos + i] + ch1[pos + i]) * 0.5;
-        } else {
-            for (let i = 0; i < hopSize; i++) chunk[i] = ch0[pos + i];
-        }
-        if (onset.do(chunk)) onsets.push(onset.getLastS());
-
-        if ((++hopCount & (yieldEvery - 1)) === 0) {
-            await new Promise(r => setTimeout(r, 0));
-            if (stillValid && !stillValid()) return [];
-        }
-    }
-
-    return onsets;
-}
-
-function _hypInstallSchedule(trackId, data) {
-    if (currentTrackId !== trackId) return;
-    _hypBeats = data;
-    _hypNextBeatIdx = 0;
-}
-
-function _hypTick() {
-    _hypRafId = requestAnimationFrame(_hypTick);
-
-    let target = 0;
-    if (!audio.paused && audio.readyState >= 2 && _hypBeats) {
-        // Compensate for the small lag between audio.currentTime and the
-        // sound actually reaching the speaker.
-        const t = audio.currentTime - _HYP_LATENCY_OFFSET;
-
-        // ── Continuous brightness from band-split, attenuated envelopes ──
-        // Bass drives the baseline brightness floor — kicks/sub feel like
-        // they "land" rather than blink. Treble adds a faint flicker layer
-        // for hi-hats / cymbals that the single-band version smeared
-        // together. Each band is normalised by its own per-track [p10, p90]
-        // so quiet songs stay visible and loud songs don't blow out.
-        const env = _hypBeats.envelope;
-        if (env && env.bass) {
-            const idx = Math.max(0, Math.min(env.bass.samples.length - 1, Math.floor(t * env.hz)));
-            const bn = (b) => Math.max(0, Math.min(1, (b.samples[idx] - b.lo) / (b.hi - b.lo)));
-            const bassNorm = bn(env.bass);
-            const trebNorm = bn(env.treb);
-            // Lower weights than v=145 — the baseline pulse should stay
-            // ambient, not compete with the onset spikes for attention.
-            target = 0.03 + 0.22 * bassNorm + 0.03 * trebNorm;
-        }
-
-        // ── Onset-driven flash spikes (adaptive to onset density) ──
-        // Dense beat tracks (>3 onsets/s) used to stack 180 ms decays on top
-        // of each other and pin the screen to white. Shorten the decay and
-        // cap the peak when we know the track is busy.
-        const beats = _hypBeats.beatTimes;
-        const rate = _hypBeats.beatRate || 1;
-        const decay = rate > 4 ? 0.07 : rate > 2 ? 0.11 : _HYP_BEAT_DECAY;
-        const peak  = rate > 4 ? 0.65 : rate > 2 ? 0.85 : 1.0;
-
-        if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
-        while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
-
-        if (_hypNextBeatIdx > 0) {
-            const since = t - beats[_hypNextBeatIdx - 1];
-            if (since >= 0 && since < decay) {
-                target = Math.max(target, peak * (1 - since / decay));
-            }
-        }
-        if (_hypNextBeatIdx < beats.length) {
-            const until = beats[_hypNextBeatIdx] - t;
-            if (until >= 0 && until < 0.07) {
-                target = Math.max(target, 0.2 * (1 - until / 0.07));
-            }
-        }
-    }
-
-    const k = target > _hypFlash ? 0.55 : 0.12;
-    _hypFlash += (target - _hypFlash) * k;
-    // S-curve before display: pushes the midrange toward 0 (black) or 1
-    // (white). Linear opacity makes the flash dwell in gray during the
-    // attack/decay; this keeps the visual mostly binary, with a quick
-    // sweep through the middle. Exactly maps 0→0 and 1→1.
-    const shaped = _hypFlash < 0.5
-        ? 4 * _hypFlash * _hypFlash * _hypFlash
-        : 1 - 4 * (1 - _hypFlash) * (1 - _hypFlash) * (1 - _hypFlash);
-    hypnotiseFlashEl.style.setProperty('--flash', shaped.toFixed(3));
-}
-
-async function enterHypnotise() {
-    if (hypnotiseOverlay.classList.contains('open')) return;
-
-    _hypFlash = 0;
-    _hypBeats = null;
-    _hypNextBeatIdx = 0;
-
-    hypnotiseOverlay.classList.add('open');
-    hypnotiseOverlay.setAttribute('aria-hidden', 'false');
-    // Show the spinner immediately. _hypAnalyzeCurrentTrack will clear it
-    // on cache hit (next tick) or after the offline analysis completes.
-    _hypSetLoading(true);
-    _attachHypGestures();
-
-    try { _requestWakeLock(); } catch (_) {}
-
-    // No requestFullscreen() — the overlay covers the webapp viewport
-    // via position: fixed; inset: 0; that's enough. Going OS-fullscreen
-    // would force-resize the browser window which the user doesn't want.
-
-    if (_hypRafId == null) _hypRafId = requestAnimationFrame(_hypTick);
-
-    // Kick off offline beat analysis (fire-and-forget; live-pulse fallback runs meanwhile).
-    _hypAnalyzeCurrentTrack();
-}
-
-function exitHypnotise() {
-    if (!hypnotiseOverlay.classList.contains('open')) return;
-    hypnotiseOverlay.classList.remove('open');
-    hypnotiseOverlay.classList.remove('hyp-loading');
-    hypnotiseOverlay.setAttribute('aria-hidden', 'true');
-    hypnotiseFlashEl.style.setProperty('--flash', '0');
-
-    if (_hypRafId != null) { cancelAnimationFrame(_hypRafId); _hypRafId = null; }
-    _detachHypGestures();
-    _hypClearHold();
-    // Don't release the wake lock — playback may still want it.
-}
-
-function _hypClearHold() {
-    if (_hypHoldTimer != null) { clearTimeout(_hypHoldTimer); _hypHoldTimer = null; }
-    _hypHoldStart = null;
-}
-
-function _hypOnPointerDown(e) {
-    _hypClearHold();
-    _hypHoldStart = { x: e.clientX, y: e.clientY };
-    _hypHoldTimer = setTimeout(() => {
-        _hypHoldTimer = null;
-        exitHypnotise();
-    }, _HYP_HOLD_MS);
-}
-function _hypOnPointerMove(e) {
-    if (!_hypHoldStart) return;
-    const dx = e.clientX - _hypHoldStart.x;
-    const dy = e.clientY - _hypHoldStart.y;
-    if (dx * dx + dy * dy > _HYP_HOLD_MOVE_PX * _HYP_HOLD_MOVE_PX) _hypClearHold();
-}
-function _hypOnPointerEnd() { _hypClearHold(); }
-
-function _attachHypGestures() {
-    hypnotiseOverlay.addEventListener('pointerdown', _hypOnPointerDown);
-    hypnotiseOverlay.addEventListener('pointermove', _hypOnPointerMove);
-    hypnotiseOverlay.addEventListener('pointerup', _hypOnPointerEnd);
-    hypnotiseOverlay.addEventListener('pointercancel', _hypOnPointerEnd);
-    hypnotiseOverlay.addEventListener('pointerleave', _hypOnPointerEnd);
-}
-function _detachHypGestures() {
-    hypnotiseOverlay.removeEventListener('pointerdown', _hypOnPointerDown);
-    hypnotiseOverlay.removeEventListener('pointermove', _hypOnPointerMove);
-    hypnotiseOverlay.removeEventListener('pointerup', _hypOnPointerEnd);
-    hypnotiseOverlay.removeEventListener('pointercancel', _hypOnPointerEnd);
-    hypnotiseOverlay.removeEventListener('pointerleave', _hypOnPointerEnd);
-}
-
-btnHypnotise?.addEventListener('click', enterHypnotise);
-
-// Track changes mid-hypnotise: invalidate the schedule and re-analyse the new track.
-audio.addEventListener('loadstart', () => {
-    _hypBeats = null;
-    _hypNextBeatIdx = 0;
-    _hypAnalysisToken++;  // cancel any in-flight analysis for the previous src
-    if (hypnotiseOverlay.classList.contains('open')) _hypAnalyzeCurrentTrack();
-    // Piano mode: same — invalidate any in-flight transcription and re-run
-    // against the new track if the overlay is open.
-    _pianoNotes = null;
-    _pianoNextIdx = 0;
-    _pianoAnalysisToken++;
-    if (typeof pianoOverlay !== 'undefined' && pianoOverlay?.classList.contains('open')) {
-        _pianoAnalyzeCurrentTrack();
-    }
+// Wire up the feature modules whose code lives in their own files. Each
+// install() captures the small slice of main.js state it needs and owns
+// its own DOM refs, gestures, and audio-event listeners internally.
+installRecognize({
+    openSearch,
+    performSearch,
+    setSearchQuery: q => { searchQuery.value = q; },
 });
-
-// Esc / Backspace exits any of the overlay modes. Replaces the previous
-// fullscreenchange listener — the overlays no longer call requestFullscreen
-// (they just cover the webapp viewport), so we wire keyboard exit directly.
-document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape') return;
-    if (hypnotiseOverlay?.classList.contains('open')) { exitHypnotise(); e.preventDefault(); return; }
-    if (visualizerOverlay?.classList.contains('open')) { exitVisualizer(); e.preventDefault(); return; }
-    if (typeof pianoOverlay !== 'undefined' && pianoOverlay?.classList.contains('open')) {
-        exitPiano(); e.preventDefault();
-    }
+installHypnotise({
+    audio,
+    getCurrentTrackId: () => currentTrackId,
+    requestWakeLock: _requestWakeLock,
 });
-
-// ════════════════════════════════════════════════════════════════════
-//  VISUALIZER — Butterchurn (MilkDrop port)
-// ────────────────────────────────────────────────────────────────────
-//  Live FFT visualizer driven by the player's <audio> element through
-//  Web Audio. Once entered, the AudioContext + MediaElementSource
-//  remain attached to the audio element for the lifetime of the page —
-//  we cannot un-route a captured MediaElementSource. iOS suspends Web
-//  Audio when the PWA backgrounds, so lock-screen playback may stop
-//  until the page is reloaded. This is the documented trade-off and
-//  why the visualizer is opt-in only (the user has to tap btn-visualize).
-// ════════════════════════════════════════════════════════════════════
-import butterchurn from 'butterchurn';
-import butterchurnPresetsMinimal from 'butterchurn-presets/lib/butterchurnPresetsMinimal.min.js';
-
-const visualizerOverlay = $('visualizer-overlay');
-const visualizerCanvas  = $('visualizer-canvas');
-const visualizerHint    = $('visualizer-hint');
-const visualizerPresetName = $('visualizer-preset-name');
-const btnVisualize      = $('btn-visualize');
-
-let _vizCtx       = null; // AudioContext (page-lifetime once attached)
-let _vizSource    = null; // MediaElementSource — one-shot per audio element
-let _vizInstance  = null; // butterchurn visualizer instance
-let _vizPresets   = null; // { name → preset object }
-let _vizPresetKeys = [];
-let _vizCurrentPresetIdx = -1;
-let _vizRafId = null;
-let _vizHoldTimer = null;
-let _vizHoldStart = null;
-let _vizPresetWarnedIOS = false;
-const _VIZ_HOLD_MS = 600;
-const _VIZ_HOLD_MOVE_PX = 10;
-const _VIZ_PRESET_BLEND_S = 1.5;
-
-function _vizSetupAudioOnce() {
-    if (_vizSource) return true;
-    try {
-        _vizCtx = new (window.AudioContext || window.webkitAudioContext)();
-        _vizSource = _vizCtx.createMediaElementSource(audio);
-        _vizSource.connect(_vizCtx.destination);
-        if (!_vizPresetWarnedIOS) {
-            _vizPresetWarnedIOS = true;
-            // Heads-up that this captures the audio path. Only shown once.
-            showToast('Visualizer is on — lock-screen playback may stop until reload', 4500);
-        }
-        return true;
-    } catch (e) {
-        console.warn('[viz] failed to create audio context:', e?.message || e);
-        showToast('Visualizer not supported here');
-        return false;
-    }
-}
-
-function _vizSizing() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    return { w, h, pxW: Math.max(1, Math.floor(w * dpr)), pxH: Math.max(1, Math.floor(h * dpr)) };
-}
-
-function _vizApplySize() {
-    if (!_vizInstance) return;
-    const s = _vizSizing();
-    visualizerCanvas.width = s.pxW;
-    visualizerCanvas.height = s.pxH;
-    try { _vizInstance.setRendererSize(s.pxW, s.pxH); } catch (_) {}
-}
-
-function _vizSetupVisualizerOnce() {
-    if (_vizInstance) return true;
-    if (!_vizCtx) return false;
-    try {
-        const s = _vizSizing();
-        visualizerCanvas.width = s.pxW;
-        visualizerCanvas.height = s.pxH;
-        _vizInstance = butterchurn.createVisualizer(_vizCtx, visualizerCanvas, {
-            width: s.pxW,
-            height: s.pxH,
-            pixelRatio: 1, // we already account for DPR in canvas size
-            textureRatio: 1,
-        });
-        _vizInstance.connectAudio(_vizSource);
-
-        // butterchurn-presets exports differ slightly across versions; try
-        // both shapes so we don't break on a minor bump.
-        const mod = butterchurnPresetsMinimal;
-        _vizPresets = (typeof mod.getPresets === 'function')
-            ? mod.getPresets()
-            : (mod.default && typeof mod.default.getPresets === 'function')
-                ? mod.default.getPresets()
-                : (mod.default || mod);
-        _vizPresetKeys = Object.keys(_vizPresets);
-        if (_vizPresetKeys.length === 0) {
-            console.warn('[viz] no presets loaded');
-            return false;
-        }
-        return true;
-    } catch (e) {
-        console.warn('[viz] visualizer init failed:', e?.message || e);
-        return false;
-    }
-}
-
-function _vizPickPresetName(name) {
-    if (!_vizInstance || !_vizPresets) return;
-    const preset = _vizPresets[name];
-    if (!preset) return;
-    try {
-        _vizInstance.loadPreset(preset, _VIZ_PRESET_BLEND_S);
-        _vizCurrentPresetIdx = _vizPresetKeys.indexOf(name);
-        // Strip the leading category prefix from MilkDrop names for display.
-        const display = name.replace(/^[^-]+\s*-\s*/, '').replace(/\.milk$/, '');
-        visualizerPresetName.textContent = display;
-        visualizerPresetName.classList.add('show');
-        clearTimeout(_vizPresetNameHide);
-        _vizPresetNameHide = setTimeout(() => {
-            visualizerPresetName.classList.remove('show');
-        }, 1800);
-    } catch (e) {
-        console.warn('[viz] preset load failed:', e?.message || e);
-    }
-}
-let _vizPresetNameHide = null;
-
-function _vizCyclePreset() {
-    if (_vizPresetKeys.length < 2) return;
-    let next;
-    do {
-        next = Math.floor(Math.random() * _vizPresetKeys.length);
-    } while (next === _vizCurrentPresetIdx);
-    _vizPickPresetName(_vizPresetKeys[next]);
-}
-
-function _vizTick() {
-    _vizRafId = requestAnimationFrame(_vizTick);
-    try {
-        _vizInstance.render();
-    } catch (e) {
-        // Bad presets occasionally throw on edge cases (NaN math etc.).
-        // Skip to the next one rather than killing the rAF loop.
-        console.warn('[viz] render error, cycling preset:', e?.message || e);
-        _vizCyclePreset();
-    }
-}
-
-async function enterVisualizer() {
-    if (visualizerOverlay.classList.contains('open')) return;
-
-    if (!_vizSetupAudioOnce()) return;
-    if (!_vizSetupVisualizerOnce()) return;
-
-    // Resume context if iOS suspended it from a previous session.
-    if (_vizCtx.state === 'suspended') {
-        try { await _vizCtx.resume(); } catch (_) {}
-    }
-
-    visualizerOverlay.classList.add('open');
-    visualizerOverlay.setAttribute('aria-hidden', 'false');
-    _attachVizGestures();
-
-    _vizApplySize();
-    if (_vizCurrentPresetIdx < 0) _vizCyclePreset();
-
-    // No requestFullscreen() — the overlay covers the webapp viewport
-    // via position: fixed; inset: 0.
-
-    try { _requestWakeLock(); } catch (_) {}
-
-    if (_vizRafId == null) _vizTick();
-}
-
-function exitVisualizer() {
-    if (!visualizerOverlay.classList.contains('open')) return;
-    visualizerOverlay.classList.remove('open');
-    visualizerOverlay.setAttribute('aria-hidden', 'true');
-
-    if (_vizRafId != null) { cancelAnimationFrame(_vizRafId); _vizRafId = null; }
-    _detachVizGestures();
-    _vizClearHold();
-    visualizerPresetName.classList.remove('show');
-    // Audio context stays connected — see top-of-block comment. We can't
-    // un-route createMediaElementSource cleanly, and recreating the audio
-    // element would interrupt playback.
-}
-
-function _vizClearHold() {
-    if (_vizHoldTimer != null) { clearTimeout(_vizHoldTimer); _vizHoldTimer = null; }
-    _vizHoldStart = null;
-}
-
-function _vizOnPointerDown(e) {
-    _vizClearHold();
-    _vizHoldStart = { x: e.clientX, y: e.clientY, kind: 'pending' };
-    _vizHoldTimer = setTimeout(() => {
-        _vizHoldTimer = null;
-        if (_vizHoldStart) _vizHoldStart.kind = 'held';
-        exitVisualizer();
-    }, _VIZ_HOLD_MS);
-}
-function _vizOnPointerMove(e) {
-    if (!_vizHoldStart || _vizHoldStart.kind !== 'pending') return;
-    const dx = e.clientX - _vizHoldStart.x;
-    const dy = e.clientY - _vizHoldStart.y;
-    if (dx * dx + dy * dy > _VIZ_HOLD_MOVE_PX * _VIZ_HOLD_MOVE_PX) {
-        _vizHoldStart.kind = 'moved';
-        if (_vizHoldTimer) { clearTimeout(_vizHoldTimer); _vizHoldTimer = null; }
-    }
-}
-function _vizOnPointerUp() {
-    // Released before the hold timer fired AND barely moved → that's a
-    // tap, which cycles to a new preset.
-    if (_vizHoldStart && _vizHoldStart.kind === 'pending') {
-        _vizCyclePreset();
-    }
-    _vizClearHold();
-}
-
-function _attachVizGestures() {
-    visualizerOverlay.addEventListener('pointerdown', _vizOnPointerDown);
-    visualizerOverlay.addEventListener('pointermove', _vizOnPointerMove);
-    visualizerOverlay.addEventListener('pointerup', _vizOnPointerUp);
-    visualizerOverlay.addEventListener('pointercancel', _vizOnPointerUp);
-    visualizerOverlay.addEventListener('pointerleave', _vizOnPointerUp);
-}
-function _detachVizGestures() {
-    visualizerOverlay.removeEventListener('pointerdown', _vizOnPointerDown);
-    visualizerOverlay.removeEventListener('pointermove', _vizOnPointerMove);
-    visualizerOverlay.removeEventListener('pointerup', _vizOnPointerUp);
-    visualizerOverlay.removeEventListener('pointercancel', _vizOnPointerUp);
-    visualizerOverlay.removeEventListener('pointerleave', _vizOnPointerUp);
-}
-
-btnVisualize?.addEventListener('click', enterVisualizer);
-
-window.addEventListener('resize', () => {
-    if (visualizerOverlay.classList.contains('open')) _vizApplySize();
+installButterchurn({
+    audio,
+    requestWakeLock: _requestWakeLock,
 });
-
-// ════════════════════════════════════════════════════════════════════
-//  PIANO MODE — Synthesia-style falling-notes tutorial
-// ────────────────────────────────────────────────────────────────────
-//  Audio→MIDI transcription via Magenta Onsets & Frames (TF.js,
-//  lazy-loaded from esm.sh on first entry). Onsets & Frames is a
-//  piano-trained model that consistently scores higher onset F1 on
-//  MAESTRO than basic-pitch and produces noticeably fewer phantom
-//  notes on solo piano material. Notes cached per-track in IDB.
-//  Render: 2D canvas. NO Web Audio routing of the playing audio
-//  element — we only read audio.currentTime each frame, so iOS
-//  lock-screen playback is unaffected (preserves the v=132 invariant).
-//  Magenta does its own resampling via OfflineAudioContext — it never
-//  touches the live audio element.
-//
-//  Quality is honest only on solo / lead piano tracks. Full mixes will
-//  produce noisy transcriptions; we surface a warning footer when the
-//  notes/sec ratio is too low.
-// ════════════════════════════════════════════════════════════════════
-const pianoOverlay = $('piano-overlay');
-const pianoCanvas = $('piano-canvas');
-const pianoLoadingLabel = $('piano-loading-label');
-const pianoSeekbar = $('piano-seekbar');
-const pianoSeekbarFill = $('piano-seekbar-fill');
-const pianoSeekbarHandle = $('piano-seekbar-handle');
-const btnPiano = $('btn-piano');
-let _pianoSeeking = false;
-
-let _pianoCtx = null;
-let _pianoNotes = null;                  // active schedule
-let _pianoCache = new Map();             // trackId → notes[]
-let _pianoAnalysisToken = 0;
-let _pianoRafId = null;
-let _pianoNextIdx = 0;
-let _pianoKeyboardLayout = null;
-let _pianoEnginesLoading = null;
-let _pianoEnginesReady = false;
-let _pianoModelInstance = null;
-let _pianoMagentaModule = null;  // resolved @magenta/music module after dynamic import
-let _pianoHoldTimer = null;
-let _pianoHoldStart = null;
-const _PIANO_HOLD_MS = 600;
-const _PIANO_HOLD_MOVE_PX = 10;
-const _PIANO_LOOK_AHEAD_S = 3.5;
-const _PIANO_KEYBOARD_HEIGHT_FRAC = 0.22;
-const _PIANO_MIDI_LOW = 21;   // A0
-const _PIANO_MIDI_HIGH = 108; // C8
-// Pitch class → white-key flag. Order: C C# D D# E F F# G G# A A# B
-const _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-// @magenta/music full UMD bundle from jsdelivr — the package's
-// declared default file (and the only browser bundle that exists in
-// 1.23.1; per-module /es5/ subpaths are 404). The /esm/ subpath via
-// esm.sh broke a constructor at runtime ("Lt is not a constructor").
-// The full bundle is bigger (~7-8 MB) but is the official browser
-// distribution and exposes `mm` as a global with OnsetsAndFrames
-// wired to its bundled TF.js.
-const _PIANO_MAGENTA_URL    = 'https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/dist/magentamusic.min.js';
-// Official Magenta-hosted Onsets & Frames checkpoint (universal,
-// piano-trained on MAESTRO). ~30 MB. The model fetches a manifest +
-// weights from this base URL on initialize().
-const _PIANO_OAF_CHECKPOINT = 'https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni';
-// Bump this whenever the transcription engine or its parameters
-// change so cached IDB notes from older runs get re-transcribed
-// instead of silently using stale output. Stored next to pianoNotes.
-//   v2 = basic-pitch with tightened thresholds (0.65/0.45/11+amp≥0.3)
-//   v3 = Magenta Onsets & Frames (different engine entirely)
-//   v4 = Magenta + post-trim (cap + same-pitch reonset)
-//   v5 = Magenta + post-trim with 60 ms gap between same-pitch hits
-//   v6 = same gap also applied to ±1 semitone neighbour onsets
-const _PIANO_NOTES_VERSION = 6;
-
-function _pianoSetLoading(label) {
-    if (!pianoOverlay) return;
-    if (label === null) {
-        pianoOverlay.classList.remove('piano-loading');
-    } else {
-        pianoOverlay.classList.add('piano-loading');
-        if (pianoLoadingLabel) pianoLoadingLabel.textContent = label;
-    }
-}
-
-function _pianoSetWarning(on) {
-    pianoOverlay?.classList.toggle('piano-warn', !!on);
-}
-
-function _pianoBuildKeyboardLayout(canvasWidth) {
-    let whiteCount = 0;
-    for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
-        if (_PIANO_IS_WHITE[m % 12]) whiteCount++;
-    }
-    const whiteW = canvasWidth / whiteCount;
-    const blackW = whiteW * 0.62;
-    const layout = new Map();
-    let whiteIdx = 0;
-    for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
-        const pc = m % 12;
-        if (_PIANO_IS_WHITE[pc]) {
-            layout.set(m, { isWhite: true, x: whiteIdx * whiteW, w: whiteW });
-            whiteIdx++;
-        } else {
-            // Black keys sit centred on the boundary between two adjacent whites.
-            const boundary = whiteIdx * whiteW;
-            layout.set(m, { isWhite: false, x: boundary - blackW / 2, w: blackW });
-        }
-    }
-    return { whiteW, blackW, layout, whiteCount };
-}
-
-function _pianoApplySize() {
-    if (!pianoCanvas) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = window.innerWidth, h = window.innerHeight;
-    pianoCanvas.width = Math.floor(w * dpr);
-    pianoCanvas.height = Math.floor(h * dpr);
-    pianoCanvas.style.width = w + 'px';
-    pianoCanvas.style.height = h + 'px';
-    _pianoCtx = pianoCanvas.getContext('2d');
-    _pianoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    _pianoKeyboardLayout = _pianoBuildKeyboardLayout(w);
-}
-
-// Inject a <script> tag and resolve once it loads. Used to lazy-load
-// the magenta UMD bundle on first piano-mode entry. SW cache picks it
-// up on the second visit.
-function _pianoLoadScript(url) {
-    return new Promise((resolve, reject) => {
-        const existing = document.querySelector('script[data-piano-src="' + url + '"]');
-        if (existing) {
-            if (existing.dataset.loaded === '1') return resolve();
-            existing.addEventListener('load', () => resolve(), { once: true });
-            existing.addEventListener('error', () => reject(new Error('script load failed: ' + url)), { once: true });
-            return;
-        }
-        const s = document.createElement('script');
-        s.src = url;
-        s.async = true;
-        s.dataset.pianoSrc = url;
-        s.addEventListener('load', () => { s.dataset.loaded = '1'; resolve(); }, { once: true });
-        s.addEventListener('error', () => reject(new Error('script load failed: ' + url)), { once: true });
-        document.head.appendChild(s);
-    });
-}
-
-async function _pianoLoadEngines() {
-    if (_pianoEnginesReady) return true;
-    if (_pianoEnginesLoading) return _pianoEnginesLoading;
-    _pianoEnginesLoading = (async () => {
-        _pianoSetLoading('Loading piano engine…');
-        await _pianoLoadScript(_PIANO_MAGENTA_URL);
-        // Magenta's UMD exposes a `mm` global with OnsetsAndFrames + a
-        // bundled TF.js. Some sub-bundles use a different global name
-        // — fall back to scanning a couple of known shapes.
-        const ns = (window.mm && window.mm.OnsetsAndFrames) ? window.mm
-                 : (window.transcription && window.transcription.OnsetsAndFrames) ? window.transcription
-                 : null;
-        if (!ns) {
-            throw new Error('@magenta/music did not register OnsetsAndFrames on window');
-        }
-        _pianoMagentaModule = ns;
-        _pianoEnginesReady = true;
-        return true;
-    })();
-    try {
-        return await _pianoEnginesLoading;
-    } catch (e) {
-        _pianoEnginesLoading = null;
-        throw e;
-    }
-}
-
-async function _pianoTranscribe(audioBuffer, progressCb) {
-    const ns = _pianoMagentaModule;
-    if (!ns || !ns.OnsetsAndFrames) throw new Error('@magenta/music did not load');
-
-    if (!_pianoModelInstance) {
-        if (progressCb) progressCb(0.0);
-        _pianoModelInstance = new ns.OnsetsAndFrames(_PIANO_OAF_CHECKPOINT);
-        await _pianoModelInstance.initialize();
-    }
-    if (progressCb) progressCb(0.05);
-
-    // Magenta resamples to its expected rate (16 kHz) internally via
-    // OfflineAudioContext — pass our decoded buffer through directly.
-    // Returns a NoteSequence: { notes: [{pitch, startTime, endTime, velocity}] }.
-    const seq = await _pianoModelInstance.transcribeFromAudioBuffer(audioBuffer);
-    if (progressCb) progressCb(1.0);
-    if (!seq || !Array.isArray(seq.notes)) return [];
-
-    const raw = seq.notes
-        .filter(n => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH)
-        .map(n => ({
-            t0: Number(n.startTime) || 0,
-            t1: Number(n.endTime) || 0,
-            pitch: n.pitch,
-        }))
-        .filter(n => n.t1 > n.t0);
-    return _pianoTrimSustain(raw);
-}
-
-// Onsets & Frames is trained on MAESTRO, which has heavy sustain-pedal
-// usage. The model accordingly emits long note tails — visually this
-// looks like notes "sticking" on the falling-bar view. We can't change
-// the model, so we trim its output:
-//   • cap every note at _PIANO_MAX_NOTE_S (a typical visual beat),
-//   • end any note _PIANO_REONSET_GAP_S before the SAME pitch is hit
-//     again, so consecutive same-pitch bars don't kiss into one block,
-//   • end any note _PIANO_REONSET_GAP_S before a NEIGHBOUR pitch (±1
-//     semitone) is hit — but only if the neighbour onset arrives
-//     _PIANO_NEIGHBOR_GUARD_S after this note started, so simultaneous
-//     chord attacks (intentional minor-2nd dissonances) are preserved,
-//   • enforce a minimum bar length so the gap subtraction never
-//     shrinks a real attack to nothing.
-// Shrinks bars to feel like discrete keystrokes instead of a held-pedal
-// blur. Tune the cap if real long notes start being chopped too short.
-const _PIANO_MAX_NOTE_S = 1.2;
-const _PIANO_REONSET_GAP_S = 0.06;   // visible gap (≈10 px at typical lookahead)
-const _PIANO_MIN_NOTE_S = 0.05;
-const _PIANO_NEIGHBOR_GUARD_S = 0.10; // chord-attack window
-function _pianoTrimSustain(notes) {
-    if (!Array.isArray(notes) || notes.length === 0) return notes;
-    const byPitch = new Map();
-    for (const n of notes) {
-        let arr = byPitch.get(n.pitch);
-        if (!arr) { arr = []; byPitch.set(n.pitch, arr); }
-        arr.push(n);
-    }
-    for (const arr of byPitch.values()) arr.sort((a, b) => a.t0 - b.t0);
-    // Onsets-per-pitch lookup for the neighbour-onset trim.
-    const onsetsByPitch = new Map();
-    for (const [p, arr] of byPitch.entries()) onsetsByPitch.set(p, arr.map(n => n.t0));
-    const firstOnsetAfter = (pitch, after) => {
-        const arr = onsetsByPitch.get(pitch);
-        if (!arr) return Infinity;
-        for (const t of arr) if (t > after) return t;
-        return Infinity;
-    };
-    const out = [];
-    for (const arr of byPitch.values()) {
-        for (let i = 0; i < arr.length; i++) {
-            const n = arr[i];
-            const nextSame = arr[i + 1];
-            let t1 = Math.min(n.t1, n.t0 + _PIANO_MAX_NOTE_S);
-            if (nextSame && nextSame.t0 - n.t0 > _PIANO_MIN_NOTE_S) {
-                t1 = Math.min(t1, nextSame.t0 - _PIANO_REONSET_GAP_S);
-            }
-            const guardedAfter = n.t0 + _PIANO_NEIGHBOR_GUARD_S;
-            const nbLow = firstOnsetAfter(n.pitch - 1, guardedAfter);
-            const nbHigh = firstOnsetAfter(n.pitch + 1, guardedAfter);
-            const nb = Math.min(nbLow, nbHigh);
-            if (nb < Infinity) t1 = Math.min(t1, nb - _PIANO_REONSET_GAP_S);
-            if (t1 - n.t0 < _PIANO_MIN_NOTE_S) t1 = n.t0 + _PIANO_MIN_NOTE_S;
-            out.push({ t0: n.t0, t1, pitch: n.pitch });
-        }
-    }
-    out.sort((a, b) => a.t0 - b.t0 || a.pitch - b.pitch);
-    return out;
-}
-
-function _pianoFindCurrentTrack() {
-    if (typeof playerTracks === 'undefined') return null;
-    return playerTracks.find(t => t.id === currentTrackId) || null;
-}
-
-async function _pianoAnalyzeCurrentTrack() {
-    const trackId = currentTrackId;
-    if (trackId == null) { _pianoSetLoading(null); return; }
-
-    // 1. In-memory cache
-    const memHit = _pianoCache.get(trackId);
-    if (memHit) {
-        _pianoInstallNotes(trackId, memHit);
-        _pianoSetWarning(_pianoIsUnreliable(memHit));
-        _pianoSetLoading(null);
-        return;
-    }
-
-    const myToken = ++_pianoAnalysisToken;
-
-    // 2. IDB cache
-    try {
-        const row = await tg.getCachedTrackRecord(playerGroupId, trackId);
-        if (myToken !== _pianoAnalysisToken) return;
-        if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0
-            && row.pianoNotesVersion === _PIANO_NOTES_VERSION) {
-            _pianoCache.set(trackId, row.pianoNotes);
-            _pianoInstallNotes(trackId, row.pianoNotes);
-            _pianoSetWarning(_pianoIsUnreliable(row.pianoNotes));
-            _pianoSetLoading(null);
-            return;
-        }
-    } catch (_) { /* fall through to live transcription */ }
-    if (myToken !== _pianoAnalysisToken) return;
-
-    // 3. Load engine
-    try {
-        await _pianoLoadEngines();
-    } catch (e) {
-        if (myToken !== _pianoAnalysisToken) return;
-        console.warn('[piano] engine load failed:', e);
-        _pianoSetLoading('Could not load piano engine. Check connection.');
-        return;
-    }
-    if (myToken !== _pianoAnalysisToken) return;
-
-    // 4. Decode audio
-    _pianoSetLoading('Decoding audio…');
-    const src = audio.currentSrc || audio.src;
-    if (!src) { _pianoSetLoading(null); return; }
-    let ctx = null, audioBuffer = null;
-    try {
-        const res = await fetch(src);
-        if (!res.ok) throw new Error('fetch ' + res.status);
-        const buf = await res.arrayBuffer();
-        if (myToken !== _pianoAnalysisToken) return;
-        ctx = new (window.AudioContext || window.webkitAudioContext)();
-        audioBuffer = await ctx.decodeAudioData(buf);
-    } catch (e) {
-        if (myToken !== _pianoAnalysisToken) return;
-        console.warn('[piano] audio decode failed:', e);
-        _pianoSetLoading('Could not decode audio.');
-        return;
-    } finally {
-        if (ctx && ctx.close) ctx.close().catch(() => {});
-    }
-    if (myToken !== _pianoAnalysisToken) return;
-
-    // 5. Transcribe
-    let notes;
-    try {
-        // Onsets & Frames doesn't expose granular progress; show an
-        // indeterminate label and warn that this step is the slow one.
-        _pianoSetLoading('Transcribing piano…');
-        notes = await _pianoTranscribe(audioBuffer, () => {
-            if (myToken !== _pianoAnalysisToken) return;
-        });
-    } catch (e) {
-        if (myToken !== _pianoAnalysisToken) return;
-        console.warn('[piano] transcription failed:', e);
-        _pianoSetLoading('Transcription failed.');
-        return;
-    }
-    if (myToken !== _pianoAnalysisToken) return;
-
-    // 6. Cache + install + warn-if-poor
-    _pianoCache.set(trackId, notes);
-    try { tg.updateTrackPianoNotes(playerGroupId, trackId, notes, { track: _pianoFindCurrentTrack(), pianoNotesVersion: _PIANO_NOTES_VERSION }); } catch (_) {}
-    _pianoSetWarning(_pianoIsUnreliable(notes, audioBuffer.duration));
-    _pianoInstallNotes(trackId, notes);
-    _pianoSetLoading(null);
-    console.log('[piano] transcribed', trackId, '→', notes.length, 'notes (',
-        (notes.length / Math.max(1, audioBuffer.duration)).toFixed(2), '/s )');
-}
-
-function _pianoIsUnreliable(notes, dur) {
-    if (!Array.isArray(notes)) return true;
-    if (notes.length < 10) return true;
-    if (dur && (notes.length / dur) < 0.3) return true;
-    return false;
-}
-
-function _pianoInstallNotes(trackId, notes) {
-    if (currentTrackId !== trackId) return;
-    _pianoNotes = notes;
-    _pianoNextIdx = 0;
-}
-
-function _pianoRoundRect(ctx, x, y, w, h, r) {
-    r = Math.max(0, Math.min(r, w / 2, h / 2));
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-}
-
-function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys) {
-    const layout = _pianoKeyboardLayout.layout;
-    // White keys first
-    for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
-        const k = layout.get(m);
-        if (!k || !k.isWhite) continue;
-        const isActive = activeKeys.has(m);
-        ctx.fillStyle = isActive ? '#7eb6f0' : '#f0eee5';
-        ctx.fillRect(k.x, kbTop, k.w, kbH);
-        // Right edge separator
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
-        ctx.fillRect(k.x + k.w - 0.5, kbTop, 0.5, kbH);
-        // Bottom shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
-        ctx.fillRect(k.x, kbTop + kbH - 4, k.w, 4);
-    }
-    // Black keys overlay
-    const blackH = kbH * 0.62;
-    for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
-        const k = layout.get(m);
-        if (!k || k.isWhite) continue;
-        const isActive = activeKeys.has(m);
-        const grad = ctx.createLinearGradient(0, kbTop, 0, kbTop + blackH);
-        if (isActive) {
-            grad.addColorStop(0, '#7eb6f0');
-            grad.addColorStop(1, '#3d6c9c');
-        } else {
-            grad.addColorStop(0, '#1c1c1c');
-            grad.addColorStop(1, '#070707');
-        }
-        ctx.fillStyle = grad;
-        ctx.fillRect(k.x, kbTop, k.w, blackH);
-        // Top sheen
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
-        ctx.fillRect(k.x, kbTop, k.w, 2);
-    }
-}
-
-function _pianoTick() {
-    _pianoRafId = requestAnimationFrame(_pianoTick);
-    if (!_pianoCtx || !_pianoKeyboardLayout) return;
-    const w = pianoCanvas.clientWidth;
-    const h = pianoCanvas.clientHeight;
-    const ctx = _pianoCtx;
-    const kbH = h * _PIANO_KEYBOARD_HEIGHT_FRAC;
-    const kbTop = h - kbH;
-    const lookAhead = _PIANO_LOOK_AHEAD_S;
-    const pps = kbTop / lookAhead;
-
-    // Background gradient above keyboard
-    ctx.clearRect(0, 0, w, h);
-    const bg = ctx.createLinearGradient(0, 0, 0, kbTop);
-    bg.addColorStop(0, '#070910');
-    bg.addColorStop(1, '#11151e');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, w, kbTop);
-
-    // Soft glow above the keyboard — the HTML seekbar overlays the line
-    // itself so we don't draw a hard strike-line in the canvas anymore.
-    ctx.fillStyle = 'rgba(82, 136, 193, 0.10)';
-    ctx.fillRect(0, kbTop - 10, w, 10);
-
-    const activeKeys = new Set();
-
-    if (_pianoNotes && _pianoNotes.length) {
-        const t = audio.currentTime;
-        const layout = _pianoKeyboardLayout.layout;
-
-        for (let i = 0; i < _pianoNotes.length; i++) {
-            const n = _pianoNotes[i];
-            // Note bar's BOTTOM reaches the keyboard at n.t0 (note start —
-            // when the matching key lights up). It then extends below the
-            // keyboard line as time advances and shrinks until the TOP
-            // reaches kbTop at n.t1 (note end). Visibility window: note
-            // appears when its TOP enters the lookahead lane and disappears
-            // shortly after its end.
-            if (t > n.t1 + 0.05) continue;
-            if (t < n.t0 - lookAhead) continue;
-
-            const k = layout.get(n.pitch);
-            if (!k) continue;
-            if (n.t0 <= t && t <= n.t1) activeKeys.add(n.pitch);
-
-            const yBottom = kbTop + (t - n.t0) * pps;
-            const yTop = yBottom - (n.t1 - n.t0) * pps;
-            const drawBottom = Math.min(yBottom, kbTop);
-            const drawTop = Math.max(yTop, 0);
-            if (drawBottom <= 0 || drawTop >= kbTop) continue;
-            const drawH = drawBottom - drawTop;
-            if (drawH < 1) continue;
-
-            const inset = k.isWhite ? 2 : 1;
-            const x = k.x + inset;
-            const ww = Math.max(1, k.w - inset * 2);
-
-            const gr = ctx.createLinearGradient(0, drawTop, 0, drawBottom);
-            if (k.isWhite) {
-                gr.addColorStop(0, '#9ec8f5');
-                gr.addColorStop(1, '#3a6595');
-            } else {
-                gr.addColorStop(0, '#6ea4d8');
-                gr.addColorStop(1, '#274c75');
-            }
-            ctx.fillStyle = gr;
-            _pianoRoundRect(ctx, x, drawTop, ww, drawH, 4);
-            ctx.fill();
-            // Top edge highlight
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
-            ctx.fillRect(x + 1, drawTop, ww - 2, 1);
-        }
-    }
-
-    _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
-
-    // Update HTML seek-bar fill + handle position from current playback.
-    if (audio.duration > 0 && pianoSeekbarFill) {
-        const pct = Math.max(0, Math.min(1, audio.currentTime / audio.duration));
-        const pctStr = (pct * 100).toFixed(2) + '%';
-        pianoSeekbarFill.style.width = pctStr;
-        if (pianoSeekbarHandle) pianoSeekbarHandle.style.left = pctStr;
-    }
-}
-
-async function enterPiano() {
-    if (!pianoOverlay) return;
-    if (pianoOverlay.classList.contains('open')) return;
-
-    pianoOverlay.classList.add('open');
-    pianoOverlay.setAttribute('aria-hidden', 'false');
-    _pianoSetWarning(false);
-    _pianoSetLoading('Loading piano model…');
-    _attachPianoGestures();
-
-    _pianoApplySize();
-
-    // No requestFullscreen() — the overlay covers the webapp viewport
-    // via position: fixed; inset: 0.
-
-    try { _requestWakeLock(); } catch (_) {}
-
-    if (_pianoRafId == null) _pianoRafId = requestAnimationFrame(_pianoTick);
-
-    // Kick off transcription (async; cancellable on track change / exit).
-    _pianoAnalyzeCurrentTrack();
-}
-
-function exitPiano() {
-    if (!pianoOverlay) return;
-    if (!pianoOverlay.classList.contains('open')) return;
-    pianoOverlay.classList.remove('open');
-    pianoOverlay.classList.remove('piano-loading');
-    pianoOverlay.classList.remove('piano-warn');
-    pianoOverlay.setAttribute('aria-hidden', 'true');
-
-    if (_pianoRafId != null) { cancelAnimationFrame(_pianoRafId); _pianoRafId = null; }
-    _detachPianoGestures();
-    _pianoClearHold();
-}
-
-function _pianoClearHold() {
-    if (_pianoHoldTimer != null) { clearTimeout(_pianoHoldTimer); _pianoHoldTimer = null; }
-    _pianoHoldStart = null;
-}
-function _pianoOnPointerDown(e) {
-    _pianoClearHold();
-    _pianoHoldStart = { x: e.clientX, y: e.clientY };
-    _pianoHoldTimer = setTimeout(() => {
-        _pianoHoldTimer = null;
-        exitPiano();
-    }, _PIANO_HOLD_MS);
-}
-function _pianoOnPointerMove(e) {
-    if (!_pianoHoldStart) return;
-    const dx = e.clientX - _pianoHoldStart.x;
-    const dy = e.clientY - _pianoHoldStart.y;
-    if (dx * dx + dy * dy > _PIANO_HOLD_MOVE_PX * _PIANO_HOLD_MOVE_PX) _pianoClearHold();
-}
-function _pianoOnPointerUp() { _pianoClearHold(); }
-
-function _attachPianoGestures() {
-    pianoOverlay.addEventListener('pointerdown', _pianoOnPointerDown);
-    pianoOverlay.addEventListener('pointermove', _pianoOnPointerMove);
-    pianoOverlay.addEventListener('pointerup', _pianoOnPointerUp);
-    pianoOverlay.addEventListener('pointercancel', _pianoOnPointerUp);
-    pianoOverlay.addEventListener('pointerleave', _pianoOnPointerUp);
-}
-function _detachPianoGestures() {
-    pianoOverlay.removeEventListener('pointerdown', _pianoOnPointerDown);
-    pianoOverlay.removeEventListener('pointermove', _pianoOnPointerMove);
-    pianoOverlay.removeEventListener('pointerup', _pianoOnPointerUp);
-    pianoOverlay.removeEventListener('pointercancel', _pianoOnPointerUp);
-    pianoOverlay.removeEventListener('pointerleave', _pianoOnPointerUp);
-}
-
-btnPiano?.addEventListener('click', enterPiano);
-
-window.addEventListener('resize', () => {
-    if (pianoOverlay?.classList.contains('open')) _pianoApplySize();
+installPiano({
+    audio,
+    getCurrentTrackId: () => currentTrackId,
+    getPlayerTracks: () => playerTracks,
+    getPlayerGroupId: () => playerGroupId,
+    requestWakeLock: _requestWakeLock,
 });
-
-// Seek bar — its pointerdown/move/up handlers stop propagation so the
-// overlay's hold-to-exit timer never fires while the user is scrubbing.
-function _pianoSeekFromEvent(e) {
-    if (!audio.duration || !pianoSeekbar) return;
-    const rect = pianoSeekbar.getBoundingClientRect();
-    if (rect.width <= 0) return;
-    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    audio.currentTime = fraction * audio.duration;
-}
-function _pianoOnSeekDown(e) {
-    e.stopPropagation();
-    e.preventDefault();
-    _pianoSeeking = true;
-    try { pianoSeekbar.setPointerCapture?.(e.pointerId); } catch (_) {}
-    _pianoSeekFromEvent(e);
-}
-function _pianoOnSeekMove(e) {
-    if (!_pianoSeeking) return;
-    e.stopPropagation();
-    _pianoSeekFromEvent(e);
-}
-function _pianoOnSeekUp(e) {
-    if (!_pianoSeeking) return;
-    e.stopPropagation();
-    _pianoSeeking = false;
-    try { pianoSeekbar.releasePointerCapture?.(e.pointerId); } catch (_) {}
-}
-pianoSeekbar?.addEventListener('pointerdown', _pianoOnSeekDown);
-pianoSeekbar?.addEventListener('pointermove', _pianoOnSeekMove);
-pianoSeekbar?.addEventListener('pointerup', _pianoOnSeekUp);
-pianoSeekbar?.addEventListener('pointercancel', _pianoOnSeekUp);
 
 // ══════════════════════════════════════
 //  BOOT

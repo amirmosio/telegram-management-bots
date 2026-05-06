@@ -52,7 +52,7 @@
     "node_modules/base64-js/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.byteLength = byteLength;
       exports.toByteArray = toByteArray;
       exports.fromByteArray = fromByteArray;
@@ -154,7 +154,7 @@
   var require_ieee754 = __commonJS({
     "node_modules/ieee754/index.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.read = function(buffer, offset, isLE, mLen, nBytes) {
         var e, m;
         var eLen = nBytes * 8 - mLen - 1;
@@ -240,7 +240,7 @@
     "node_modules/buffer/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var base64 = require_base64_js();
       var ieee754 = require_ieee754();
       var customInspectSymbol = typeof Symbol === "function" && typeof Symbol["for"] === "function" ? Symbol["for"]("nodejs.util.inspect.custom") : null;
@@ -1845,7 +1845,7 @@
     "node_modules/has-symbols/shams.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = function hasSymbols() {
         if (typeof Symbol !== "function" || typeof Object.getOwnPropertySymbols !== "function") {
           return false;
@@ -1902,7 +1902,7 @@
     "node_modules/has-tostringtag/shams.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var hasSymbols = require_shams();
       module.exports = function hasToStringTagShams() {
         return hasSymbols() && !!Symbol.toStringTag;
@@ -1915,7 +1915,7 @@
     "node_modules/es-object-atoms/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Object;
     }
   });
@@ -1925,7 +1925,7 @@
     "node_modules/es-errors/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Error;
     }
   });
@@ -1935,7 +1935,7 @@
     "node_modules/es-errors/eval.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = EvalError;
     }
   });
@@ -1945,7 +1945,7 @@
     "node_modules/es-errors/range.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = RangeError;
     }
   });
@@ -1955,7 +1955,7 @@
     "node_modules/es-errors/ref.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = ReferenceError;
     }
   });
@@ -1965,7 +1965,7 @@
     "node_modules/es-errors/syntax.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = SyntaxError;
     }
   });
@@ -1975,7 +1975,7 @@
     "node_modules/es-errors/type.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = TypeError;
     }
   });
@@ -1985,7 +1985,7 @@
     "node_modules/es-errors/uri.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = URIError;
     }
   });
@@ -1995,7 +1995,7 @@
     "node_modules/math-intrinsics/abs.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Math.abs;
     }
   });
@@ -2005,7 +2005,7 @@
     "node_modules/math-intrinsics/floor.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Math.floor;
     }
   });
@@ -2015,7 +2015,7 @@
     "node_modules/math-intrinsics/max.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Math.max;
     }
   });
@@ -2025,7 +2025,7 @@
     "node_modules/math-intrinsics/min.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Math.min;
     }
   });
@@ -2035,7 +2035,7 @@
     "node_modules/math-intrinsics/pow.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Math.pow;
     }
   });
@@ -2045,7 +2045,7 @@
     "node_modules/math-intrinsics/round.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Math.round;
     }
   });
@@ -2055,7 +2055,7 @@
     "node_modules/math-intrinsics/isNaN.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Number.isNaN || function isNaN2(a) {
         return a !== a;
       };
@@ -2067,7 +2067,7 @@
     "node_modules/math-intrinsics/sign.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var $isNaN = require_isNaN();
       module.exports = function sign(number) {
         if ($isNaN(number) || number === 0) {
@@ -2083,7 +2083,7 @@
     "node_modules/gopd/gOPD.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Object.getOwnPropertyDescriptor;
     }
   });
@@ -2093,7 +2093,7 @@
     "node_modules/gopd/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var $gOPD = require_gOPD();
       if ($gOPD) {
         try {
@@ -2111,7 +2111,7 @@
     "node_modules/es-define-property/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var $defineProperty = Object.defineProperty || false;
       if ($defineProperty) {
         try {
@@ -2129,7 +2129,7 @@
     "node_modules/has-symbols/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var origSymbol = typeof Symbol !== "undefined" && Symbol;
       var hasSymbolSham = require_shams();
       module.exports = function hasNativeSymbols() {
@@ -2155,7 +2155,7 @@
     "node_modules/get-proto/Reflect.getPrototypeOf.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = typeof Reflect !== "undefined" && Reflect.getPrototypeOf || null;
     }
   });
@@ -2165,7 +2165,7 @@
     "node_modules/get-proto/Object.getPrototypeOf.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var $Object = require_es_object_atoms();
       module.exports = $Object.getPrototypeOf || null;
     }
@@ -2176,7 +2176,7 @@
     "node_modules/function-bind/implementation.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var ERROR_MESSAGE = "Function.prototype.bind called on incompatible ";
       var toStr = Object.prototype.toString;
       var max = Math.max;
@@ -2254,7 +2254,7 @@
     "node_modules/function-bind/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var implementation = require_implementation();
       module.exports = Function.prototype.bind || implementation;
     }
@@ -2265,7 +2265,7 @@
     "node_modules/call-bind-apply-helpers/functionCall.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Function.prototype.call;
     }
   });
@@ -2275,7 +2275,7 @@
     "node_modules/call-bind-apply-helpers/functionApply.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Function.prototype.apply;
     }
   });
@@ -2285,7 +2285,7 @@
     "node_modules/call-bind-apply-helpers/reflectApply.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = typeof Reflect !== "undefined" && Reflect && Reflect.apply;
     }
   });
@@ -2295,7 +2295,7 @@
     "node_modules/call-bind-apply-helpers/actualApply.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var bind = require_function_bind();
       var $apply = require_functionApply();
       var $call = require_functionCall();
@@ -2309,7 +2309,7 @@
     "node_modules/call-bind-apply-helpers/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var bind = require_function_bind();
       var $TypeError = require_type();
       var $call = require_functionCall();
@@ -2328,7 +2328,7 @@
     "node_modules/dunder-proto/get.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var callBind = require_call_bind_apply_helpers();
       var gOPD = require_gopd();
       var hasProtoAccessor;
@@ -2361,7 +2361,7 @@
     "node_modules/get-proto/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var reflectGetProto = require_Reflect_getPrototypeOf();
       var originalGetProto = require_Object_getPrototypeOf();
       var getDunderProto = require_get();
@@ -2383,7 +2383,7 @@
     "node_modules/hasown/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var call = Function.prototype.call;
       var $hasOwn = Object.prototype.hasOwnProperty;
       var bind = require_function_bind();
@@ -2396,7 +2396,7 @@
     "node_modules/get-intrinsic/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var undefined2;
       var $Object = require_es_object_atoms();
       var $Error = require_es_errors();
@@ -2729,7 +2729,7 @@
     "node_modules/call-bound/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var GetIntrinsic = require_get_intrinsic();
       var callBindBasic = require_call_bind_apply_helpers();
       var $indexOf = callBindBasic([GetIntrinsic("%String.prototype.indexOf%")]);
@@ -2754,7 +2754,7 @@
     "node_modules/is-arguments/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var hasToStringTag = require_shams2()();
       var callBound = require_call_bound();
       var $toString = callBound("Object.prototype.toString");
@@ -2783,7 +2783,7 @@
     "node_modules/is-regex/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var callBound = require_call_bound();
       var hasToStringTag = require_shams2()();
       var hasOwn = require_hasown();
@@ -2854,7 +2854,7 @@
     "node_modules/safe-regex-test/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var callBound = require_call_bound();
       var isRegex = require_is_regex();
       var $exec = callBound("RegExp.prototype.exec");
@@ -2875,7 +2875,7 @@
     "node_modules/generator-function/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var cached = (
         /** @type {GeneratorFunctionConstructor} */
         function* () {
@@ -2890,7 +2890,7 @@
     "node_modules/is-generator-function/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var callBound = require_call_bound();
       var safeRegexTest = require_safe_regex_test();
       var isFnRegex = safeRegexTest(/^\s*(?:function)?\*/);
@@ -2924,7 +2924,7 @@
     "node_modules/is-callable/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var fnToStr = Function.prototype.toString;
       var reflectApply = typeof Reflect === "object" && Reflect !== null && Reflect.apply;
       var badArrayLike;
@@ -3044,7 +3044,7 @@
     "node_modules/for-each/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var isCallable = require_is_callable();
       var toStr = Object.prototype.toString;
       var hasOwnProperty = Object.prototype.hasOwnProperty;
@@ -3106,7 +3106,7 @@
     "node_modules/possible-typed-array-names/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = [
         "Float16Array",
         "Float32Array",
@@ -3129,7 +3129,7 @@
     "node_modules/available-typed-arrays/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var possibleNames = require_possible_typed_array_names();
       var g = typeof globalThis === "undefined" ? window : globalThis;
       module.exports = function availableTypedArrays() {
@@ -3149,7 +3149,7 @@
     "node_modules/define-data-property/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var $defineProperty = require_es_define_property();
       var $SyntaxError = require_syntax();
       var $TypeError = require_type();
@@ -3199,7 +3199,7 @@
     "node_modules/has-property-descriptors/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var $defineProperty = require_es_define_property();
       var hasPropertyDescriptors = function hasPropertyDescriptors2() {
         return !!$defineProperty;
@@ -3223,7 +3223,7 @@
     "node_modules/set-function-length/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var GetIntrinsic = require_get_intrinsic();
       var define2 = require_define_data_property();
       var hasDescriptors = require_has_property_descriptors()();
@@ -3278,7 +3278,7 @@
     "node_modules/call-bind-apply-helpers/applyBind.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var bind = require_function_bind();
       var $apply = require_functionApply();
       var actualApply = require_actualApply();
@@ -3293,7 +3293,7 @@
     "node_modules/call-bind/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var setFunctionLength = require_set_function_length();
       var $defineProperty = require_es_define_property();
       var callBindBasic = require_call_bind_apply_helpers();
@@ -3320,7 +3320,7 @@
     "node_modules/which-typed-array/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var forEach = require_for_each();
       var availableTypedArrays = require_available_typed_arrays();
       var callBind = require_call_bind();
@@ -3443,7 +3443,7 @@
     "node_modules/is-typed-array/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var whichTypedArray = require_which_typed_array();
       module.exports = function isTypedArray(value) {
         return !!whichTypedArray(value);
@@ -3456,7 +3456,7 @@
     "node_modules/util/support/types.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var isArgumentsObject = require_is_arguments();
       var isGeneratorFunction = require_is_generator_function();
       var whichTypedArray = require_which_typed_array();
@@ -3687,7 +3687,7 @@
   var require_isBufferBrowser = __commonJS({
     "node_modules/util/support/isBufferBrowser.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = function isBuffer(arg) {
         return arg && typeof arg === "object" && typeof arg.copy === "function" && typeof arg.fill === "function" && typeof arg.readUInt8 === "function";
       };
@@ -3698,7 +3698,7 @@
   var require_inherits_browser = __commonJS({
     "node_modules/inherits/inherits_browser.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       if (typeof Object.create === "function") {
         module.exports = function inherits(ctor, superCtor) {
           if (superCtor) {
@@ -3732,7 +3732,7 @@
   var require_util = __commonJS({
     "node_modules/util/util.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var getOwnPropertyDescriptors = Object.getOwnPropertyDescriptors || function getOwnPropertyDescriptors2(obj) {
         var keys = Object.keys(obj);
         var descriptors = {};
@@ -4294,7 +4294,7 @@
     "node_modules/telegram/inspect.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.inspect = void 0;
       var util_1 = require_util();
@@ -4308,7 +4308,7 @@
   var require_BigInteger = __commonJS({
     "node_modules/big-integer/BigInteger.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var bigInt2 = (function(undefined2) {
         "use strict";
         var BASE = 1e7, LOG_BASE = 7, MAX_INT = 9007199254740992, MAX_INT_ARR = smallToArray(MAX_INT), DEFAULT_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -5566,7 +5566,7 @@
   var require_safe_buffer = __commonJS({
     "node_modules/safe-buffer/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var buffer = require_buffer();
       var Buffer3 = buffer.Buffer;
       function copyProps(src, dst) {
@@ -5627,7 +5627,7 @@
     "node_modules/randombytes/browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var MAX_BYTES = 65536;
       var MAX_UINT32 = 4294967295;
       function oldBrowser() {
@@ -5667,7 +5667,7 @@
     "node_modules/events/events.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var R = typeof Reflect === "object" ? Reflect : null;
       var ReflectApply = R && typeof R.apply === "function" ? R.apply : function ReflectApply2(target, receiver, args) {
         return Function.prototype.apply.call(target, receiver, args);
@@ -6037,7 +6037,7 @@
   var require_stream_browser = __commonJS({
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/stream-browser.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = require_events().EventEmitter;
     }
   });
@@ -6046,7 +6046,7 @@
   var require_util2 = __commonJS({
     "(disabled):node_modules/util/util.js"() {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
     }
   });
 
@@ -6055,7 +6055,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/buffer_list.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function ownKeys2(object, enumerableOnly) {
         var keys = Object.keys(object);
         if (Object.getOwnPropertySymbols) {
@@ -6299,7 +6299,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/destroy.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function destroy(err, cb) {
         var _this = this;
         var readableDestroyed = this._readableState && this._readableState.destroyed;
@@ -6390,7 +6390,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/errors-browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function _inheritsLoose(subClass, superClass) {
         subClass.prototype = Object.create(superClass.prototype);
         subClass.prototype.constructor = subClass;
@@ -6501,7 +6501,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/state.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var ERR_INVALID_OPT_VALUE = require_errors_browser().codes.ERR_INVALID_OPT_VALUE;
       function highWaterMarkFrom(options, isDuplex, duplexKey) {
         return options.highWaterMark != null ? options.highWaterMark : isDuplex ? options[duplexKey] : null;
@@ -6527,7 +6527,7 @@
   var require_browser2 = __commonJS({
     "node_modules/util-deprecate/browser.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = deprecate;
       function deprecate(fn, msg) {
         if (config("noDeprecation")) {
@@ -6567,7 +6567,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_writable.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Writable;
       function CorkedRequest(state) {
         var _this = this;
@@ -7040,7 +7040,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_duplex.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var objectKeys = Object.keys || function(obj) {
         var keys2 = [];
         for (var key in obj) keys2.push(key);
@@ -7134,7 +7134,7 @@
   var require_safe_buffer2 = __commonJS({
     "node_modules/string_decoder/node_modules/safe-buffer/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var buffer = require_buffer();
       var Buffer3 = buffer.Buffer;
       function copyProps(src, dst) {
@@ -7194,7 +7194,7 @@
     "node_modules/string_decoder/lib/string_decoder.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer2().Buffer;
       var isEncoding = Buffer3.isEncoding || function(encoding) {
         encoding = "" + encoding;
@@ -7434,7 +7434,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/end-of-stream.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var ERR_STREAM_PREMATURE_CLOSE = require_errors_browser().codes.ERR_STREAM_PREMATURE_CLOSE;
       function once(callback) {
         var called = false;
@@ -7525,7 +7525,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/async_iterator.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var _Object$setPrototypeO;
       function _defineProperty(obj, key, value) {
         key = _toPropertyKey(key);
@@ -7709,7 +7709,7 @@
   var require_from_browser = __commonJS({
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/from-browser.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = function() {
         throw new Error("Readable.from is not available in the browser");
       };
@@ -7721,7 +7721,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_readable.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Readable;
       var Duplex;
       Readable.ReadableState = ReadableState;
@@ -8456,7 +8456,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_transform.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Transform;
       var _require$codes = require_errors_browser().codes;
       var ERR_METHOD_NOT_IMPLEMENTED = _require$codes.ERR_METHOD_NOT_IMPLEMENTED;
@@ -8559,7 +8559,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_passthrough.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = PassThrough;
       var Transform = require_stream_transform();
       require_inherits_browser()(PassThrough, Transform);
@@ -8578,7 +8578,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/pipeline.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var eos;
       function once(callback) {
         var called = false;
@@ -8664,7 +8664,7 @@
   var require_stream_browserify = __commonJS({
     "node_modules/stream-browserify/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Stream;
       var EE = require_events().EventEmitter;
       var inherits = require_inherits_browser();
@@ -8744,7 +8744,7 @@
     "node_modules/hash-base/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var Transform = require_stream_browserify().Transform;
       var inherits = require_inherits_browser();
@@ -8834,7 +8834,7 @@
     "node_modules/md5.js/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var HashBase = require_hash_base();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -8964,7 +8964,7 @@
   var require_isarray = __commonJS({
     "node_modules/to-buffer/node_modules/isarray/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var toString = {}.toString;
       module.exports = Array.isArray || function(arr) {
         return toString.call(arr) == "[object Array]";
@@ -8977,7 +8977,7 @@
     "node_modules/typed-array-buffer/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var $TypeError = require_type();
       var callBound = require_call_bound();
       var $typedArrayBuffer = callBound("TypedArray.prototype.buffer", true);
@@ -8996,7 +8996,7 @@
     "node_modules/to-buffer/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var isArray = require_isarray();
       var typedArrayBuffer = require_typed_array_buffer();
@@ -9062,7 +9062,7 @@
     "node_modules/ripemd160/node_modules/hash-base/to-buffer.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var toBuffer = require_to_buffer();
       var useUint8Array = typeof Uint8Array !== "undefined";
@@ -9082,7 +9082,7 @@
     "node_modules/process-nextick-args/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       if (typeof process === "undefined" || !process.version || process.version.indexOf("v0.") === 0 || process.version.indexOf("v1.") === 0 && process.version.indexOf("v1.8.") !== 0) {
         module.exports = { nextTick };
       } else {
@@ -9128,7 +9128,7 @@
   var require_isarray2 = __commonJS({
     "node_modules/isarray/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var toString = {}.toString;
       module.exports = Array.isArray || function(arr) {
         return toString.call(arr) == "[object Array]";
@@ -9140,7 +9140,7 @@
   var require_stream_browser2 = __commonJS({
     "node_modules/readable-stream/lib/internal/streams/stream-browser.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = require_events().EventEmitter;
     }
   });
@@ -9149,7 +9149,7 @@
   var require_safe_buffer3 = __commonJS({
     "node_modules/readable-stream/node_modules/safe-buffer/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var buffer = require_buffer();
       var Buffer3 = buffer.Buffer;
       function copyProps(src, dst) {
@@ -9208,7 +9208,7 @@
   var require_util3 = __commonJS({
     "node_modules/core-util-is/lib/util.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function isArray(arg) {
         if (Array.isArray) {
           return Array.isArray(arg);
@@ -9281,7 +9281,7 @@
     "node_modules/readable-stream/lib/internal/streams/BufferList.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function _classCallCheck(instance, Constructor) {
         if (!(instance instanceof Constructor)) {
           throw new TypeError("Cannot call a class as a function");
@@ -9361,7 +9361,7 @@
     "node_modules/readable-stream/lib/internal/streams/destroy.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var pna = require_process_nextick_args();
       function destroy(err, cb) {
         var _this = this;
@@ -9432,7 +9432,7 @@
     "node_modules/readable-stream/lib/_stream_writable.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var pna = require_process_nextick_args();
       module.exports = Writable;
       function CorkedRequest(state) {
@@ -9874,7 +9874,7 @@
     "node_modules/readable-stream/lib/_stream_duplex.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var pna = require_process_nextick_args();
       var objectKeys = Object.keys || function(obj) {
         var keys2 = [];
@@ -9953,7 +9953,7 @@
     "node_modules/readable-stream/lib/_stream_readable.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var pna = require_process_nextick_args();
       module.exports = Readable;
       var isArray = require_isarray2();
@@ -10641,7 +10641,7 @@
     "node_modules/readable-stream/lib/_stream_transform.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = Transform;
       var Duplex = require_stream_duplex2();
       var util = Object.create(require_util3());
@@ -10743,7 +10743,7 @@
     "node_modules/readable-stream/lib/_stream_passthrough.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = PassThrough;
       var Transform = require_stream_transform2();
       var util = Object.create(require_util3());
@@ -10763,7 +10763,7 @@
   var require_readable_browser = __commonJS({
     "node_modules/readable-stream/readable-browser.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports = module.exports = require_stream_readable2();
       exports.Stream = exports;
       exports.Readable = exports;
@@ -10779,7 +10779,7 @@
     "node_modules/ripemd160/node_modules/hash-base/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var toBuffer = require_to_buffer2();
       var Transform = require_readable_browser().Transform;
@@ -10872,7 +10872,7 @@
     "node_modules/ripemd160/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_buffer().Buffer;
       var inherits = require_inherits_browser();
       var HashBase = require_hash_base2();
@@ -11315,7 +11315,7 @@
     "node_modules/sha.js/hash.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var toBuffer = require_to_buffer();
       function Hash(blockSize, finalSize) {
@@ -11378,7 +11378,7 @@
     "node_modules/sha.js/sha.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Hash = require_hash();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -11464,7 +11464,7 @@
     "node_modules/sha.js/sha1.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Hash = require_hash();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -11553,7 +11553,7 @@
     "node_modules/sha.js/sha256.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Hash = require_hash();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -11717,7 +11717,7 @@
     "node_modules/sha.js/sha224.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Sha256 = require_sha256();
       var Hash = require_hash();
@@ -11760,7 +11760,7 @@
     "node_modules/sha.js/sha512.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Hash = require_hash();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -12105,7 +12105,7 @@
     "node_modules/sha.js/sha384.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var SHA512 = require_sha512();
       var Hash = require_hash();
@@ -12159,7 +12159,7 @@
     "node_modules/sha.js/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = function SHA(algorithm) {
         var alg = algorithm.toLowerCase();
         var Algorithm = module.exports[alg];
@@ -12182,7 +12182,7 @@
     "node_modules/cipher-base/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var Transform = require_stream_browserify().Transform;
       var StringDecoder = require_string_decoder().StringDecoder;
@@ -12279,7 +12279,7 @@
     "node_modules/create-hash/browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var MD5 = require_md5();
       var RIPEMD160 = require_ripemd160();
@@ -12310,7 +12310,7 @@
     "node_modules/create-hmac/legacy.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Buffer3 = require_safe_buffer().Buffer;
       var Base = require_cipher_base();
@@ -12352,7 +12352,7 @@
   var require_md52 = __commonJS({
     "node_modules/create-hash/md5.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var MD5 = require_md5();
       module.exports = function(buffer) {
         return new MD5().update(buffer).digest();
@@ -12365,7 +12365,7 @@
     "node_modules/create-hmac/browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Legacy = require_legacy();
       var Base = require_cipher_base();
@@ -12582,7 +12582,7 @@
     "node_modules/browserify-sign/algos.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = require_algorithms();
     }
   });
@@ -12592,7 +12592,7 @@
     "node_modules/pbkdf2/lib/precondition.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var $isFinite = isFinite;
       var MAX_ALLOC = Math.pow(2, 30) - 1;
       module.exports = function(iterations, keylen) {
@@ -12617,7 +12617,7 @@
     "node_modules/pbkdf2/lib/default-encoding.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var defaultEncoding;
       if (window.process && window.process.browser) {
         defaultEncoding = "utf-8";
@@ -12637,7 +12637,7 @@
     "node_modules/pbkdf2/lib/to-buffer.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var toBuffer = require_to_buffer();
       var useUint8Array = typeof Uint8Array !== "undefined";
@@ -12657,7 +12657,7 @@
     "node_modules/pbkdf2/lib/sync-browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var md5 = require_md52();
       var RIPEMD160 = require_ripemd160();
       var sha = require_sha2();
@@ -12773,7 +12773,7 @@
     "node_modules/pbkdf2/lib/async.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var checkParameters = require_precondition();
       var defaultEncoding = require_default_encoding();
@@ -12897,7 +12897,7 @@
     "node_modules/pbkdf2/browser.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.pbkdf2 = require_async();
       exports.pbkdf2Sync = require_sync_browser();
     }
@@ -12908,7 +12908,7 @@
     "node_modules/des.js/lib/des/utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.readUInt32BE = function readUInt32BE(bytes, off) {
         var res = bytes[0 + off] << 24 | bytes[1 + off] << 16 | bytes[2 + off] << 8 | bytes[3 + off];
         return res >>> 0;
@@ -13675,7 +13675,7 @@
   var require_minimalistic_assert = __commonJS({
     "node_modules/minimalistic-assert/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = assert;
       function assert(val, msg) {
         if (!val)
@@ -13693,7 +13693,7 @@
     "node_modules/des.js/lib/des/cipher.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       function Cipher(options) {
         this.options = options;
@@ -13803,7 +13803,7 @@
     "node_modules/des.js/lib/des/des.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       var inherits = require_inherits_browser();
       var utils = require_utils();
@@ -13932,7 +13932,7 @@
     "node_modules/des.js/lib/des/cbc.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       var inherits = require_inherits_browser();
       var proto = {};
@@ -13989,7 +13989,7 @@
     "node_modules/des.js/lib/des/ede.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       var inherits = require_inherits_browser();
       var Cipher = require_cipher();
@@ -14039,7 +14039,7 @@
     "node_modules/des.js/lib/des.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.utils = require_utils();
       exports.Cipher = require_cipher();
       exports.DES = require_des();
@@ -14052,7 +14052,7 @@
   var require_browserify_des = __commonJS({
     "node_modules/browserify-des/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var CipherBase = require_cipher_base();
       var des = require_des2();
       var inherits = require_inherits_browser();
@@ -14109,7 +14109,7 @@
   var require_ecb = __commonJS({
     "node_modules/browserify-aes/modes/ecb.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.encrypt = function(self2, block) {
         return self2._cipher.encryptBlock(block);
       };
@@ -14123,7 +14123,7 @@
   var require_buffer_xor = __commonJS({
     "node_modules/buffer-xor/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = function xor(a, b) {
         var length = Math.min(a.length, b.length);
         var buffer = new Buffer(length);
@@ -14139,7 +14139,7 @@
   var require_cbc2 = __commonJS({
     "node_modules/browserify-aes/modes/cbc.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var xor = require_buffer_xor();
       exports.encrypt = function(self2, block) {
         var data = xor(block, self2._prev);
@@ -14159,7 +14159,7 @@
   var require_cfb = __commonJS({
     "node_modules/browserify-aes/modes/cfb.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var xor = require_buffer_xor();
       function encryptStart(self2, data, decrypt) {
@@ -14195,7 +14195,7 @@
   var require_cfb8 = __commonJS({
     "node_modules/browserify-aes/modes/cfb8.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       function encryptByte(self2, byteParam, decrypt) {
         var pad = self2._cipher.encryptBlock(self2._prev);
@@ -14222,7 +14222,7 @@
   var require_cfb1 = __commonJS({
     "node_modules/browserify-aes/modes/cfb1.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       function encryptByte(self2, byteParam, decrypt) {
         var pad;
@@ -14265,7 +14265,7 @@
   var require_ofb = __commonJS({
     "node_modules/browserify-aes/modes/ofb.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var xor = require_buffer_xor();
       function getBlock(self2) {
         self2._prev = self2._cipher.encryptBlock(self2._prev);
@@ -14286,7 +14286,7 @@
   var require_incr32 = __commonJS({
     "node_modules/browserify-aes/incr32.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function incr32(iv) {
         var len = iv.length;
         var item;
@@ -14309,7 +14309,7 @@
   var require_ctr = __commonJS({
     "node_modules/browserify-aes/modes/ctr.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var xor = require_buffer_xor();
       var Buffer3 = require_safe_buffer().Buffer;
       var incr32 = require_incr32();
@@ -14542,7 +14542,7 @@
   var require_modes = __commonJS({
     "node_modules/browserify-aes/modes/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var modeModules = {
         ECB: require_ecb(),
         CBC: require_cbc2(),
@@ -14566,7 +14566,7 @@
   var require_aes = __commonJS({
     "node_modules/browserify-aes/aes.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       function asUInt32Array(buf) {
         if (!Buffer3.isBuffer(buf)) buf = Buffer3.from(buf);
@@ -14742,7 +14742,7 @@
   var require_ghash = __commonJS({
     "node_modules/browserify-aes/ghash.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var ZEROES = Buffer3.alloc(16, 0);
       function toArray(buf) {
@@ -14821,7 +14821,7 @@
   var require_authCipher = __commonJS({
     "node_modules/browserify-aes/authCipher.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var aes = require_aes();
       var Buffer3 = require_safe_buffer().Buffer;
       var Transform = require_cipher_base();
@@ -14925,7 +14925,7 @@
   var require_streamCipher = __commonJS({
     "node_modules/browserify-aes/streamCipher.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var aes = require_aes();
       var Buffer3 = require_safe_buffer().Buffer;
       var Transform = require_cipher_base();
@@ -14954,7 +14954,7 @@
   var require_evp_bytestokey = __commonJS({
     "node_modules/evp_bytestokey/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var MD5 = require_md5();
       function EVP_BytesToKey(password, salt, keyBits, ivLen) {
@@ -14998,7 +14998,7 @@
   var require_encrypter = __commonJS({
     "node_modules/browserify-aes/encrypter.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var MODES = require_modes();
       var AuthCipher = require_authCipher();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -15096,7 +15096,7 @@
   var require_decrypter = __commonJS({
     "node_modules/browserify-aes/decrypter.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var AuthCipher = require_authCipher();
       var Buffer3 = require_safe_buffer().Buffer;
       var MODES = require_modes();
@@ -15207,7 +15207,7 @@
   var require_browser6 = __commonJS({
     "node_modules/browserify-aes/browser.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var ciphers = require_encrypter();
       var deciphers = require_decrypter();
       var modes = require_list();
@@ -15226,7 +15226,7 @@
   var require_modes2 = __commonJS({
     "node_modules/browserify-des/modes.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports["des-ecb"] = {
         key: 8,
         iv: 0
@@ -15258,7 +15258,7 @@
   var require_browser7 = __commonJS({
     "node_modules/browserify-cipher/browser.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var DES = require_browserify_des();
       var aes = require_browser6();
       var aesModes = require_modes();
@@ -15321,7 +15321,7 @@
   var require_buffer2 = __commonJS({
     "(disabled):node_modules/buffer/index.js"() {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
     }
   });
 
@@ -15329,7 +15329,7 @@
   var require_bn = __commonJS({
     "node_modules/diffie-hellman/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -18142,7 +18142,7 @@
   var require_bn2 = __commonJS({
     "node_modules/miller-rabin/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -20955,7 +20955,7 @@
   var require_brorand = __commonJS({
     "node_modules/brorand/index.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var r;
       module.exports = function rand2(len) {
         if (!r)
@@ -21014,7 +21014,7 @@
   var require_mr = __commonJS({
     "node_modules/miller-rabin/lib/mr.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var bn = require_bn2();
       var brorand = require_brorand();
       function MillerRabin(rand2) {
@@ -21107,7 +21107,7 @@
   var require_generatePrime = __commonJS({
     "node_modules/diffie-hellman/lib/generatePrime.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var randomBytes = require_browser();
       module.exports = findPrime;
       findPrime.simpleSieve = simpleSieve;
@@ -21245,7 +21245,7 @@
   var require_dh = __commonJS({
     "node_modules/diffie-hellman/lib/dh.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BN = require_bn();
       var MillerRabin = require_mr();
       var millerRabin = new MillerRabin();
@@ -21393,7 +21393,7 @@
   var require_browser8 = __commonJS({
     "node_modules/diffie-hellman/browser.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var generatePrime = require_generatePrime();
       var primes = require_primes();
       var DH = require_dh();
@@ -21434,7 +21434,7 @@
   var require_bn3 = __commonJS({
     "node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -24328,7 +24328,7 @@
     "node_modules/browserify-rsa/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BN = require_bn3();
       var randomBytes = require_browser();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -24430,7 +24430,7 @@
   var require_bn4 = __commonJS({
     "node_modules/elliptic/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -27244,7 +27244,7 @@
     "node_modules/minimalistic-crypto-utils/lib/utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = exports;
       function toArray(msg, enc) {
         if (Array.isArray(msg))
@@ -27305,7 +27305,7 @@
     "node_modules/elliptic/lib/elliptic/utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = exports;
       var BN = require_bn4();
       var minAssert = require_minimalistic_assert();
@@ -27413,7 +27413,7 @@
     "node_modules/elliptic/lib/elliptic/curve/base.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BN = require_bn4();
       var utils = require_utils3();
       var getNAF = utils.getNAF;
@@ -27737,7 +27737,7 @@
     "node_modules/elliptic/lib/elliptic/curve/short.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils3();
       var BN = require_bn4();
       var inherits = require_inherits_browser();
@@ -28437,7 +28437,7 @@
     "node_modules/elliptic/lib/elliptic/curve/mont.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BN = require_bn4();
       var inherits = require_inherits_browser();
       var Base = require_base();
@@ -28567,7 +28567,7 @@
     "node_modules/elliptic/lib/elliptic/curve/edwards.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils3();
       var BN = require_bn4();
       var inherits = require_inherits_browser();
@@ -28870,7 +28870,7 @@
     "node_modules/elliptic/lib/elliptic/curve/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var curve = exports;
       curve.base = require_base();
       curve.short = require_short();
@@ -28884,7 +28884,7 @@
     "node_modules/hash.js/lib/hash/utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       var inherits = require_inherits_browser();
       exports.inherits = inherits;
@@ -29131,7 +29131,7 @@
     "node_modules/hash.js/lib/hash/common.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils4();
       var assert = require_minimalistic_assert();
       function BlockHash() {
@@ -29212,7 +29212,7 @@
     "node_modules/hash.js/lib/hash/sha/common.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils4();
       var rotr32 = utils.rotr32;
       function ft_1(s, x, y, z) {
@@ -29260,7 +29260,7 @@
     "node_modules/hash.js/lib/hash/sha/1.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils4();
       var common = require_common();
       var shaCommon = require_common2();
@@ -29334,7 +29334,7 @@
     "node_modules/hash.js/lib/hash/sha/256.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils4();
       var common = require_common();
       var shaCommon = require_common2();
@@ -29488,7 +29488,7 @@
     "node_modules/hash.js/lib/hash/sha/224.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils4();
       var SHA256 = require__2();
       function SHA224() {
@@ -29526,7 +29526,7 @@
     "node_modules/hash.js/lib/hash/sha/512.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils4();
       var common = require_common();
       var assert = require_minimalistic_assert();
@@ -29967,7 +29967,7 @@
     "node_modules/hash.js/lib/hash/sha/384.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils4();
       var SHA512 = require__4();
       function SHA384() {
@@ -30013,7 +30013,7 @@
     "node_modules/hash.js/lib/hash/sha.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.sha1 = require__();
       exports.sha224 = require__3();
       exports.sha256 = require__2();
@@ -30027,7 +30027,7 @@
     "node_modules/hash.js/lib/hash/ripemd.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils4();
       var common = require_common();
       var rotl32 = utils.rotl32;
@@ -30470,7 +30470,7 @@
     "node_modules/hash.js/lib/hash/hmac.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils4();
       var assert = require_minimalistic_assert();
       function Hmac(hash, key, enc) {
@@ -30512,7 +30512,7 @@
   var require_hash2 = __commonJS({
     "node_modules/hash.js/lib/hash.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var hash = exports;
       hash.utils = require_utils4();
       hash.common = require_common();
@@ -30532,7 +30532,7 @@
   var require_secp256k1 = __commonJS({
     "node_modules/elliptic/lib/elliptic/precomputed/secp256k1.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = {
         doubles: {
           step: 4,
@@ -31321,7 +31321,7 @@
     "node_modules/elliptic/lib/elliptic/curves.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var curves = exports;
       var hash = require_hash2();
       var curve = require_curve();
@@ -31499,7 +31499,7 @@
     "node_modules/hmac-drbg/lib/hmac-drbg.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var hash = require_hash2();
       var utils = require_utils2();
       var assert = require_minimalistic_assert();
@@ -31595,7 +31595,7 @@
     "node_modules/elliptic/lib/elliptic/ec/key.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BN = require_bn4();
       var utils = require_utils3();
       var assert = utils.assert;
@@ -31691,7 +31691,7 @@
     "node_modules/elliptic/lib/elliptic/ec/signature.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BN = require_bn4();
       var utils = require_utils3();
       var assert = utils.assert;
@@ -31848,7 +31848,7 @@
     "node_modules/elliptic/lib/elliptic/ec/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BN = require_bn4();
       var HmacDRBG = require_hmac_drbg();
       var utils = require_utils3();
@@ -32057,7 +32057,7 @@
     "node_modules/elliptic/lib/elliptic/eddsa/key.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var utils = require_utils3();
       var assert = utils.assert;
       var parseBytes = utils.parseBytes;
@@ -32133,7 +32133,7 @@
     "node_modules/elliptic/lib/elliptic/eddsa/signature.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BN = require_bn4();
       var utils = require_utils3();
       var assert = utils.assert;
@@ -32185,7 +32185,7 @@
     "node_modules/elliptic/lib/elliptic/eddsa/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var hash = require_hash2();
       var curves = require_curves();
       var utils = require_utils3();
@@ -32275,7 +32275,7 @@
     "node_modules/elliptic/lib/elliptic.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var elliptic = exports;
       elliptic.version = require_package().version;
       elliptic.utils = require_utils3();
@@ -32291,7 +32291,7 @@
   var require_bn5 = __commonJS({
     "node_modules/asn1.js/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -35104,7 +35104,7 @@
   var require_api = __commonJS({
     "node_modules/asn1.js/lib/asn1/api.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var asn1 = require_asn1();
       var inherits = require_inherits_browser();
       var api = exports;
@@ -35159,7 +35159,7 @@
   var require_reporter = __commonJS({
     "node_modules/asn1.js/lib/asn1/base/reporter.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       function Reporter(options) {
         this._reporterState = {
@@ -35261,7 +35261,7 @@
   var require_buffer3 = __commonJS({
     "node_modules/asn1.js/lib/asn1/base/buffer.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Reporter = require_base2().Reporter;
       var Buffer3 = require_buffer().Buffer;
@@ -35365,7 +35365,7 @@
   var require_node = __commonJS({
     "node_modules/asn1.js/lib/asn1/base/node.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Reporter = require_base2().Reporter;
       var EncoderBuffer = require_base2().EncoderBuffer;
       var DecoderBuffer = require_base2().DecoderBuffer;
@@ -35900,7 +35900,7 @@
   var require_base2 = __commonJS({
     "node_modules/asn1.js/lib/asn1/base/index.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var base = exports;
       base.Reporter = require_reporter().Reporter;
       base.DecoderBuffer = require_buffer3().DecoderBuffer;
@@ -35913,7 +35913,7 @@
   var require_der = __commonJS({
     "node_modules/asn1.js/lib/asn1/constants/der.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var constants = require_constants();
       exports.tagClass = {
         0: "universal",
@@ -35961,7 +35961,7 @@
   var require_constants = __commonJS({
     "node_modules/asn1.js/lib/asn1/constants/index.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var constants = exports;
       constants._reverse = function reverse(map) {
         var res = {};
@@ -35981,7 +35981,7 @@
   var require_der2 = __commonJS({
     "node_modules/asn1.js/lib/asn1/decoders/der.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var asn1 = require_asn1();
       var base = asn1.base;
@@ -36246,7 +36246,7 @@
   var require_pem = __commonJS({
     "node_modules/asn1.js/lib/asn1/decoders/pem.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Buffer3 = require_buffer().Buffer;
       var DERDecoder = require_der2();
@@ -36293,7 +36293,7 @@
   var require_decoders = __commonJS({
     "node_modules/asn1.js/lib/asn1/decoders/index.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var decoders = exports;
       decoders.der = require_der2();
       decoders.pem = require_pem();
@@ -36304,7 +36304,7 @@
   var require_der3 = __commonJS({
     "node_modules/asn1.js/lib/asn1/encoders/der.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Buffer3 = require_buffer().Buffer;
       var asn1 = require_asn1();
@@ -36537,7 +36537,7 @@
   var require_pem2 = __commonJS({
     "node_modules/asn1.js/lib/asn1/encoders/pem.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var DEREncoder = require_der3();
       function PEMEncoder(entity) {
@@ -36562,7 +36562,7 @@
   var require_encoders = __commonJS({
     "node_modules/asn1.js/lib/asn1/encoders/index.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var encoders = exports;
       encoders.der = require_der3();
       encoders.pem = require_pem2();
@@ -36573,7 +36573,7 @@
   var require_asn1 = __commonJS({
     "node_modules/asn1.js/lib/asn1.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var asn1 = exports;
       asn1.bignum = require_bn5();
       asn1.define = require_api().define;
@@ -36589,7 +36589,7 @@
     "node_modules/parse-asn1/certificate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var asn = require_asn1();
       var Time = asn.define("Time", function() {
         this.choice({
@@ -36670,7 +36670,7 @@
     "node_modules/parse-asn1/asn1.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var asn1 = require_asn1();
       exports.certificate = require_certificate();
       var RSAPrivateKey = asn1.define("RSAPrivateKey", function() {
@@ -36805,7 +36805,7 @@
     "node_modules/parse-asn1/fixProc.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var findProc = /Proc-Type: 4,ENCRYPTED[\n\r]+DEK-Info: AES-((?:128)|(?:192)|(?:256))-CBC,([0-9A-H]+)[\n\r]+([0-9A-z\n\r+/=]+)[\n\r]+/m;
       var startRegex = /^-----BEGIN ((?:.*? KEY)|CERTIFICATE)-----/m;
       var fullRegex = /^-----BEGIN ((?:.*? KEY)|CERTIFICATE)-----([0-9A-z\n\r+/=]+)-----END \1-----$/m;
@@ -36844,7 +36844,7 @@
     "node_modules/parse-asn1/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var asn1 = require_asn12();
       var aesid = require_aesid();
       var fixProc = require_fixProc();
@@ -36974,7 +36974,7 @@
     "node_modules/browserify-sign/browser/sign.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var createHmac = require_browser4();
       var crt = require_browserify_rsa();
@@ -37130,7 +37130,7 @@
     "node_modules/browserify-sign/browser/verify.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var BN = require_bn3();
       var EC = require_elliptic().ec;
@@ -37222,7 +37222,7 @@
     "node_modules/browserify-sign/browser/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var createHash = require_browser3();
       var stream = require_readable_browser();
@@ -37304,7 +37304,7 @@
   var require_bn6 = __commonJS({
     "node_modules/create-ecdh/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -40117,7 +40117,7 @@
   var require_browser10 = __commonJS({
     "node_modules/create-ecdh/browser.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var elliptic = require_elliptic();
       var BN = require_bn6();
       module.exports = function createECDH(curve) {
@@ -40237,7 +40237,7 @@
   var require_mgf = __commonJS({
     "node_modules/public-encrypt/mgf.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var createHash = require_browser3();
       var Buffer3 = require_safe_buffer().Buffer;
       module.exports = function(seed, len) {
@@ -40262,7 +40262,7 @@
   var require_xor = __commonJS({
     "node_modules/public-encrypt/xor.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = function xor(a, b) {
         var len = a.length;
         var i = -1;
@@ -40278,7 +40278,7 @@
   var require_bn7 = __commonJS({
     "node_modules/public-encrypt/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -43091,7 +43091,7 @@
   var require_withPublic = __commonJS({
     "node_modules/public-encrypt/withPublic.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BN = require_bn7();
       var Buffer3 = require_safe_buffer().Buffer;
       function withPublic(paddedMsg, key) {
@@ -43105,7 +43105,7 @@
   var require_publicEncrypt = __commonJS({
     "node_modules/public-encrypt/publicEncrypt.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var parseKeys = require_parse_asn1();
       var randomBytes = require_browser();
       var createHash = require_browser3();
@@ -43199,7 +43199,7 @@
   var require_privateDecrypt = __commonJS({
     "node_modules/public-encrypt/privateDecrypt.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var parseKeys = require_parse_asn1();
       var mgf = require_mgf();
       var xor = require_xor();
@@ -43307,7 +43307,7 @@
   var require_browser11 = __commonJS({
     "node_modules/public-encrypt/browser.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.publicEncrypt = require_publicEncrypt();
       exports.privateDecrypt = require_privateDecrypt();
       exports.privateEncrypt = function privateEncrypt(key, buf) {
@@ -43324,7 +43324,7 @@
     "node_modules/randomfill/browser.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function oldBrowser() {
         throw new Error("secure random number generation not supported by this browser\nuse chrome, FireFox or Internet Explorer 11");
       }
@@ -43428,7 +43428,7 @@
     "node_modules/crypto-browserify/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.randomBytes = exports.rng = exports.pseudoRandomBytes = exports.prng = require_browser();
       exports.createHash = exports.Hash = require_browser3();
       exports.createHmac = exports.Hmac = require_browser4();
@@ -43508,7 +43508,7 @@
     "node_modules/telegram/CryptoFile.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -43547,7 +43547,7 @@
     "node_modules/telegram/platform.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.isNode = exports.isBrowser = exports.isDeno = void 0;
       exports.isDeno = "Deno" in globalThis;
@@ -43561,7 +43561,7 @@
     "node_modules/telegram/Helpers.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod2) {
         return mod2 && mod2.__esModule ? mod2 : { "default": mod2 };
       };
@@ -43898,7 +43898,7 @@
     "node_modules/telegram/tl/apiTl.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = `boolFalse#bc799737 = Bool;
 boolTrue#997275b5 = Bool;
 true#3fedd339 = True;
@@ -46000,7 +46000,7 @@ fragment.getCollectibleInfo#be1e85ba collectible:InputCollectible = fragment.Col
     "node_modules/telegram/tl/schemaTl.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = `
 resPQ#05162463 nonce:int128 server_nonce:int128 pq:string server_public_key_fingerprints:Vector<long> = ResPQ;
 p_q_inner_data#83c95aec pq:string p:string q:string nonce:int128 server_nonce:int128 new_nonce:int256 = P_Q_inner_data;
@@ -46073,7 +46073,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/generationHelpers.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.variableSnakeToCamelCase = exports.snakeToCamelCase = exports.CORE_TYPES = exports.fromLine = exports.parseTl = exports.findAll = void 0;
       exports.serializeBytes = serializeBytes;
@@ -46326,7 +46326,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/api.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var { inspect } = require_inspect();
       var bigInt2 = require_BigInteger();
       var { generateRandomBytes, readBigIntFromBuffer, isArrayLike, betterConsoleLog } = require_Helpers();
@@ -46786,7 +46786,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/chatGetter.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __asyncValues2 = exports && exports.__asyncValues || function(o) {
         if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
         var m = o[Symbol.asyncIterator], i;
@@ -46915,7 +46915,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/senderGetter.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.SenderGetter = void 0;
       var api_1 = require_api2();
@@ -46975,7 +46975,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/mime/Mime.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function Mime() {
         this._types = /* @__PURE__ */ Object.create(null);
         this._extensions = /* @__PURE__ */ Object.create(null);
@@ -47030,7 +47030,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_standard = __commonJS({
     "node_modules/mime/types/standard.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = { "application/andrew-inset": ["ez"], "application/applixware": ["aw"], "application/atom+xml": ["atom"], "application/atomcat+xml": ["atomcat"], "application/atomdeleted+xml": ["atomdeleted"], "application/atomsvc+xml": ["atomsvc"], "application/atsc-dwd+xml": ["dwd"], "application/atsc-held+xml": ["held"], "application/atsc-rsat+xml": ["rsat"], "application/bdoc": ["bdoc"], "application/calendar+xml": ["xcs"], "application/ccxml+xml": ["ccxml"], "application/cdfx+xml": ["cdfx"], "application/cdmi-capability": ["cdmia"], "application/cdmi-container": ["cdmic"], "application/cdmi-domain": ["cdmid"], "application/cdmi-object": ["cdmio"], "application/cdmi-queue": ["cdmiq"], "application/cu-seeme": ["cu"], "application/dash+xml": ["mpd"], "application/davmount+xml": ["davmount"], "application/docbook+xml": ["dbk"], "application/dssc+der": ["dssc"], "application/dssc+xml": ["xdssc"], "application/ecmascript": ["es", "ecma"], "application/emma+xml": ["emma"], "application/emotionml+xml": ["emotionml"], "application/epub+zip": ["epub"], "application/exi": ["exi"], "application/express": ["exp"], "application/fdt+xml": ["fdt"], "application/font-tdpfr": ["pfr"], "application/geo+json": ["geojson"], "application/gml+xml": ["gml"], "application/gpx+xml": ["gpx"], "application/gxf": ["gxf"], "application/gzip": ["gz"], "application/hjson": ["hjson"], "application/hyperstudio": ["stk"], "application/inkml+xml": ["ink", "inkml"], "application/ipfix": ["ipfix"], "application/its+xml": ["its"], "application/java-archive": ["jar", "war", "ear"], "application/java-serialized-object": ["ser"], "application/java-vm": ["class"], "application/javascript": ["js", "mjs"], "application/json": ["json", "map"], "application/json5": ["json5"], "application/jsonml+json": ["jsonml"], "application/ld+json": ["jsonld"], "application/lgr+xml": ["lgr"], "application/lost+xml": ["lostxml"], "application/mac-binhex40": ["hqx"], "application/mac-compactpro": ["cpt"], "application/mads+xml": ["mads"], "application/manifest+json": ["webmanifest"], "application/marc": ["mrc"], "application/marcxml+xml": ["mrcx"], "application/mathematica": ["ma", "nb", "mb"], "application/mathml+xml": ["mathml"], "application/mbox": ["mbox"], "application/mediaservercontrol+xml": ["mscml"], "application/metalink+xml": ["metalink"], "application/metalink4+xml": ["meta4"], "application/mets+xml": ["mets"], "application/mmt-aei+xml": ["maei"], "application/mmt-usd+xml": ["musd"], "application/mods+xml": ["mods"], "application/mp21": ["m21", "mp21"], "application/mp4": ["mp4s", "m4p"], "application/msword": ["doc", "dot"], "application/mxf": ["mxf"], "application/n-quads": ["nq"], "application/n-triples": ["nt"], "application/node": ["cjs"], "application/octet-stream": ["bin", "dms", "lrf", "mar", "so", "dist", "distz", "pkg", "bpk", "dump", "elc", "deploy", "exe", "dll", "deb", "dmg", "iso", "img", "msi", "msp", "msm", "buffer"], "application/oda": ["oda"], "application/oebps-package+xml": ["opf"], "application/ogg": ["ogx"], "application/omdoc+xml": ["omdoc"], "application/onenote": ["onetoc", "onetoc2", "onetmp", "onepkg"], "application/oxps": ["oxps"], "application/p2p-overlay+xml": ["relo"], "application/patch-ops-error+xml": ["xer"], "application/pdf": ["pdf"], "application/pgp-encrypted": ["pgp"], "application/pgp-signature": ["asc", "sig"], "application/pics-rules": ["prf"], "application/pkcs10": ["p10"], "application/pkcs7-mime": ["p7m", "p7c"], "application/pkcs7-signature": ["p7s"], "application/pkcs8": ["p8"], "application/pkix-attr-cert": ["ac"], "application/pkix-cert": ["cer"], "application/pkix-crl": ["crl"], "application/pkix-pkipath": ["pkipath"], "application/pkixcmp": ["pki"], "application/pls+xml": ["pls"], "application/postscript": ["ai", "eps", "ps"], "application/provenance+xml": ["provx"], "application/pskc+xml": ["pskcxml"], "application/raml+yaml": ["raml"], "application/rdf+xml": ["rdf", "owl"], "application/reginfo+xml": ["rif"], "application/relax-ng-compact-syntax": ["rnc"], "application/resource-lists+xml": ["rl"], "application/resource-lists-diff+xml": ["rld"], "application/rls-services+xml": ["rs"], "application/route-apd+xml": ["rapd"], "application/route-s-tsid+xml": ["sls"], "application/route-usd+xml": ["rusd"], "application/rpki-ghostbusters": ["gbr"], "application/rpki-manifest": ["mft"], "application/rpki-roa": ["roa"], "application/rsd+xml": ["rsd"], "application/rss+xml": ["rss"], "application/rtf": ["rtf"], "application/sbml+xml": ["sbml"], "application/scvp-cv-request": ["scq"], "application/scvp-cv-response": ["scs"], "application/scvp-vp-request": ["spq"], "application/scvp-vp-response": ["spp"], "application/sdp": ["sdp"], "application/senml+xml": ["senmlx"], "application/sensml+xml": ["sensmlx"], "application/set-payment-initiation": ["setpay"], "application/set-registration-initiation": ["setreg"], "application/shf+xml": ["shf"], "application/sieve": ["siv", "sieve"], "application/smil+xml": ["smi", "smil"], "application/sparql-query": ["rq"], "application/sparql-results+xml": ["srx"], "application/srgs": ["gram"], "application/srgs+xml": ["grxml"], "application/sru+xml": ["sru"], "application/ssdl+xml": ["ssdl"], "application/ssml+xml": ["ssml"], "application/swid+xml": ["swidtag"], "application/tei+xml": ["tei", "teicorpus"], "application/thraud+xml": ["tfi"], "application/timestamped-data": ["tsd"], "application/toml": ["toml"], "application/trig": ["trig"], "application/ttml+xml": ["ttml"], "application/ubjson": ["ubj"], "application/urc-ressheet+xml": ["rsheet"], "application/urc-targetdesc+xml": ["td"], "application/voicexml+xml": ["vxml"], "application/wasm": ["wasm"], "application/widget": ["wgt"], "application/winhlp": ["hlp"], "application/wsdl+xml": ["wsdl"], "application/wspolicy+xml": ["wspolicy"], "application/xaml+xml": ["xaml"], "application/xcap-att+xml": ["xav"], "application/xcap-caps+xml": ["xca"], "application/xcap-diff+xml": ["xdf"], "application/xcap-el+xml": ["xel"], "application/xcap-ns+xml": ["xns"], "application/xenc+xml": ["xenc"], "application/xhtml+xml": ["xhtml", "xht"], "application/xliff+xml": ["xlf"], "application/xml": ["xml", "xsl", "xsd", "rng"], "application/xml-dtd": ["dtd"], "application/xop+xml": ["xop"], "application/xproc+xml": ["xpl"], "application/xslt+xml": ["*xsl", "xslt"], "application/xspf+xml": ["xspf"], "application/xv+xml": ["mxml", "xhvml", "xvml", "xvm"], "application/yang": ["yang"], "application/yin+xml": ["yin"], "application/zip": ["zip"], "audio/3gpp": ["*3gpp"], "audio/adpcm": ["adp"], "audio/amr": ["amr"], "audio/basic": ["au", "snd"], "audio/midi": ["mid", "midi", "kar", "rmi"], "audio/mobile-xmf": ["mxmf"], "audio/mp3": ["*mp3"], "audio/mp4": ["m4a", "mp4a"], "audio/mpeg": ["mpga", "mp2", "mp2a", "mp3", "m2a", "m3a"], "audio/ogg": ["oga", "ogg", "spx", "opus"], "audio/s3m": ["s3m"], "audio/silk": ["sil"], "audio/wav": ["wav"], "audio/wave": ["*wav"], "audio/webm": ["weba"], "audio/xm": ["xm"], "font/collection": ["ttc"], "font/otf": ["otf"], "font/ttf": ["ttf"], "font/woff": ["woff"], "font/woff2": ["woff2"], "image/aces": ["exr"], "image/apng": ["apng"], "image/avif": ["avif"], "image/bmp": ["bmp"], "image/cgm": ["cgm"], "image/dicom-rle": ["drle"], "image/emf": ["emf"], "image/fits": ["fits"], "image/g3fax": ["g3"], "image/gif": ["gif"], "image/heic": ["heic"], "image/heic-sequence": ["heics"], "image/heif": ["heif"], "image/heif-sequence": ["heifs"], "image/hej2k": ["hej2"], "image/hsj2": ["hsj2"], "image/ief": ["ief"], "image/jls": ["jls"], "image/jp2": ["jp2", "jpg2"], "image/jpeg": ["jpeg", "jpg", "jpe"], "image/jph": ["jph"], "image/jphc": ["jhc"], "image/jpm": ["jpm"], "image/jpx": ["jpx", "jpf"], "image/jxr": ["jxr"], "image/jxra": ["jxra"], "image/jxrs": ["jxrs"], "image/jxs": ["jxs"], "image/jxsc": ["jxsc"], "image/jxsi": ["jxsi"], "image/jxss": ["jxss"], "image/ktx": ["ktx"], "image/ktx2": ["ktx2"], "image/png": ["png"], "image/sgi": ["sgi"], "image/svg+xml": ["svg", "svgz"], "image/t38": ["t38"], "image/tiff": ["tif", "tiff"], "image/tiff-fx": ["tfx"], "image/webp": ["webp"], "image/wmf": ["wmf"], "message/disposition-notification": ["disposition-notification"], "message/global": ["u8msg"], "message/global-delivery-status": ["u8dsn"], "message/global-disposition-notification": ["u8mdn"], "message/global-headers": ["u8hdr"], "message/rfc822": ["eml", "mime"], "model/3mf": ["3mf"], "model/gltf+json": ["gltf"], "model/gltf-binary": ["glb"], "model/iges": ["igs", "iges"], "model/mesh": ["msh", "mesh", "silo"], "model/mtl": ["mtl"], "model/obj": ["obj"], "model/step+xml": ["stpx"], "model/step+zip": ["stpz"], "model/step-xml+zip": ["stpxz"], "model/stl": ["stl"], "model/vrml": ["wrl", "vrml"], "model/x3d+binary": ["*x3db", "x3dbz"], "model/x3d+fastinfoset": ["x3db"], "model/x3d+vrml": ["*x3dv", "x3dvz"], "model/x3d+xml": ["x3d", "x3dz"], "model/x3d-vrml": ["x3dv"], "text/cache-manifest": ["appcache", "manifest"], "text/calendar": ["ics", "ifb"], "text/coffeescript": ["coffee", "litcoffee"], "text/css": ["css"], "text/csv": ["csv"], "text/html": ["html", "htm", "shtml"], "text/jade": ["jade"], "text/jsx": ["jsx"], "text/less": ["less"], "text/markdown": ["markdown", "md"], "text/mathml": ["mml"], "text/mdx": ["mdx"], "text/n3": ["n3"], "text/plain": ["txt", "text", "conf", "def", "list", "log", "in", "ini"], "text/richtext": ["rtx"], "text/rtf": ["*rtf"], "text/sgml": ["sgml", "sgm"], "text/shex": ["shex"], "text/slim": ["slim", "slm"], "text/spdx": ["spdx"], "text/stylus": ["stylus", "styl"], "text/tab-separated-values": ["tsv"], "text/troff": ["t", "tr", "roff", "man", "me", "ms"], "text/turtle": ["ttl"], "text/uri-list": ["uri", "uris", "urls"], "text/vcard": ["vcard"], "text/vtt": ["vtt"], "text/xml": ["*xml"], "text/yaml": ["yaml", "yml"], "video/3gpp": ["3gp", "3gpp"], "video/3gpp2": ["3g2"], "video/h261": ["h261"], "video/h263": ["h263"], "video/h264": ["h264"], "video/iso.segment": ["m4s"], "video/jpeg": ["jpgv"], "video/jpm": ["*jpm", "jpgm"], "video/mj2": ["mj2", "mjp2"], "video/mp2t": ["ts"], "video/mp4": ["mp4", "mp4v", "mpg4"], "video/mpeg": ["mpeg", "mpg", "mpe", "m1v", "m2v"], "video/ogg": ["ogv"], "video/quicktime": ["qt", "mov"], "video/webm": ["webm"] };
     }
   });
@@ -47039,7 +47039,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_other = __commonJS({
     "node_modules/mime/types/other.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = { "application/prs.cww": ["cww"], "application/vnd.1000minds.decision-model+xml": ["1km"], "application/vnd.3gpp.pic-bw-large": ["plb"], "application/vnd.3gpp.pic-bw-small": ["psb"], "application/vnd.3gpp.pic-bw-var": ["pvb"], "application/vnd.3gpp2.tcap": ["tcap"], "application/vnd.3m.post-it-notes": ["pwn"], "application/vnd.accpac.simply.aso": ["aso"], "application/vnd.accpac.simply.imp": ["imp"], "application/vnd.acucobol": ["acu"], "application/vnd.acucorp": ["atc", "acutc"], "application/vnd.adobe.air-application-installer-package+zip": ["air"], "application/vnd.adobe.formscentral.fcdt": ["fcdt"], "application/vnd.adobe.fxp": ["fxp", "fxpl"], "application/vnd.adobe.xdp+xml": ["xdp"], "application/vnd.adobe.xfdf": ["xfdf"], "application/vnd.ahead.space": ["ahead"], "application/vnd.airzip.filesecure.azf": ["azf"], "application/vnd.airzip.filesecure.azs": ["azs"], "application/vnd.amazon.ebook": ["azw"], "application/vnd.americandynamics.acc": ["acc"], "application/vnd.amiga.ami": ["ami"], "application/vnd.android.package-archive": ["apk"], "application/vnd.anser-web-certificate-issue-initiation": ["cii"], "application/vnd.anser-web-funds-transfer-initiation": ["fti"], "application/vnd.antix.game-component": ["atx"], "application/vnd.apple.installer+xml": ["mpkg"], "application/vnd.apple.keynote": ["key"], "application/vnd.apple.mpegurl": ["m3u8"], "application/vnd.apple.numbers": ["numbers"], "application/vnd.apple.pages": ["pages"], "application/vnd.apple.pkpass": ["pkpass"], "application/vnd.aristanetworks.swi": ["swi"], "application/vnd.astraea-software.iota": ["iota"], "application/vnd.audiograph": ["aep"], "application/vnd.balsamiq.bmml+xml": ["bmml"], "application/vnd.blueice.multipass": ["mpm"], "application/vnd.bmi": ["bmi"], "application/vnd.businessobjects": ["rep"], "application/vnd.chemdraw+xml": ["cdxml"], "application/vnd.chipnuts.karaoke-mmd": ["mmd"], "application/vnd.cinderella": ["cdy"], "application/vnd.citationstyles.style+xml": ["csl"], "application/vnd.claymore": ["cla"], "application/vnd.cloanto.rp9": ["rp9"], "application/vnd.clonk.c4group": ["c4g", "c4d", "c4f", "c4p", "c4u"], "application/vnd.cluetrust.cartomobile-config": ["c11amc"], "application/vnd.cluetrust.cartomobile-config-pkg": ["c11amz"], "application/vnd.commonspace": ["csp"], "application/vnd.contact.cmsg": ["cdbcmsg"], "application/vnd.cosmocaller": ["cmc"], "application/vnd.crick.clicker": ["clkx"], "application/vnd.crick.clicker.keyboard": ["clkk"], "application/vnd.crick.clicker.palette": ["clkp"], "application/vnd.crick.clicker.template": ["clkt"], "application/vnd.crick.clicker.wordbank": ["clkw"], "application/vnd.criticaltools.wbs+xml": ["wbs"], "application/vnd.ctc-posml": ["pml"], "application/vnd.cups-ppd": ["ppd"], "application/vnd.curl.car": ["car"], "application/vnd.curl.pcurl": ["pcurl"], "application/vnd.dart": ["dart"], "application/vnd.data-vision.rdz": ["rdz"], "application/vnd.dbf": ["dbf"], "application/vnd.dece.data": ["uvf", "uvvf", "uvd", "uvvd"], "application/vnd.dece.ttml+xml": ["uvt", "uvvt"], "application/vnd.dece.unspecified": ["uvx", "uvvx"], "application/vnd.dece.zip": ["uvz", "uvvz"], "application/vnd.denovo.fcselayout-link": ["fe_launch"], "application/vnd.dna": ["dna"], "application/vnd.dolby.mlp": ["mlp"], "application/vnd.dpgraph": ["dpg"], "application/vnd.dreamfactory": ["dfac"], "application/vnd.ds-keypoint": ["kpxx"], "application/vnd.dvb.ait": ["ait"], "application/vnd.dvb.service": ["svc"], "application/vnd.dynageo": ["geo"], "application/vnd.ecowin.chart": ["mag"], "application/vnd.enliven": ["nml"], "application/vnd.epson.esf": ["esf"], "application/vnd.epson.msf": ["msf"], "application/vnd.epson.quickanime": ["qam"], "application/vnd.epson.salt": ["slt"], "application/vnd.epson.ssf": ["ssf"], "application/vnd.eszigno3+xml": ["es3", "et3"], "application/vnd.ezpix-album": ["ez2"], "application/vnd.ezpix-package": ["ez3"], "application/vnd.fdf": ["fdf"], "application/vnd.fdsn.mseed": ["mseed"], "application/vnd.fdsn.seed": ["seed", "dataless"], "application/vnd.flographit": ["gph"], "application/vnd.fluxtime.clip": ["ftc"], "application/vnd.framemaker": ["fm", "frame", "maker", "book"], "application/vnd.frogans.fnc": ["fnc"], "application/vnd.frogans.ltf": ["ltf"], "application/vnd.fsc.weblaunch": ["fsc"], "application/vnd.fujitsu.oasys": ["oas"], "application/vnd.fujitsu.oasys2": ["oa2"], "application/vnd.fujitsu.oasys3": ["oa3"], "application/vnd.fujitsu.oasysgp": ["fg5"], "application/vnd.fujitsu.oasysprs": ["bh2"], "application/vnd.fujixerox.ddd": ["ddd"], "application/vnd.fujixerox.docuworks": ["xdw"], "application/vnd.fujixerox.docuworks.binder": ["xbd"], "application/vnd.fuzzysheet": ["fzs"], "application/vnd.genomatix.tuxedo": ["txd"], "application/vnd.geogebra.file": ["ggb"], "application/vnd.geogebra.tool": ["ggt"], "application/vnd.geometry-explorer": ["gex", "gre"], "application/vnd.geonext": ["gxt"], "application/vnd.geoplan": ["g2w"], "application/vnd.geospace": ["g3w"], "application/vnd.gmx": ["gmx"], "application/vnd.google-apps.document": ["gdoc"], "application/vnd.google-apps.presentation": ["gslides"], "application/vnd.google-apps.spreadsheet": ["gsheet"], "application/vnd.google-earth.kml+xml": ["kml"], "application/vnd.google-earth.kmz": ["kmz"], "application/vnd.grafeq": ["gqf", "gqs"], "application/vnd.groove-account": ["gac"], "application/vnd.groove-help": ["ghf"], "application/vnd.groove-identity-message": ["gim"], "application/vnd.groove-injector": ["grv"], "application/vnd.groove-tool-message": ["gtm"], "application/vnd.groove-tool-template": ["tpl"], "application/vnd.groove-vcard": ["vcg"], "application/vnd.hal+xml": ["hal"], "application/vnd.handheld-entertainment+xml": ["zmm"], "application/vnd.hbci": ["hbci"], "application/vnd.hhe.lesson-player": ["les"], "application/vnd.hp-hpgl": ["hpgl"], "application/vnd.hp-hpid": ["hpid"], "application/vnd.hp-hps": ["hps"], "application/vnd.hp-jlyt": ["jlt"], "application/vnd.hp-pcl": ["pcl"], "application/vnd.hp-pclxl": ["pclxl"], "application/vnd.hydrostatix.sof-data": ["sfd-hdstx"], "application/vnd.ibm.minipay": ["mpy"], "application/vnd.ibm.modcap": ["afp", "listafp", "list3820"], "application/vnd.ibm.rights-management": ["irm"], "application/vnd.ibm.secure-container": ["sc"], "application/vnd.iccprofile": ["icc", "icm"], "application/vnd.igloader": ["igl"], "application/vnd.immervision-ivp": ["ivp"], "application/vnd.immervision-ivu": ["ivu"], "application/vnd.insors.igm": ["igm"], "application/vnd.intercon.formnet": ["xpw", "xpx"], "application/vnd.intergeo": ["i2g"], "application/vnd.intu.qbo": ["qbo"], "application/vnd.intu.qfx": ["qfx"], "application/vnd.ipunplugged.rcprofile": ["rcprofile"], "application/vnd.irepository.package+xml": ["irp"], "application/vnd.is-xpr": ["xpr"], "application/vnd.isac.fcs": ["fcs"], "application/vnd.jam": ["jam"], "application/vnd.jcp.javame.midlet-rms": ["rms"], "application/vnd.jisp": ["jisp"], "application/vnd.joost.joda-archive": ["joda"], "application/vnd.kahootz": ["ktz", "ktr"], "application/vnd.kde.karbon": ["karbon"], "application/vnd.kde.kchart": ["chrt"], "application/vnd.kde.kformula": ["kfo"], "application/vnd.kde.kivio": ["flw"], "application/vnd.kde.kontour": ["kon"], "application/vnd.kde.kpresenter": ["kpr", "kpt"], "application/vnd.kde.kspread": ["ksp"], "application/vnd.kde.kword": ["kwd", "kwt"], "application/vnd.kenameaapp": ["htke"], "application/vnd.kidspiration": ["kia"], "application/vnd.kinar": ["kne", "knp"], "application/vnd.koan": ["skp", "skd", "skt", "skm"], "application/vnd.kodak-descriptor": ["sse"], "application/vnd.las.las+xml": ["lasxml"], "application/vnd.llamagraphics.life-balance.desktop": ["lbd"], "application/vnd.llamagraphics.life-balance.exchange+xml": ["lbe"], "application/vnd.lotus-1-2-3": ["123"], "application/vnd.lotus-approach": ["apr"], "application/vnd.lotus-freelance": ["pre"], "application/vnd.lotus-notes": ["nsf"], "application/vnd.lotus-organizer": ["org"], "application/vnd.lotus-screencam": ["scm"], "application/vnd.lotus-wordpro": ["lwp"], "application/vnd.macports.portpkg": ["portpkg"], "application/vnd.mapbox-vector-tile": ["mvt"], "application/vnd.mcd": ["mcd"], "application/vnd.medcalcdata": ["mc1"], "application/vnd.mediastation.cdkey": ["cdkey"], "application/vnd.mfer": ["mwf"], "application/vnd.mfmp": ["mfm"], "application/vnd.micrografx.flo": ["flo"], "application/vnd.micrografx.igx": ["igx"], "application/vnd.mif": ["mif"], "application/vnd.mobius.daf": ["daf"], "application/vnd.mobius.dis": ["dis"], "application/vnd.mobius.mbk": ["mbk"], "application/vnd.mobius.mqy": ["mqy"], "application/vnd.mobius.msl": ["msl"], "application/vnd.mobius.plc": ["plc"], "application/vnd.mobius.txf": ["txf"], "application/vnd.mophun.application": ["mpn"], "application/vnd.mophun.certificate": ["mpc"], "application/vnd.mozilla.xul+xml": ["xul"], "application/vnd.ms-artgalry": ["cil"], "application/vnd.ms-cab-compressed": ["cab"], "application/vnd.ms-excel": ["xls", "xlm", "xla", "xlc", "xlt", "xlw"], "application/vnd.ms-excel.addin.macroenabled.12": ["xlam"], "application/vnd.ms-excel.sheet.binary.macroenabled.12": ["xlsb"], "application/vnd.ms-excel.sheet.macroenabled.12": ["xlsm"], "application/vnd.ms-excel.template.macroenabled.12": ["xltm"], "application/vnd.ms-fontobject": ["eot"], "application/vnd.ms-htmlhelp": ["chm"], "application/vnd.ms-ims": ["ims"], "application/vnd.ms-lrm": ["lrm"], "application/vnd.ms-officetheme": ["thmx"], "application/vnd.ms-outlook": ["msg"], "application/vnd.ms-pki.seccat": ["cat"], "application/vnd.ms-pki.stl": ["*stl"], "application/vnd.ms-powerpoint": ["ppt", "pps", "pot"], "application/vnd.ms-powerpoint.addin.macroenabled.12": ["ppam"], "application/vnd.ms-powerpoint.presentation.macroenabled.12": ["pptm"], "application/vnd.ms-powerpoint.slide.macroenabled.12": ["sldm"], "application/vnd.ms-powerpoint.slideshow.macroenabled.12": ["ppsm"], "application/vnd.ms-powerpoint.template.macroenabled.12": ["potm"], "application/vnd.ms-project": ["mpp", "mpt"], "application/vnd.ms-word.document.macroenabled.12": ["docm"], "application/vnd.ms-word.template.macroenabled.12": ["dotm"], "application/vnd.ms-works": ["wps", "wks", "wcm", "wdb"], "application/vnd.ms-wpl": ["wpl"], "application/vnd.ms-xpsdocument": ["xps"], "application/vnd.mseq": ["mseq"], "application/vnd.musician": ["mus"], "application/vnd.muvee.style": ["msty"], "application/vnd.mynfc": ["taglet"], "application/vnd.neurolanguage.nlu": ["nlu"], "application/vnd.nitf": ["ntf", "nitf"], "application/vnd.noblenet-directory": ["nnd"], "application/vnd.noblenet-sealer": ["nns"], "application/vnd.noblenet-web": ["nnw"], "application/vnd.nokia.n-gage.ac+xml": ["*ac"], "application/vnd.nokia.n-gage.data": ["ngdat"], "application/vnd.nokia.n-gage.symbian.install": ["n-gage"], "application/vnd.nokia.radio-preset": ["rpst"], "application/vnd.nokia.radio-presets": ["rpss"], "application/vnd.novadigm.edm": ["edm"], "application/vnd.novadigm.edx": ["edx"], "application/vnd.novadigm.ext": ["ext"], "application/vnd.oasis.opendocument.chart": ["odc"], "application/vnd.oasis.opendocument.chart-template": ["otc"], "application/vnd.oasis.opendocument.database": ["odb"], "application/vnd.oasis.opendocument.formula": ["odf"], "application/vnd.oasis.opendocument.formula-template": ["odft"], "application/vnd.oasis.opendocument.graphics": ["odg"], "application/vnd.oasis.opendocument.graphics-template": ["otg"], "application/vnd.oasis.opendocument.image": ["odi"], "application/vnd.oasis.opendocument.image-template": ["oti"], "application/vnd.oasis.opendocument.presentation": ["odp"], "application/vnd.oasis.opendocument.presentation-template": ["otp"], "application/vnd.oasis.opendocument.spreadsheet": ["ods"], "application/vnd.oasis.opendocument.spreadsheet-template": ["ots"], "application/vnd.oasis.opendocument.text": ["odt"], "application/vnd.oasis.opendocument.text-master": ["odm"], "application/vnd.oasis.opendocument.text-template": ["ott"], "application/vnd.oasis.opendocument.text-web": ["oth"], "application/vnd.olpc-sugar": ["xo"], "application/vnd.oma.dd2+xml": ["dd2"], "application/vnd.openblox.game+xml": ["obgx"], "application/vnd.openofficeorg.extension": ["oxt"], "application/vnd.openstreetmap.data+xml": ["osm"], "application/vnd.openxmlformats-officedocument.presentationml.presentation": ["pptx"], "application/vnd.openxmlformats-officedocument.presentationml.slide": ["sldx"], "application/vnd.openxmlformats-officedocument.presentationml.slideshow": ["ppsx"], "application/vnd.openxmlformats-officedocument.presentationml.template": ["potx"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ["xlsx"], "application/vnd.openxmlformats-officedocument.spreadsheetml.template": ["xltx"], "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"], "application/vnd.openxmlformats-officedocument.wordprocessingml.template": ["dotx"], "application/vnd.osgeo.mapguide.package": ["mgp"], "application/vnd.osgi.dp": ["dp"], "application/vnd.osgi.subsystem": ["esa"], "application/vnd.palm": ["pdb", "pqa", "oprc"], "application/vnd.pawaafile": ["paw"], "application/vnd.pg.format": ["str"], "application/vnd.pg.osasli": ["ei6"], "application/vnd.picsel": ["efif"], "application/vnd.pmi.widget": ["wg"], "application/vnd.pocketlearn": ["plf"], "application/vnd.powerbuilder6": ["pbd"], "application/vnd.previewsystems.box": ["box"], "application/vnd.proteus.magazine": ["mgz"], "application/vnd.publishare-delta-tree": ["qps"], "application/vnd.pvi.ptid1": ["ptid"], "application/vnd.quark.quarkxpress": ["qxd", "qxt", "qwd", "qwt", "qxl", "qxb"], "application/vnd.rar": ["rar"], "application/vnd.realvnc.bed": ["bed"], "application/vnd.recordare.musicxml": ["mxl"], "application/vnd.recordare.musicxml+xml": ["musicxml"], "application/vnd.rig.cryptonote": ["cryptonote"], "application/vnd.rim.cod": ["cod"], "application/vnd.rn-realmedia": ["rm"], "application/vnd.rn-realmedia-vbr": ["rmvb"], "application/vnd.route66.link66+xml": ["link66"], "application/vnd.sailingtracker.track": ["st"], "application/vnd.seemail": ["see"], "application/vnd.sema": ["sema"], "application/vnd.semd": ["semd"], "application/vnd.semf": ["semf"], "application/vnd.shana.informed.formdata": ["ifm"], "application/vnd.shana.informed.formtemplate": ["itp"], "application/vnd.shana.informed.interchange": ["iif"], "application/vnd.shana.informed.package": ["ipk"], "application/vnd.simtech-mindmapper": ["twd", "twds"], "application/vnd.smaf": ["mmf"], "application/vnd.smart.teacher": ["teacher"], "application/vnd.software602.filler.form+xml": ["fo"], "application/vnd.solent.sdkm+xml": ["sdkm", "sdkd"], "application/vnd.spotfire.dxp": ["dxp"], "application/vnd.spotfire.sfs": ["sfs"], "application/vnd.stardivision.calc": ["sdc"], "application/vnd.stardivision.draw": ["sda"], "application/vnd.stardivision.impress": ["sdd"], "application/vnd.stardivision.math": ["smf"], "application/vnd.stardivision.writer": ["sdw", "vor"], "application/vnd.stardivision.writer-global": ["sgl"], "application/vnd.stepmania.package": ["smzip"], "application/vnd.stepmania.stepchart": ["sm"], "application/vnd.sun.wadl+xml": ["wadl"], "application/vnd.sun.xml.calc": ["sxc"], "application/vnd.sun.xml.calc.template": ["stc"], "application/vnd.sun.xml.draw": ["sxd"], "application/vnd.sun.xml.draw.template": ["std"], "application/vnd.sun.xml.impress": ["sxi"], "application/vnd.sun.xml.impress.template": ["sti"], "application/vnd.sun.xml.math": ["sxm"], "application/vnd.sun.xml.writer": ["sxw"], "application/vnd.sun.xml.writer.global": ["sxg"], "application/vnd.sun.xml.writer.template": ["stw"], "application/vnd.sus-calendar": ["sus", "susp"], "application/vnd.svd": ["svd"], "application/vnd.symbian.install": ["sis", "sisx"], "application/vnd.syncml+xml": ["xsm"], "application/vnd.syncml.dm+wbxml": ["bdm"], "application/vnd.syncml.dm+xml": ["xdm"], "application/vnd.syncml.dmddf+xml": ["ddf"], "application/vnd.tao.intent-module-archive": ["tao"], "application/vnd.tcpdump.pcap": ["pcap", "cap", "dmp"], "application/vnd.tmobile-livetv": ["tmo"], "application/vnd.trid.tpt": ["tpt"], "application/vnd.triscape.mxs": ["mxs"], "application/vnd.trueapp": ["tra"], "application/vnd.ufdl": ["ufd", "ufdl"], "application/vnd.uiq.theme": ["utz"], "application/vnd.umajin": ["umj"], "application/vnd.unity": ["unityweb"], "application/vnd.uoml+xml": ["uoml"], "application/vnd.vcx": ["vcx"], "application/vnd.visio": ["vsd", "vst", "vss", "vsw"], "application/vnd.visionary": ["vis"], "application/vnd.vsf": ["vsf"], "application/vnd.wap.wbxml": ["wbxml"], "application/vnd.wap.wmlc": ["wmlc"], "application/vnd.wap.wmlscriptc": ["wmlsc"], "application/vnd.webturbo": ["wtb"], "application/vnd.wolfram.player": ["nbp"], "application/vnd.wordperfect": ["wpd"], "application/vnd.wqd": ["wqd"], "application/vnd.wt.stf": ["stf"], "application/vnd.xara": ["xar"], "application/vnd.xfdl": ["xfdl"], "application/vnd.yamaha.hv-dic": ["hvd"], "application/vnd.yamaha.hv-script": ["hvs"], "application/vnd.yamaha.hv-voice": ["hvp"], "application/vnd.yamaha.openscoreformat": ["osf"], "application/vnd.yamaha.openscoreformat.osfpvg+xml": ["osfpvg"], "application/vnd.yamaha.smaf-audio": ["saf"], "application/vnd.yamaha.smaf-phrase": ["spf"], "application/vnd.yellowriver-custom-menu": ["cmp"], "application/vnd.zul": ["zir", "zirz"], "application/vnd.zzazz.deck+xml": ["zaz"], "application/x-7z-compressed": ["7z"], "application/x-abiword": ["abw"], "application/x-ace-compressed": ["ace"], "application/x-apple-diskimage": ["*dmg"], "application/x-arj": ["arj"], "application/x-authorware-bin": ["aab", "x32", "u32", "vox"], "application/x-authorware-map": ["aam"], "application/x-authorware-seg": ["aas"], "application/x-bcpio": ["bcpio"], "application/x-bdoc": ["*bdoc"], "application/x-bittorrent": ["torrent"], "application/x-blorb": ["blb", "blorb"], "application/x-bzip": ["bz"], "application/x-bzip2": ["bz2", "boz"], "application/x-cbr": ["cbr", "cba", "cbt", "cbz", "cb7"], "application/x-cdlink": ["vcd"], "application/x-cfs-compressed": ["cfs"], "application/x-chat": ["chat"], "application/x-chess-pgn": ["pgn"], "application/x-chrome-extension": ["crx"], "application/x-cocoa": ["cco"], "application/x-conference": ["nsc"], "application/x-cpio": ["cpio"], "application/x-csh": ["csh"], "application/x-debian-package": ["*deb", "udeb"], "application/x-dgc-compressed": ["dgc"], "application/x-director": ["dir", "dcr", "dxr", "cst", "cct", "cxt", "w3d", "fgd", "swa"], "application/x-doom": ["wad"], "application/x-dtbncx+xml": ["ncx"], "application/x-dtbook+xml": ["dtb"], "application/x-dtbresource+xml": ["res"], "application/x-dvi": ["dvi"], "application/x-envoy": ["evy"], "application/x-eva": ["eva"], "application/x-font-bdf": ["bdf"], "application/x-font-ghostscript": ["gsf"], "application/x-font-linux-psf": ["psf"], "application/x-font-pcf": ["pcf"], "application/x-font-snf": ["snf"], "application/x-font-type1": ["pfa", "pfb", "pfm", "afm"], "application/x-freearc": ["arc"], "application/x-futuresplash": ["spl"], "application/x-gca-compressed": ["gca"], "application/x-glulx": ["ulx"], "application/x-gnumeric": ["gnumeric"], "application/x-gramps-xml": ["gramps"], "application/x-gtar": ["gtar"], "application/x-hdf": ["hdf"], "application/x-httpd-php": ["php"], "application/x-install-instructions": ["install"], "application/x-iso9660-image": ["*iso"], "application/x-iwork-keynote-sffkey": ["*key"], "application/x-iwork-numbers-sffnumbers": ["*numbers"], "application/x-iwork-pages-sffpages": ["*pages"], "application/x-java-archive-diff": ["jardiff"], "application/x-java-jnlp-file": ["jnlp"], "application/x-keepass2": ["kdbx"], "application/x-latex": ["latex"], "application/x-lua-bytecode": ["luac"], "application/x-lzh-compressed": ["lzh", "lha"], "application/x-makeself": ["run"], "application/x-mie": ["mie"], "application/x-mobipocket-ebook": ["prc", "mobi"], "application/x-ms-application": ["application"], "application/x-ms-shortcut": ["lnk"], "application/x-ms-wmd": ["wmd"], "application/x-ms-wmz": ["wmz"], "application/x-ms-xbap": ["xbap"], "application/x-msaccess": ["mdb"], "application/x-msbinder": ["obd"], "application/x-mscardfile": ["crd"], "application/x-msclip": ["clp"], "application/x-msdos-program": ["*exe"], "application/x-msdownload": ["*exe", "*dll", "com", "bat", "*msi"], "application/x-msmediaview": ["mvb", "m13", "m14"], "application/x-msmetafile": ["*wmf", "*wmz", "*emf", "emz"], "application/x-msmoney": ["mny"], "application/x-mspublisher": ["pub"], "application/x-msschedule": ["scd"], "application/x-msterminal": ["trm"], "application/x-mswrite": ["wri"], "application/x-netcdf": ["nc", "cdf"], "application/x-ns-proxy-autoconfig": ["pac"], "application/x-nzb": ["nzb"], "application/x-perl": ["pl", "pm"], "application/x-pilot": ["*prc", "*pdb"], "application/x-pkcs12": ["p12", "pfx"], "application/x-pkcs7-certificates": ["p7b", "spc"], "application/x-pkcs7-certreqresp": ["p7r"], "application/x-rar-compressed": ["*rar"], "application/x-redhat-package-manager": ["rpm"], "application/x-research-info-systems": ["ris"], "application/x-sea": ["sea"], "application/x-sh": ["sh"], "application/x-shar": ["shar"], "application/x-shockwave-flash": ["swf"], "application/x-silverlight-app": ["xap"], "application/x-sql": ["sql"], "application/x-stuffit": ["sit"], "application/x-stuffitx": ["sitx"], "application/x-subrip": ["srt"], "application/x-sv4cpio": ["sv4cpio"], "application/x-sv4crc": ["sv4crc"], "application/x-t3vm-image": ["t3"], "application/x-tads": ["gam"], "application/x-tar": ["tar"], "application/x-tcl": ["tcl", "tk"], "application/x-tex": ["tex"], "application/x-tex-tfm": ["tfm"], "application/x-texinfo": ["texinfo", "texi"], "application/x-tgif": ["*obj"], "application/x-ustar": ["ustar"], "application/x-virtualbox-hdd": ["hdd"], "application/x-virtualbox-ova": ["ova"], "application/x-virtualbox-ovf": ["ovf"], "application/x-virtualbox-vbox": ["vbox"], "application/x-virtualbox-vbox-extpack": ["vbox-extpack"], "application/x-virtualbox-vdi": ["vdi"], "application/x-virtualbox-vhd": ["vhd"], "application/x-virtualbox-vmdk": ["vmdk"], "application/x-wais-source": ["src"], "application/x-web-app-manifest+json": ["webapp"], "application/x-x509-ca-cert": ["der", "crt", "pem"], "application/x-xfig": ["fig"], "application/x-xliff+xml": ["*xlf"], "application/x-xpinstall": ["xpi"], "application/x-xz": ["xz"], "application/x-zmachine": ["z1", "z2", "z3", "z4", "z5", "z6", "z7", "z8"], "audio/vnd.dece.audio": ["uva", "uvva"], "audio/vnd.digital-winds": ["eol"], "audio/vnd.dra": ["dra"], "audio/vnd.dts": ["dts"], "audio/vnd.dts.hd": ["dtshd"], "audio/vnd.lucent.voice": ["lvp"], "audio/vnd.ms-playready.media.pya": ["pya"], "audio/vnd.nuera.ecelp4800": ["ecelp4800"], "audio/vnd.nuera.ecelp7470": ["ecelp7470"], "audio/vnd.nuera.ecelp9600": ["ecelp9600"], "audio/vnd.rip": ["rip"], "audio/x-aac": ["aac"], "audio/x-aiff": ["aif", "aiff", "aifc"], "audio/x-caf": ["caf"], "audio/x-flac": ["flac"], "audio/x-m4a": ["*m4a"], "audio/x-matroska": ["mka"], "audio/x-mpegurl": ["m3u"], "audio/x-ms-wax": ["wax"], "audio/x-ms-wma": ["wma"], "audio/x-pn-realaudio": ["ram", "ra"], "audio/x-pn-realaudio-plugin": ["rmp"], "audio/x-realaudio": ["*ra"], "audio/x-wav": ["*wav"], "chemical/x-cdx": ["cdx"], "chemical/x-cif": ["cif"], "chemical/x-cmdf": ["cmdf"], "chemical/x-cml": ["cml"], "chemical/x-csml": ["csml"], "chemical/x-xyz": ["xyz"], "image/prs.btif": ["btif"], "image/prs.pti": ["pti"], "image/vnd.adobe.photoshop": ["psd"], "image/vnd.airzip.accelerator.azv": ["azv"], "image/vnd.dece.graphic": ["uvi", "uvvi", "uvg", "uvvg"], "image/vnd.djvu": ["djvu", "djv"], "image/vnd.dvb.subtitle": ["*sub"], "image/vnd.dwg": ["dwg"], "image/vnd.dxf": ["dxf"], "image/vnd.fastbidsheet": ["fbs"], "image/vnd.fpx": ["fpx"], "image/vnd.fst": ["fst"], "image/vnd.fujixerox.edmics-mmr": ["mmr"], "image/vnd.fujixerox.edmics-rlc": ["rlc"], "image/vnd.microsoft.icon": ["ico"], "image/vnd.ms-dds": ["dds"], "image/vnd.ms-modi": ["mdi"], "image/vnd.ms-photo": ["wdp"], "image/vnd.net-fpx": ["npx"], "image/vnd.pco.b16": ["b16"], "image/vnd.tencent.tap": ["tap"], "image/vnd.valve.source.texture": ["vtf"], "image/vnd.wap.wbmp": ["wbmp"], "image/vnd.xiff": ["xif"], "image/vnd.zbrush.pcx": ["pcx"], "image/x-3ds": ["3ds"], "image/x-cmu-raster": ["ras"], "image/x-cmx": ["cmx"], "image/x-freehand": ["fh", "fhc", "fh4", "fh5", "fh7"], "image/x-icon": ["*ico"], "image/x-jng": ["jng"], "image/x-mrsid-image": ["sid"], "image/x-ms-bmp": ["*bmp"], "image/x-pcx": ["*pcx"], "image/x-pict": ["pic", "pct"], "image/x-portable-anymap": ["pnm"], "image/x-portable-bitmap": ["pbm"], "image/x-portable-graymap": ["pgm"], "image/x-portable-pixmap": ["ppm"], "image/x-rgb": ["rgb"], "image/x-tga": ["tga"], "image/x-xbitmap": ["xbm"], "image/x-xpixmap": ["xpm"], "image/x-xwindowdump": ["xwd"], "message/vnd.wfa.wsc": ["wsc"], "model/vnd.collada+xml": ["dae"], "model/vnd.dwf": ["dwf"], "model/vnd.gdl": ["gdl"], "model/vnd.gtw": ["gtw"], "model/vnd.mts": ["mts"], "model/vnd.opengex": ["ogex"], "model/vnd.parasolid.transmit.binary": ["x_b"], "model/vnd.parasolid.transmit.text": ["x_t"], "model/vnd.sap.vds": ["vds"], "model/vnd.usdz+zip": ["usdz"], "model/vnd.valve.source.compiled-map": ["bsp"], "model/vnd.vtu": ["vtu"], "text/prs.lines.tag": ["dsc"], "text/vnd.curl": ["curl"], "text/vnd.curl.dcurl": ["dcurl"], "text/vnd.curl.mcurl": ["mcurl"], "text/vnd.curl.scurl": ["scurl"], "text/vnd.dvb.subtitle": ["sub"], "text/vnd.fly": ["fly"], "text/vnd.fmi.flexstor": ["flx"], "text/vnd.graphviz": ["gv"], "text/vnd.in3d.3dml": ["3dml"], "text/vnd.in3d.spot": ["spot"], "text/vnd.sun.j2me.app-descriptor": ["jad"], "text/vnd.wap.wml": ["wml"], "text/vnd.wap.wmlscript": ["wmls"], "text/x-asm": ["s", "asm"], "text/x-c": ["c", "cc", "cxx", "cpp", "h", "hh", "dic"], "text/x-component": ["htc"], "text/x-fortran": ["f", "for", "f77", "f90"], "text/x-handlebars-template": ["hbs"], "text/x-java-source": ["java"], "text/x-lua": ["lua"], "text/x-markdown": ["mkd"], "text/x-nfo": ["nfo"], "text/x-opml": ["opml"], "text/x-org": ["*org"], "text/x-pascal": ["p", "pas"], "text/x-processing": ["pde"], "text/x-sass": ["sass"], "text/x-scss": ["scss"], "text/x-setext": ["etx"], "text/x-sfv": ["sfv"], "text/x-suse-ymp": ["ymp"], "text/x-uuencode": ["uu"], "text/x-vcalendar": ["vcs"], "text/x-vcard": ["vcf"], "video/vnd.dece.hd": ["uvh", "uvvh"], "video/vnd.dece.mobile": ["uvm", "uvvm"], "video/vnd.dece.pd": ["uvp", "uvvp"], "video/vnd.dece.sd": ["uvs", "uvvs"], "video/vnd.dece.video": ["uvv", "uvvv"], "video/vnd.dvb.file": ["dvb"], "video/vnd.fvt": ["fvt"], "video/vnd.mpegurl": ["mxu", "m4u"], "video/vnd.ms-playready.media.pyv": ["pyv"], "video/vnd.uvvu.mp4": ["uvu", "uvvu"], "video/vnd.vivo": ["viv"], "video/x-f4v": ["f4v"], "video/x-fli": ["fli"], "video/x-flv": ["flv"], "video/x-m4v": ["m4v"], "video/x-matroska": ["mkv", "mk3d", "mks"], "video/x-mng": ["mng"], "video/x-ms-asf": ["asf", "asx"], "video/x-ms-vob": ["vob"], "video/x-ms-wm": ["wm"], "video/x-ms-wmv": ["wmv"], "video/x-ms-wmx": ["wmx"], "video/x-ms-wvx": ["wvx"], "video/x-msvideo": ["avi"], "video/x-sgi-movie": ["movie"], "video/x-smv": ["smv"], "x-conference/x-cooltalk": ["ice"] };
     }
   });
@@ -47049,7 +47049,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/mime/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Mime = require_Mime();
       module.exports = new Mime(require_standard(), require_other());
     }
@@ -47067,7 +47067,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/entities/lib/decode_codepoint.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -47125,7 +47125,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/htmlparser2/lib/Tokenizer.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -47995,7 +47995,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/htmlparser2/lib/Parser.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -48326,7 +48326,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domelementtype/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Doctype = exports.CDATA = exports.Tag = exports.Style = exports.Script = exports.Comment = exports.Directive = exports.Text = exports.Root = exports.isTag = exports.ElementType = void 0;
       var ElementType;
@@ -48362,7 +48362,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domhandler/lib/node.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __extends2 = exports && exports.__extends || /* @__PURE__ */ (function() {
         var extendStatics2 = function(d, b) {
           extendStatics2 = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
@@ -48759,7 +48759,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domhandler/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -48930,7 +48930,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/entities/lib/decode.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -48994,7 +48994,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/entities/lib/encode.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -49089,7 +49089,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/entities/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.decodeXMLStrict = exports.decodeHTML5Strict = exports.decodeHTML4Strict = exports.decodeHTML5 = exports.decodeHTML4 = exports.decodeHTMLStrict = exports.decodeHTML = exports.decodeXML = exports.encodeHTML5 = exports.encodeHTML4 = exports.escapeUTF8 = exports.escape = exports.encodeNonAsciiHTML = exports.encodeHTML = exports.encodeXML = exports.encode = exports.decodeStrict = exports.decode = void 0;
       var decode_1 = require_decode2();
@@ -49161,7 +49161,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/dom-serializer/lib/foreignNames.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.attributeNames = exports.elementNames = void 0;
       exports.elementNames = /* @__PURE__ */ new Map([
@@ -49272,7 +49272,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/dom-serializer/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __assign2 = exports && exports.__assign || function() {
         __assign2 = Object.assign || function(t) {
           for (var s, i = 1, n = arguments.length; i < n; i++) {
@@ -49461,7 +49461,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/stringify.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -49522,7 +49522,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/traversal.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.prevElementSibling = exports.nextElementSibling = exports.getName = exports.hasAttrib = exports.getAttributeValue = exports.getSiblings = exports.getParent = exports.getChildren = void 0;
       var domhandler_1 = require_lib2();
@@ -49591,7 +49591,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/manipulation.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.prepend = exports.prependChild = exports.append = exports.appendChild = exports.replaceElement = exports.removeElement = void 0;
       function removeElement(elem) {
@@ -49690,7 +49690,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/querying.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.findAll = exports.existsOne = exports.findOne = exports.findOneChild = exports.find = exports.filter = void 0;
       var domhandler_1 = require_lib2();
@@ -49778,7 +49778,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/legacy.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.getElementsByTagType = exports.getElementsByTagName = exports.getElementById = exports.getElements = exports.testElement = void 0;
       var domhandler_1 = require_lib2();
@@ -49889,7 +49889,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/helpers.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.uniqueSort = exports.compareDocumentPosition = exports.removeSubsets = void 0;
       var domhandler_1 = require_lib2();
@@ -49975,7 +49975,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/feeds.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.getFeed = void 0;
       var stringify_1 = require_stringify();
@@ -50118,7 +50118,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         Object.defineProperty(o, k2, { enumerable: true, get: function() {
@@ -50167,7 +50167,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/htmlparser2/lib/FeedHandler.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __extends2 = exports && exports.__extends || /* @__PURE__ */ (function() {
         var extendStatics2 = function(d, b) {
           extendStatics2 = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
@@ -50413,7 +50413,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/htmlparser2/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         Object.defineProperty(o, k2, { enumerable: true, get: function() {
@@ -50491,7 +50491,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/html.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.HTMLParser = void 0;
       var htmlparser2_1 = require_lib6();
@@ -50689,7 +50689,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/messageParse.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -50864,7 +50864,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/markdown.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MarkdownParser = void 0;
       var messageParse_1 = require_messageParse();
@@ -50946,7 +50946,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/markdownv2.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MarkdownV2Parser = void 0;
       var html_1 = require_html();
@@ -50986,7 +50986,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/Utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -51843,7 +51843,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/forward.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Forward = void 0;
       var chatGetter_1 = require_chatGetter();
@@ -51896,7 +51896,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/file.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.File = void 0;
       var api_1 = require_api2();
@@ -51970,7 +51970,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/Logger.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Logger = exports.LogLevel = void 0;
       var platform_1 = require_platform();
@@ -52093,7 +52093,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/Deferred.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       var Deferred = class _Deferred {
         constructor() {
@@ -52117,7 +52117,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/RequestState.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -52159,7 +52159,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/users.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -52574,7 +52574,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/button.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Button = void 0;
       var api_1 = require_api2();
@@ -52656,7 +52656,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/Password.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -53059,7 +53059,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/messageButton.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MessageButton = void 0;
       var api_1 = require_api2();
@@ -53207,7 +53207,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/message.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -53877,7 +53877,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/patched/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.patchAll = patchAll;
       var api_1 = require_api2();
@@ -53958,7 +53958,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.serializeDate = exports.serializeBytes = exports.Api = void 0;
       var api_1 = require_api2();
@@ -53982,7 +53982,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/BinaryWriter.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.BinaryWriter = void 0;
       var BinaryWriter = class {
@@ -54004,7 +54004,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_custom_error = __commonJS({
     "node_modules/ts-custom-error/dist/custom-error.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function fixProto(target, prototype) {
         var setPrototypeOf = Object.setPrototypeOf;
         setPrototypeOf ? setPrototypeOf(target, prototype) : target.__proto__ = prototype;
@@ -54104,7 +54104,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/errors/RPCBaseErrors.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.TimedOutError = exports.ServerError = exports.FloodError = exports.AuthKeyError = exports.NotFoundError = exports.ForbiddenError = exports.UnauthorizedError = exports.BadRequestError = exports.InvalidDCError = exports.RPCError = void 0;
       var ts_custom_error_1 = require_custom_error();
@@ -54203,7 +54203,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/errors/RPCErrorList.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.rpcErrorRe = exports.MsgWaitError = exports.EmailUnconfirmedError = exports.NetworkMigrateError = exports.FileMigrateError = exports.FloodTestPhoneWaitError = exports.FloodWaitError = exports.SlowModeWaitError = exports.PhoneMigrateError = exports.UserMigrateError = void 0;
       var RPCBaseErrors_1 = require_RPCBaseErrors();
@@ -54306,7 +54306,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/errors/Common.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.BadMessageError = exports.CdnFileTamperedError = exports.SecurityError = exports.InvalidBufferError = exports.InvalidChecksumError = exports.TypeNotFoundError = exports.ReadCancelledError = void 0;
       var ReadCancelledError = class extends Error {
@@ -54396,7 +54396,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/errors/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -54438,7 +54438,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/TLMessage.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.TLMessage = void 0;
       var TLMessage = class {
@@ -54460,7 +54460,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/RPCResult.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.RPCResult = void 0;
       var api_1 = require_api2();
@@ -54497,7 +54497,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/MessageContainer.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MessageContainer = void 0;
       var TLMessage_1 = require_TLMessage();
@@ -54536,7 +54536,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/trees.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Z_FIXED = 4;
       var Z_BINARY = 0;
       var Z_TEXT = 1;
@@ -55176,7 +55176,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/adler32.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var adler32 = (adler, buf, len, pos) => {
         let s1 = adler & 65535 | 0, s2 = adler >>> 16 & 65535 | 0, n = 0;
         while (len !== 0) {
@@ -55200,7 +55200,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/crc32.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var makeTable = () => {
         let c, table = [];
         for (var n = 0; n < 256; n++) {
@@ -55231,7 +55231,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/messages.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = {
         2: "need dictionary",
         /* Z_NEED_DICT       2  */
@@ -55260,7 +55260,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/constants.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = {
         /* Allowed flush values; see deflate() and inflate() below for details */
         Z_NO_FLUSH: 0,
@@ -55309,7 +55309,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/deflate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var { _tr_init, _tr_stored_block, _tr_flush_block, _tr_tally, _tr_align } = require_trees();
       var adler32 = require_adler32();
       var crc32 = require_crc32();
@@ -56451,7 +56451,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/utils/common.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var _has = (obj, key) => {
         return Object.prototype.hasOwnProperty.call(obj, key);
       };
@@ -56494,7 +56494,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/utils/strings.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var STR_APPLY_UIA_OK = true;
       try {
         String.fromCharCode.apply(null, new Uint8Array(1));
@@ -56625,7 +56625,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/zstream.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function ZStream() {
         this.input = null;
         this.next_in = 0;
@@ -56649,7 +56649,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/deflate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var zlib_deflate = require_deflate();
       var utils = require_common3();
       var strings = require_strings();
@@ -56812,7 +56812,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/inffast.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var BAD = 16209;
       var TYPE = 16191;
       module.exports = function inflate_fast(strm, start) {
@@ -57042,7 +57042,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/inftrees.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var MAXBITS = 15;
       var ENOUGH_LENS = 852;
       var ENOUGH_DISTS = 592;
@@ -57356,7 +57356,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/inflate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var adler32 = require_adler32();
       var crc32 = require_crc32();
       var inflate_fast = require_inffast();
@@ -58609,7 +58609,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/gzheader.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       function GZheader() {
         this.text = 0;
         this.time = 0;
@@ -58631,7 +58631,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/inflate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var zlib_inflate = require_inflate();
       var utils = require_common3();
       var strings = require_strings();
@@ -58808,7 +58808,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var { Deflate, deflate, deflateRaw, gzip } = require_deflate2();
       var { Inflate, inflate, inflateRaw, ungzip } = require_inflate2();
       var constants = require_constants2();
@@ -58829,7 +58829,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/GZIPPacked.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.GZIPPacked = void 0;
       var __1 = require_tl();
@@ -58886,7 +58886,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.GZIPPacked = exports.MessageContainer = exports.TLMessage = exports.RPCResult = exports.coreObjects = void 0;
       var TLMessage_1 = require_TLMessage();
@@ -58918,7 +58918,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/AllTLObjects.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.tlobjects = exports.LAYER = void 0;
       exports.LAYER = 198;
@@ -58942,7 +58942,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/BinaryReader.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.BinaryReader = void 0;
       var errors_1 = require_errors();
@@ -59171,7 +59171,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_global = __commonJS({
     "node_modules/es5-ext/global.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var naiveFallback = function() {
         if (typeof self === "object" && self) return self;
         if (typeof window === "object" && window) return window;
@@ -59268,7 +59268,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_version = __commonJS({
     "node_modules/websocket/lib/version.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = require_package2().version;
     }
   });
@@ -59277,7 +59277,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_browser13 = __commonJS({
     "node_modules/websocket/lib/browser.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var _globalThis;
       if (typeof globalThis === "object") {
         _globalThis = globalThis;
@@ -59853,7 +59853,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/errors.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.E_CANCELED = exports.E_ALREADY_LOCKED = exports.E_TIMEOUT = void 0;
       exports.E_TIMEOUT = new Error("timeout while waiting for mutex to become available");
@@ -59867,7 +59867,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/Semaphore.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
       var errors_1 = require_errors2();
@@ -59996,7 +59996,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/Mutex.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
       var Semaphore_1 = require_Semaphore();
@@ -60049,7 +60049,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/withTimeout.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.withTimeout = void 0;
       var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
@@ -60169,7 +60169,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/tryAcquire.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.tryAcquire = void 0;
       var errors_1 = require_errors2();
@@ -60189,7 +60189,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.tryAcquire = exports.withTimeout = exports.Semaphore = exports.Mutex = void 0;
       var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
@@ -60218,7 +60218,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/PromisedWebSockets.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.PromisedWebSockets = void 0;
       var websocket_1 = require_browser13();
@@ -60355,7 +60355,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_net = __commonJS({
     "src/shims/net.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var Socket = class {
         constructor() {
           this.destroyed = false;
@@ -60395,7 +60395,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/net.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -60421,7 +60421,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_socks = __commonJS({
     "src/shims/socks.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = { SocksClient: { createConnection: async () => {
         throw new Error("SOCKS not available in browser");
       } } };
@@ -60433,7 +60433,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/socks.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -60460,7 +60460,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/PromisedNetSockets.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -60649,7 +60649,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/MessagePacker.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MessagePacker = void 0;
       var core_1 = require_core();
@@ -60801,7 +60801,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/AsyncQueue.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.AsyncQueue = void 0;
       var AsyncQueue = class {
@@ -60843,7 +60843,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.AsyncQueue = exports.MessagePacker = exports.PromisedNetSockets = exports.PromisedWebSockets = exports.BinaryReader = exports.BinaryWriter = exports.Logger = void 0;
       var Logger_1 = require_Logger();
@@ -60882,7 +60882,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/Connection.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ObfuscatedConnection = exports.PacketCodec = exports.Connection = void 0;
       var extensions_1 = require_extensions();
@@ -61029,7 +61029,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/TCPFull.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPFull = exports.FullPacketCodec = void 0;
       var Connection_1 = require_Connection();
@@ -61092,7 +61092,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/TCPAbridged.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -61152,7 +61152,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/@cryptography/aes/dist/cjs/aes.min.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       var t = new Uint8Array(256);
       var e = new Uint8Array(256);
@@ -61254,7 +61254,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/converters.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ab2i = exports.i2ab = exports.isBigEndian = void 0;
       exports.i2abLow = i2abLow;
@@ -61298,7 +61298,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/words.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.s2i = s2i;
       exports.getWords = getWords;
@@ -61340,7 +61340,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/crypto.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -61457,7 +61457,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/CTR.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -61508,7 +61508,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/TCPObfuscated.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPObfuscated = void 0;
       var Helpers_1 = require_Helpers();
@@ -61590,7 +61590,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPObfuscated = exports.ConnectionTCPAbridged = exports.ConnectionTCPFull = exports.Connection = void 0;
       var Connection_1 = require_Connection();
@@ -61617,7 +61617,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/Abstract.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Session = void 0;
       var Session = class {
@@ -61631,7 +61631,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/Memory.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -61882,7 +61882,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/AuthKey.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.AuthKey = void 0;
       var Helpers_1 = require_Helpers();
@@ -61962,7 +61962,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/StringSession.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.StringSession = void 0;
       var Memory_1 = require_Memory();
@@ -62062,7 +62062,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_store2 = __commonJS({
     "node_modules/store2/dist/store2.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function(window2, define2) {
         var _ = {
           version: "2.14.4",
@@ -62403,7 +62403,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_empty = __commonJS({
     "src/shims/empty.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = {};
     }
   });
@@ -62412,7 +62412,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_async_map = __commonJS({
     "node_modules/slide/lib/async-map.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = asyncMap;
       function asyncMap() {
         var steps = Array.prototype.slice.call(arguments), list = steps.shift() || [], cb_ = steps.pop();
@@ -62456,7 +62456,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_bind_actor = __commonJS({
     "node_modules/slide/lib/bind-actor.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = bindActor;
       function bindActor() {
         var args = Array.prototype.slice.call(arguments), obj = null, fn;
@@ -62477,7 +62477,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_chain = __commonJS({
     "node_modules/slide/lib/chain.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = chain;
       var bindActor = require_bind_actor();
       chain.first = {};
@@ -62508,7 +62508,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_slide = __commonJS({
     "node_modules/slide/lib/slide.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       exports.asyncMap = require_async_map();
       exports.bindActor = require_bind_actor();
       exports.chain = require_chain();
@@ -62519,7 +62519,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_imurmurhash = __commonJS({
     "node_modules/imurmurhash/imurmurhash.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function() {
         var cache3;
         function MurmurHash3(key, seed) {
@@ -62620,7 +62620,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/write-file-atomic/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = writeFile;
       module.exports.sync = writeFileSync;
       module.exports._getTmpname = getTmpname;
@@ -62738,7 +62738,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_LocalStorage = __commonJS({
     "node_modules/node-localstorage/LocalStorage.js"(exports) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function() {
         var JSONStorage, KEY_FOR_EMPTY_STRING, LocalStorage, MetaKey, QUOTA_EXCEEDED_ERR, StorageEvent, _emptyDirectory, _escapeKey, _rm, createMap, events, fs, path, writeSync, extend = function(child, parent) {
           for (var key in parent) {
@@ -63065,7 +63065,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/localStorage.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.LocalStorage = void 0;
       exports.LocalStorage = require_LocalStorage().LocalStorage;
@@ -63077,7 +63077,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/StoreSession.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63161,7 +63161,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Session = exports.StoreSession = exports.StringSession = exports.MemorySession = void 0;
       var Memory_1 = require_Memory();
@@ -63187,7 +63187,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_os = __commonJS({
     "src/shims/os.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       module.exports = {
         type: () => "Browser",
         release: () => navigator.userAgent || "1.0",
@@ -63205,7 +63205,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/os.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -63244,7 +63244,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/entityCache.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63328,7 +63328,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/IGE.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.IGE = void 0;
       var Helpers = require_Helpers();
@@ -63370,7 +63370,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/MTProtoState.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63629,7 +63629,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/MTProtoPlainSender.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63694,7 +63694,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/Factorizator.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63776,7 +63776,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/RSA.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __rest2 = exports && exports.__rest || function(s, e) {
         var t = {};
         for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
@@ -63832,7 +63832,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/Authenticator.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -64022,7 +64022,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/PendingState.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.PendingState = void 0;
       var PendingState = class {
@@ -64059,7 +64059,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/MTProtoSender.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -64813,7 +64813,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPObfuscated = exports.ConnectionTCPAbridged = exports.ConnectionTCPFull = exports.Connection = exports.UpdateConnectionState = exports.MTProtoSender = exports.doAuthentication = exports.MTProtoPlainSender = void 0;
       var MTProtoPlainSender_1 = require_MTProtoPlainSender();
@@ -64858,7 +64858,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/TCPMTProxy.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPMTProxyAbridged = exports.TCPMTProxy = void 0;
       var Connection_1 = require_Connection();
@@ -64980,7 +64980,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/telegramBaseClient.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -65337,7 +65337,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/auth.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -65680,7 +65680,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/inlineResult.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.InlineResult = void 0;
       var api_1 = require_api2();
@@ -65771,7 +65771,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/inlineResults.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.InlineResults = void 0;
       var inlineResult_1 = require_inlineResult();
@@ -65805,7 +65805,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/bots.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.inlineQuery = inlineQuery;
       var tl_1 = require_tl();
@@ -65834,7 +65834,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/buttons.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.buildReplyMarkup = buildReplyMarkup;
       var tl_1 = require_tl();
@@ -65919,7 +65919,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/requestIter.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __asyncValues2 = exports && exports.__asyncValues || function(o) {
         if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
         var m = o[Symbol.asyncIterator], i;
@@ -66046,7 +66046,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/fs.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -66073,7 +66073,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/path.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -66088,7 +66088,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/downloads.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -66590,7 +66590,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/uploads.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -67060,7 +67060,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/messages.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __asyncValues2 = exports && exports.__asyncValues || function(o) {
         if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
         var m = o[Symbol.asyncIterator], i;
@@ -67807,7 +67807,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ChatGetter = void 0;
       var chatGetter_1 = require_chatGetter();
@@ -67822,7 +67822,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/events/common.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -67957,7 +67957,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/events/Raw.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Raw = void 0;
       var common_1 = require_common4();
@@ -67997,7 +67997,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/updates.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.StopPropagation = void 0;
       exports.on = on;
@@ -68216,7 +68216,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/chats.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -68548,7 +68548,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/draft.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Draft = void 0;
       var Utils_1 = require_Utils();
@@ -68602,7 +68602,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/dialog.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Dialog = void 0;
       var api_1 = require_api2();
@@ -68648,7 +68648,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/dialogs.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -68801,7 +68801,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/2fa.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.updateTwoFaSettings = updateTwoFaSettings;
       var Helpers_1 = require_Helpers();
@@ -68872,7 +68872,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/events/NewMessage.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.NewMessageEvent = exports.NewMessage = void 0;
       var common_1 = require_common4();
@@ -69027,7 +69027,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/events/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.NewMessageEvent = exports.NewMessage = exports.Raw = void 0;
       var Raw_1 = require_Raw();
@@ -69049,7 +69049,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/TelegramClient.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -70253,7 +70253,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/Version.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.version = void 0;
       exports.version = "2.26.21";
@@ -70265,7 +70265,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -70331,7 +70331,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -73579,17 +73579,362 @@ ${JSON.stringify(state)}`;
     }
   });
 
+  // src/utils.js
+  function formatTime(s) {
+    if (!s || isNaN(s)) return "0:00";
+    s = Math.floor(s);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+  function escapeHtml(str) {
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+  }
+  function showToast(msg) {
+    let toast = document.getElementById("toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "toast";
+      document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.classList.add("visible");
+    setTimeout(() => toast.classList.remove("visible"), 2e3);
+  }
+  function formatBytes(n) {
+    if (!n) return "0 B";
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
+    return (n / Math.pow(1024, i)).toFixed(i >= 2 ? 1 : 0) + " " + units[i];
+  }
+  function encodeTrackId(msgId) {
+    const encoded = (msgId ^ SHARE_XOR_KEY) >>> 0;
+    return encoded.toString(36);
+  }
+  function decodeTrackId(code) {
+    const decoded = parseInt(code, 36);
+    if (isNaN(decoded)) return null;
+    return (decoded ^ SHARE_XOR_KEY) >>> 0;
+  }
+  var import_process7, SHARE_XOR_KEY;
+  var init_utils = __esm({
+    "src/utils.js"() {
+      init_define_process_env();
+      import_process7 = __toESM(require_process());
+      SHARE_XOR_KEY = 5913726;
+    }
+  });
+
+  // src/picker.js
+  function pickerState() {
+    return {
+      chatsCache: [],
+      // recent dialogs preloaded by the modal opener
+      remoteHits: [],
+      // server-side search results for `remoteQuery`
+      remoteQuery: "",
+      // the lower-cased query those hits came from
+      searching: false,
+      // true while a debounced API call is in flight
+      debounce: null,
+      token: 0
+    };
+  }
+  function pickerVisibleList(state, query) {
+    const q = (query || "").trim().toLowerCase();
+    if (!q) return state.chatsCache;
+    if (state.remoteQuery === q) return state.remoteHits;
+    return [];
+  }
+  function pickerReset(state) {
+    state.remoteHits = [];
+    state.remoteQuery = "";
+    state.searching = false;
+    if (state.debounce) {
+      clearTimeout(state.debounce);
+      state.debounce = null;
+    }
+    state.token = 0;
+  }
+  function pickerRenderRow(chat, opts) {
+    const { multiSelect, isSelected, showTypeTag, onClick } = opts;
+    const el = document.createElement("div");
+    el.className = (multiSelect ? "coplay-chat-item" : "share-chat-item") + (isSelected ? " selected" : "");
+    const initial = (chat.title.trim()[0] || "?").toUpperCase();
+    const sub = chat.username ? `@${chat.username}` : "";
+    const checkbox = multiSelect ? `
+        <div class="coplay-chat-check">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>` : "";
+    let typeTag = "";
+    if (showTypeTag) {
+      const label = chat.kind === "user" ? "DM" : chat.kind === "bot" ? "Bot" : chat.kind === "channel" ? "Channel" : "Group";
+      typeTag = `<div class="picker-row-type">${escapeHtml(label)}</div>`;
+    }
+    el.innerHTML = `
+        ${checkbox}
+        <div class="picker-row-avatar">${escapeHtml(initial)}</div>
+        <div class="picker-row-title">
+            <div class="picker-row-name">${escapeHtml(chat.title)}</div>
+            ${sub ? `<div class="picker-row-sub">${escapeHtml(sub)}</div>` : ""}
+        </div>
+        ${typeTag}
+    `;
+    el.addEventListener("click", () => onClick(chat, el));
+    return el;
+  }
+  function pickerOnSearchInput(state, value, kinds, render) {
+    if (state.debounce) clearTimeout(state.debounce);
+    const q = (value || "").trim();
+    if (!q) {
+      state.remoteHits = [];
+      state.remoteQuery = "";
+      state.searching = false;
+      state.token = 0;
+      render();
+      return;
+    }
+    state.searching = true;
+    render();
+    const token = ++state.token;
+    state.debounce = setTimeout(async () => {
+      try {
+        const hits = await searchContactsByQuery(q, { kinds, limit: 30 });
+        if (token !== state.token) return;
+        state.remoteHits = hits;
+        state.remoteQuery = q.toLowerCase();
+      } catch (e) {
+        if (token !== state.token) return;
+        state.remoteHits = [];
+        state.remoteQuery = q.toLowerCase();
+      } finally {
+        if (token === state.token) {
+          state.searching = false;
+          render();
+        }
+      }
+    }, 220);
+  }
+  var import_process8;
+  var init_picker = __esm({
+    "src/picker.js"() {
+      init_define_process_env();
+      import_process8 = __toESM(require_process());
+      init_telegram();
+      init_utils();
+    }
+  });
+
+  // src/recognize.js
+  function installRecognize({ openSearch, performSearch, setSearchQuery }) {
+    const $ = (id) => document.getElementById(id);
+    const btnRecognize = $("btn-recognize");
+    const recognizeOverlay = $("recognize-overlay");
+    const btnRecognizeRecord = $("btn-recognize-record");
+    const recognizeStatus = $("recognize-status");
+    const recognizeResult = $("recognize-result");
+    let _recMediaRec = null;
+    let _recStream = null;
+    let _recAutoStopTimer = null;
+    function open() {
+      recognizeResult.innerHTML = "";
+      recognizeStatus.textContent = "Tap to listen";
+      btnRecognizeRecord.classList.remove("recording");
+      recognizeOverlay.classList.add("open");
+    }
+    function close() {
+      recognizeOverlay.classList.remove("open");
+      stopRecording(true);
+    }
+    btnRecognize.addEventListener("click", () => {
+      if (recognizeOverlay.classList.contains("open")) {
+        close();
+        return;
+      }
+      open();
+      startRecording();
+    });
+    $("recognize-overlay-close").addEventListener("click", close);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && recognizeOverlay.classList.contains("open")) close();
+    });
+    document.addEventListener("click", (e) => {
+      if (recognizeOverlay.classList.contains("open") && !recognizeOverlay.contains(e.target) && !btnRecognize.contains(e.target)) close();
+    });
+    btnRecognizeRecord.addEventListener("click", async () => {
+      if (_recMediaRec?.state === "recording") {
+        stopRecording();
+        return;
+      }
+      await startRecording();
+    });
+    async function startRecording() {
+      recognizeResult.innerHTML = "";
+      recognizeStatus.textContent = "Listening\u2026";
+      btnRecognizeRecord.classList.add("recording");
+      let permState = null;
+      try {
+        const status = await navigator.permissions.query({ name: "microphone" });
+        permState = status.state;
+      } catch {
+      }
+      if (permState === "denied") {
+        showMicBlockedHelp();
+        btnRecognizeRecord.classList.remove("recording");
+        return;
+      }
+      try {
+        _recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        const name = e && e.name;
+        if (name === "NotAllowedError" || name === "SecurityError") {
+          showMicBlockedHelp();
+        } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+          recognizeStatus.textContent = "No microphone found on this device.";
+        } else {
+          recognizeStatus.textContent = "Could not access microphone. Tap to try again.";
+        }
+        btnRecognizeRecord.classList.remove("recording");
+        return;
+      }
+      const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
+      _recMediaRec = new MediaRecorder(_recStream, mime ? { mimeType: mime } : {});
+      const chunks = [];
+      _recMediaRec.ondataavailable = (e) => {
+        if (e.data?.size > 0) chunks.push(e.data);
+      };
+      _recMediaRec.onstop = () => upload(chunks, mime || (chunks[0]?.type || "audio/webm"));
+      _recMediaRec.start();
+      clearTimeout(_recAutoStopTimer);
+      _recAutoStopTimer = setTimeout(() => {
+        if (_recMediaRec?.state === "recording") _recMediaRec.stop();
+      }, 7e3);
+    }
+    function showMicBlockedHelp() {
+      const ua = navigator.userAgent || "";
+      const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+      let steps;
+      if (/iPhone|iPad|iPod/i.test(ua)) {
+        steps = standalone ? "iOS Settings &rarr; <b>Music Player</b> &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>." : "Safari &rarr; tap <b>aA</b> in the address bar &rarr; <b>Website Settings</b> &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.";
+      } else if (/Android/i.test(ua)) {
+        steps = standalone ? "Android Settings &rarr; Apps &rarr; <b>Music Player</b> &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>." : "Chrome &rarr; tap the <b>lock icon</b> next to the URL &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.";
+      } else {
+        steps = "Click the <b>lock icon</b> in the address bar &rarr; Site settings &rarr; Microphone &rarr; <b>Allow</b>, then click <b>Try again</b>.";
+      }
+      recognizeStatus.innerHTML = "";
+      recognizeResult.innerHTML = `
+            <div class="mic-blocked">
+                <div class="mic-blocked-title">Microphone is blocked</div>
+                <div class="mic-blocked-steps">${steps}</div>
+                <button id="mic-blocked-retry" class="text-btn accent">Try again</button>
+            </div>
+        `;
+      const btn = document.getElementById("mic-blocked-retry");
+      if (btn) btn.addEventListener("click", () => {
+        recognizeResult.innerHTML = "";
+        startRecording();
+      });
+    }
+    function stopRecording(silent = false) {
+      clearTimeout(_recAutoStopTimer);
+      _recAutoStopTimer = null;
+      if (_recMediaRec && _recMediaRec.state === "recording") {
+        if (silent) {
+          _recMediaRec.onstop = null;
+          _recMediaRec.stop();
+        } else {
+          _recMediaRec.stop();
+        }
+      }
+      _recStream?.getTracks().forEach((t) => t.stop());
+      _recStream = null;
+      if (silent) {
+        btnRecognizeRecord.classList.remove("recording");
+        _recMediaRec = null;
+      }
+    }
+    async function upload(chunks, mime) {
+      btnRecognizeRecord.classList.remove("recording");
+      _recStream?.getTracks().forEach((t) => t.stop());
+      _recStream = null;
+      _recMediaRec = null;
+      if (chunks.length === 0) {
+        recognizeStatus.textContent = "No audio captured. Tap to try again.";
+        return;
+      }
+      const blob = new Blob(chunks, { type: mime });
+      recognizeStatus.textContent = "Identifying\u2026";
+      try {
+        const fd = new FormData();
+        fd.append("audio", blob, "recording.webm");
+        const res = await fetch("/api/recognize", { method: "POST", body: fd });
+        if (!res.ok) {
+          if (res.status === 429) {
+            recognizeStatus.textContent = "Too many requests. Wait a moment and try again.";
+            return;
+          }
+          throw new Error(`server ${res.status}`);
+        }
+        const json = await res.json();
+        if (!json.recognized) {
+          recognizeStatus.textContent = "No match found. Tap to try again.";
+          return;
+        }
+        recognizeStatus.textContent = "";
+        renderResult(json);
+      } catch (e) {
+        console.warn("[recognize] upload failed", e);
+        recognizeStatus.textContent = "Recognition failed. Tap to try again.";
+      }
+    }
+    function renderResult(json) {
+      const title = json.title || "";
+      const artist = json.artist || "";
+      const cover = json.cover ? `<img class="recognize-cover" src="${json.cover}" alt="">` : "";
+      recognizeResult.innerHTML = `
+            <div class="recognize-tap" role="button" tabindex="0">
+                ${cover}
+                <div class="recognize-title">${escapeHtml(title)}</div>
+                <div class="recognize-artist">${escapeHtml(artist)}</div>
+                <div class="recognize-hint">Tap to search in your library</div>
+            </div>
+        `;
+      const tap = recognizeResult.querySelector(".recognize-tap");
+      const runSearch = (e) => {
+        if (e) e.stopPropagation();
+        const q = `${title} ${artist}`.trim();
+        close();
+        openSearch();
+        setSearchQuery(q);
+        setTimeout(() => performSearch(), 50);
+      };
+      tap.addEventListener("click", runSearch);
+      tap.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") runSearch(e);
+      });
+    }
+    return { open, close };
+  }
+  var import_process9;
+  var init_recognize = __esm({
+    "src/recognize.js"() {
+      init_define_process_env();
+      import_process9 = __toESM(require_process());
+      init_utils();
+    }
+  });
+
   // node_modules/aubiojs/build/aubio.js
   var require_aubio = __commonJS({
     "node_modules/aubiojs/build/aubio.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
-      var aubio = (function() {
+      var import_process13 = __toESM(require_process());
+      var aubio2 = (function() {
         var _scriptDir = typeof document !== "undefined" && document.currentScript ? document.currentScript.src : void 0;
         if (typeof __filename !== "undefined") _scriptDir = _scriptDir || __filename;
-        return (function(aubio2) {
-          aubio2 = aubio2 || {};
-          var Module = typeof aubio2 !== "undefined" ? aubio2 : {};
+        return (function(aubio3) {
+          aubio3 = aubio3 || {};
+          var Module = typeof aubio3 !== "undefined" ? aubio3 : {};
           var readyPromiseResolve, readyPromiseReject;
           Module["ready"] = new Promise(function(resolve, reject) {
             readyPromiseResolve = resolve;
@@ -75607,17 +75952,357 @@ ${JSON.stringify(state)}`;
             }
           }
           run();
-          return aubio2.ready;
+          return aubio3.ready;
         });
       })();
       if (typeof exports === "object" && typeof module === "object")
-        module.exports = aubio;
+        module.exports = aubio2;
       else if (typeof define === "function" && define["amd"])
         define([], function() {
-          return aubio;
+          return aubio2;
         });
       else if (typeof exports === "object")
-        exports["aubio"] = aubio;
+        exports["aubio"] = aubio2;
+    }
+  });
+
+  // src/visualizers/hypnotise.js
+  function installHypnotise({ audio, getCurrentTrackId, requestWakeLock }) {
+    const $ = (id) => document.getElementById(id);
+    const btnHypnotise = $("btn-hypnotise");
+    const hypnotiseOverlay = $("hypnotise-overlay");
+    const hypnotiseFlashEl = $("hypnotise-flash");
+    let _hypRafId = null;
+    let _hypFlash = 0;
+    const _hypBeatCache = /* @__PURE__ */ new Map();
+    let _hypAnalysisToken = 0;
+    let _hypBeats = null;
+    let _hypNextBeatIdx = 0;
+    const _HYP_LATENCY_OFFSET = 0.06;
+    const _HYP_BEAT_DECAY = 0.18;
+    const _HYP_MIN_BEAT_GAP_S = 0.333;
+    let _hypHoldTimer = null;
+    let _hypHoldStart = null;
+    const _HYP_HOLD_MS = 600;
+    const _HYP_HOLD_MOVE_PX = 10;
+    function _hypThinOnsets(times, minGapS) {
+      if (!times || times.length === 0) return times;
+      const out = [times[0]];
+      for (let i = 1; i < times.length; i++) {
+        if (times[i] - out[out.length - 1] >= minGapS) out.push(times[i]);
+      }
+      return out;
+    }
+    function _hypSetLoading(on) {
+      if (!hypnotiseOverlay) return;
+      hypnotiseOverlay.classList.toggle("hyp-loading", !!on);
+    }
+    async function _hypAnalyzeCurrentTrack() {
+      const trackId = getCurrentTrackId();
+      if (trackId == null) {
+        _hypSetLoading(false);
+        return;
+      }
+      const cached = _hypBeatCache.get(trackId);
+      if (cached) {
+        _hypInstallSchedule(trackId, cached);
+        _hypSetLoading(false);
+        return;
+      }
+      const myToken = ++_hypAnalysisToken;
+      const src = audio.currentSrc || audio.src;
+      if (!src) {
+        _hypSetLoading(false);
+        return;
+      }
+      let ctx = null;
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error("fetch " + res.status);
+        const buf = await res.arrayBuffer();
+        if (myToken !== _hypAnalysisToken) return;
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const audioBuffer = await ctx.decodeAudioData(buf);
+        if (myToken !== _hypAnalysisToken) return;
+        const rawBeatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
+        if (myToken !== _hypAnalysisToken) return;
+        const beatTimes = _hypThinOnsets(rawBeatTimes, _HYP_MIN_BEAT_GAP_S);
+        const envelope = _hypComputeEnvelope(audioBuffer);
+        const dur = audioBuffer.duration;
+        const beatRate = beatTimes.length / Math.max(1, dur);
+        const data = { beatTimes, envelope, beatRate };
+        _hypBeatCache.set(trackId, data);
+        if (getCurrentTrackId() === trackId) _hypInstallSchedule(trackId, data);
+        console.log("[hypnotise] analyzed track", trackId, "\u2192", rawBeatTimes.length, "onsets,", beatTimes.length, "after thinning over", dur.toFixed(1), "s (avg", beatRate.toFixed(2), "/s)");
+      } catch (e) {
+        console.warn("[hypnotise] analysis failed for track", trackId, e);
+      } finally {
+        if (ctx && ctx.close) ctx.close().catch(() => {
+        });
+        if (myToken === _hypAnalysisToken) _hypSetLoading(false);
+      }
+    }
+    function _hypMakeLowpass(fc, sr, Q = 0.707) {
+      const omega = 2 * Math.PI * fc / sr;
+      const cs = Math.cos(omega), sn = Math.sin(omega);
+      const alpha = sn / (2 * Q);
+      const a0 = 1 + alpha;
+      return {
+        b0: (1 - cs) / 2 / a0,
+        b1: (1 - cs) / a0,
+        b2: (1 - cs) / 2 / a0,
+        a1: -2 * cs / a0,
+        a2: (1 - alpha) / a0
+      };
+    }
+    function _hypMakeHighpass(fc, sr, Q = 0.707) {
+      const omega = 2 * Math.PI * fc / sr;
+      const cs = Math.cos(omega), sn = Math.sin(omega);
+      const alpha = sn / (2 * Q);
+      const a0 = 1 + alpha;
+      return {
+        b0: (1 + cs) / 2 / a0,
+        b1: -(1 + cs) / a0,
+        b2: (1 + cs) / 2 / a0,
+        a1: -2 * cs / a0,
+        a2: (1 - alpha) / a0
+      };
+    }
+    function _hypRmsSeries(mono, stride, numSamples, biquad) {
+      const out = new Float32Array(numSamples);
+      let s1 = 0, s2 = 0;
+      let outIdx = 0, sumSq = 0, count = 0;
+      for (let i = 0; i < mono.length && outIdx < numSamples; i++) {
+        const x = mono[i];
+        let y;
+        if (biquad) {
+          y = biquad.b0 * x + s1;
+          s1 = biquad.b1 * x - biquad.a1 * y + s2;
+          s2 = biquad.b2 * x - biquad.a2 * y;
+        } else {
+          y = x;
+        }
+        sumSq += y * y;
+        count++;
+        if (count === stride) {
+          out[outIdx++] = Math.sqrt(sumSq / count);
+          sumSq = 0;
+          count = 0;
+        }
+      }
+      return out;
+    }
+    function _hypAttenuate(samples, attackAlpha, decayAlpha) {
+      const out = new Float32Array(samples.length);
+      let acc = samples[0] || 0;
+      out[0] = acc;
+      for (let i = 1; i < samples.length; i++) {
+        const x = samples[i];
+        const a = x > acc ? attackAlpha : decayAlpha;
+        acc += (x - acc) * a;
+        out[i] = acc;
+      }
+      return out;
+    }
+    function _hypBandStats(samples) {
+      const sorted = Float32Array.from(samples).sort();
+      const pct = (p) => sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor(sorted.length * p)))] || 0;
+      const lo = pct(0.1);
+      const hi = Math.max(pct(0.9), lo + 1e-3);
+      return { samples, lo, hi };
+    }
+    function _hypComputeEnvelope(audioBuffer) {
+      const ENV_HZ = 30;
+      const sr = audioBuffer.sampleRate;
+      const stride = Math.max(1, Math.floor(sr / ENV_HZ));
+      const ch0 = audioBuffer.getChannelData(0);
+      const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+      const N = ch0.length;
+      const numSamples = Math.max(1, Math.floor(N / stride));
+      const mono = new Float32Array(N);
+      if (ch1) for (let i = 0; i < N; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
+      else mono.set(ch0);
+      const lpBass = _hypMakeLowpass(200, sr);
+      const hpTreb = _hypMakeHighpass(4e3, sr);
+      const fullRaw = _hypRmsSeries(mono, stride, numSamples, null);
+      const bassRaw = _hypRmsSeries(mono, stride, numSamples, lpBass);
+      const trebRaw = _hypRmsSeries(mono, stride, numSamples, hpTreb);
+      const bassAtt = _hypAttenuate(bassRaw, 0.25, 0.04);
+      const trebAtt = _hypAttenuate(trebRaw, 0.3, 0.07);
+      return {
+        hz: ENV_HZ,
+        full: _hypBandStats(fullRaw),
+        bass: _hypBandStats(bassAtt),
+        treb: _hypBandStats(trebAtt)
+      };
+    }
+    let _aubioMod = null;
+    async function _hypGetAubio() {
+      if (_aubioMod) return _aubioMod;
+      _aubioMod = await (0, import_aubiojs.default)();
+      return _aubioMod;
+    }
+    async function _hypDetectOnsets(audioBuffer, stillValid) {
+      const sr = audioBuffer.sampleRate;
+      const Aubio = await _hypGetAubio();
+      if (stillValid && !stillValid()) return [];
+      const bufferSize = 1024;
+      const hopSize = 512;
+      const onset = new Aubio.Onset("specflux", bufferSize, hopSize, sr);
+      onset.setThreshold(0.25);
+      onset.setSilence(-45);
+      const ch0 = audioBuffer.getChannelData(0);
+      const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
+      const N = ch0.length;
+      const onsets = [];
+      const chunk = new Float32Array(hopSize);
+      let hopCount = 0;
+      const yieldEvery = 2048;
+      for (let pos = 0; pos + hopSize <= N; pos += hopSize) {
+        if (ch1) {
+          for (let i = 0; i < hopSize; i++) chunk[i] = (ch0[pos + i] + ch1[pos + i]) * 0.5;
+        } else {
+          for (let i = 0; i < hopSize; i++) chunk[i] = ch0[pos + i];
+        }
+        if (onset.do(chunk)) onsets.push(onset.getLastS());
+        if ((++hopCount & yieldEvery - 1) === 0) {
+          await new Promise((r) => setTimeout(r, 0));
+          if (stillValid && !stillValid()) return [];
+        }
+      }
+      return onsets;
+    }
+    function _hypInstallSchedule(trackId, data) {
+      if (getCurrentTrackId() !== trackId) return;
+      _hypBeats = data;
+      _hypNextBeatIdx = 0;
+    }
+    function _hypTick() {
+      _hypRafId = requestAnimationFrame(_hypTick);
+      let target = 0;
+      if (!audio.paused && audio.readyState >= 2 && _hypBeats) {
+        const t = audio.currentTime - _HYP_LATENCY_OFFSET;
+        const env = _hypBeats.envelope;
+        if (env && env.bass) {
+          const idx = Math.max(0, Math.min(env.bass.samples.length - 1, Math.floor(t * env.hz)));
+          const bn = (b) => Math.max(0, Math.min(1, (b.samples[idx] - b.lo) / (b.hi - b.lo)));
+          const bassNorm = bn(env.bass);
+          const trebNorm = bn(env.treb);
+          target = 0.03 + 0.22 * bassNorm + 0.03 * trebNorm;
+        }
+        const beats = _hypBeats.beatTimes;
+        const rate = _hypBeats.beatRate || 1;
+        const decay = rate > 4 ? 0.07 : rate > 2 ? 0.11 : _HYP_BEAT_DECAY;
+        const peak = rate > 4 ? 0.65 : rate > 2 ? 0.85 : 1;
+        if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
+        while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
+        if (_hypNextBeatIdx > 0) {
+          const since = t - beats[_hypNextBeatIdx - 1];
+          if (since >= 0 && since < decay) {
+            target = Math.max(target, peak * (1 - since / decay));
+          }
+        }
+        if (_hypNextBeatIdx < beats.length) {
+          const until = beats[_hypNextBeatIdx] - t;
+          if (until >= 0 && until < 0.07) {
+            target = Math.max(target, 0.2 * (1 - until / 0.07));
+          }
+        }
+      }
+      const k = target > _hypFlash ? 0.55 : 0.12;
+      _hypFlash += (target - _hypFlash) * k;
+      const shaped = _hypFlash < 0.5 ? 4 * _hypFlash * _hypFlash * _hypFlash : 1 - 4 * (1 - _hypFlash) * (1 - _hypFlash) * (1 - _hypFlash);
+      hypnotiseFlashEl.style.setProperty("--flash", shaped.toFixed(3));
+    }
+    async function enter() {
+      if (hypnotiseOverlay.classList.contains("open")) return;
+      _hypFlash = 0;
+      _hypBeats = null;
+      _hypNextBeatIdx = 0;
+      hypnotiseOverlay.classList.add("open");
+      hypnotiseOverlay.setAttribute("aria-hidden", "false");
+      _hypSetLoading(true);
+      _attachHypGestures();
+      try {
+        requestWakeLock();
+      } catch (_) {
+      }
+      if (_hypRafId == null) _hypRafId = requestAnimationFrame(_hypTick);
+      _hypAnalyzeCurrentTrack();
+    }
+    function exit() {
+      if (!hypnotiseOverlay.classList.contains("open")) return;
+      hypnotiseOverlay.classList.remove("open");
+      hypnotiseOverlay.classList.remove("hyp-loading");
+      hypnotiseOverlay.setAttribute("aria-hidden", "true");
+      hypnotiseFlashEl.style.setProperty("--flash", "0");
+      if (_hypRafId != null) {
+        cancelAnimationFrame(_hypRafId);
+        _hypRafId = null;
+      }
+      _detachHypGestures();
+      _hypClearHold();
+    }
+    function _hypClearHold() {
+      if (_hypHoldTimer != null) {
+        clearTimeout(_hypHoldTimer);
+        _hypHoldTimer = null;
+      }
+      _hypHoldStart = null;
+    }
+    function _hypOnPointerDown(e) {
+      _hypClearHold();
+      _hypHoldStart = { x: e.clientX, y: e.clientY };
+      _hypHoldTimer = setTimeout(() => {
+        _hypHoldTimer = null;
+        exit();
+      }, _HYP_HOLD_MS);
+    }
+    function _hypOnPointerMove(e) {
+      if (!_hypHoldStart) return;
+      const dx = e.clientX - _hypHoldStart.x;
+      const dy = e.clientY - _hypHoldStart.y;
+      if (dx * dx + dy * dy > _HYP_HOLD_MOVE_PX * _HYP_HOLD_MOVE_PX) _hypClearHold();
+    }
+    function _hypOnPointerEnd() {
+      _hypClearHold();
+    }
+    function _attachHypGestures() {
+      hypnotiseOverlay.addEventListener("pointerdown", _hypOnPointerDown);
+      hypnotiseOverlay.addEventListener("pointermove", _hypOnPointerMove);
+      hypnotiseOverlay.addEventListener("pointerup", _hypOnPointerEnd);
+      hypnotiseOverlay.addEventListener("pointercancel", _hypOnPointerEnd);
+      hypnotiseOverlay.addEventListener("pointerleave", _hypOnPointerEnd);
+    }
+    function _detachHypGestures() {
+      hypnotiseOverlay.removeEventListener("pointerdown", _hypOnPointerDown);
+      hypnotiseOverlay.removeEventListener("pointermove", _hypOnPointerMove);
+      hypnotiseOverlay.removeEventListener("pointerup", _hypOnPointerEnd);
+      hypnotiseOverlay.removeEventListener("pointercancel", _hypOnPointerEnd);
+      hypnotiseOverlay.removeEventListener("pointerleave", _hypOnPointerEnd);
+    }
+    btnHypnotise?.addEventListener("click", enter);
+    audio.addEventListener("loadstart", () => {
+      _hypBeats = null;
+      _hypNextBeatIdx = 0;
+      _hypAnalysisToken++;
+      if (hypnotiseOverlay.classList.contains("open")) _hypAnalyzeCurrentTrack();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (hypnotiseOverlay?.classList.contains("open")) {
+        exit();
+        e.preventDefault();
+      }
+    });
+    return { enter, exit };
+  }
+  var import_process10, import_aubiojs;
+  var init_hypnotise = __esm({
+    "src/visualizers/hypnotise.js"() {
+      init_define_process_env();
+      import_process10 = __toESM(require_process());
+      import_aubiojs = __toESM(require_aubio());
     }
   });
 
@@ -75625,7 +76310,7 @@ ${JSON.stringify(state)}`;
   var require_butterchurn = __commonJS({
     "node_modules/butterchurn/lib/butterchurn.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       (function webpackUniversalModuleDefinition(root, factory) {
         if (typeof exports === "object" && typeof module === "object")
           module.exports = factory();
@@ -82061,7 +82746,7 @@ ${JSON.stringify(state)}`;
   var require_butterchurnPresetsMinimal_min = __commonJS({
     "node_modules/butterchurn-presets/lib/butterchurnPresetsMinimal.min.js"(exports, module) {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       !(function(a, e) {
         "object" == typeof exports && "object" == typeof module ? module.exports = e() : "function" == typeof define && define.amd ? define("butterchurnPresetsMinimal", [], e) : "object" == typeof exports ? exports.butterchurnPresetsMinimal = e() : a.butterchurnPresetsMinimal = e();
       })("undefined" != typeof self ? self : exports, function() {
@@ -82317,17 +83002,772 @@ ${JSON.stringify(state)}`;
     }
   });
 
+  // src/visualizers/butterchurn.js
+  function installButterchurn({ audio, requestWakeLock }) {
+    const $ = (id) => document.getElementById(id);
+    const visualizerOverlay = $("visualizer-overlay");
+    const visualizerCanvas = $("visualizer-canvas");
+    const visualizerHint = $("visualizer-hint");
+    const visualizerPresetName = $("visualizer-preset-name");
+    const btnVisualize = $("btn-visualize");
+    let _vizCtx = null;
+    let _vizSource = null;
+    let _vizInstance = null;
+    let _vizPresets = null;
+    let _vizPresetKeys = [];
+    let _vizCurrentPresetIdx = -1;
+    let _vizRafId = null;
+    let _vizHoldTimer = null;
+    let _vizHoldStart = null;
+    let _vizPresetWarnedIOS = false;
+    let _vizPresetNameHide = null;
+    const _VIZ_HOLD_MS = 600;
+    const _VIZ_HOLD_MOVE_PX = 10;
+    const _VIZ_PRESET_BLEND_S = 1.5;
+    function _vizSetupAudioOnce() {
+      if (_vizSource) return true;
+      try {
+        _vizCtx = new (window.AudioContext || window.webkitAudioContext)();
+        _vizSource = _vizCtx.createMediaElementSource(audio);
+        _vizSource.connect(_vizCtx.destination);
+        if (!_vizPresetWarnedIOS) {
+          _vizPresetWarnedIOS = true;
+          showToast("Visualizer is on \u2014 lock-screen playback may stop until reload", 4500);
+        }
+        return true;
+      } catch (e) {
+        console.warn("[viz] failed to create audio context:", e?.message || e);
+        showToast("Visualizer not supported here");
+        return false;
+      }
+    }
+    function _vizSizing() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      return { w, h, pxW: Math.max(1, Math.floor(w * dpr)), pxH: Math.max(1, Math.floor(h * dpr)) };
+    }
+    function _vizApplySize() {
+      if (!_vizInstance) return;
+      const s = _vizSizing();
+      visualizerCanvas.width = s.pxW;
+      visualizerCanvas.height = s.pxH;
+      try {
+        _vizInstance.setRendererSize(s.pxW, s.pxH);
+      } catch (_) {
+      }
+    }
+    function _vizSetupVisualizerOnce() {
+      if (_vizInstance) return true;
+      if (!_vizCtx) return false;
+      try {
+        const s = _vizSizing();
+        visualizerCanvas.width = s.pxW;
+        visualizerCanvas.height = s.pxH;
+        _vizInstance = import_butterchurn.default.createVisualizer(_vizCtx, visualizerCanvas, {
+          width: s.pxW,
+          height: s.pxH,
+          pixelRatio: 1,
+          // we already account for DPR in canvas size
+          textureRatio: 1
+        });
+        _vizInstance.connectAudio(_vizSource);
+        const mod = import_butterchurnPresetsMinimal_min.default;
+        _vizPresets = typeof mod.getPresets === "function" ? mod.getPresets() : mod.default && typeof mod.default.getPresets === "function" ? mod.default.getPresets() : mod.default || mod;
+        _vizPresetKeys = Object.keys(_vizPresets);
+        if (_vizPresetKeys.length === 0) {
+          console.warn("[viz] no presets loaded");
+          return false;
+        }
+        return true;
+      } catch (e) {
+        console.warn("[viz] visualizer init failed:", e?.message || e);
+        return false;
+      }
+    }
+    function _vizPickPresetName(name) {
+      if (!_vizInstance || !_vizPresets) return;
+      const preset = _vizPresets[name];
+      if (!preset) return;
+      try {
+        _vizInstance.loadPreset(preset, _VIZ_PRESET_BLEND_S);
+        _vizCurrentPresetIdx = _vizPresetKeys.indexOf(name);
+        const display = name.replace(/^[^-]+\s*-\s*/, "").replace(/\.milk$/, "");
+        visualizerPresetName.textContent = display;
+        visualizerPresetName.classList.add("show");
+        clearTimeout(_vizPresetNameHide);
+        _vizPresetNameHide = setTimeout(() => {
+          visualizerPresetName.classList.remove("show");
+        }, 1800);
+      } catch (e) {
+        console.warn("[viz] preset load failed:", e?.message || e);
+      }
+    }
+    function _vizCyclePreset() {
+      if (_vizPresetKeys.length < 2) return;
+      let next;
+      do {
+        next = Math.floor(Math.random() * _vizPresetKeys.length);
+      } while (next === _vizCurrentPresetIdx);
+      _vizPickPresetName(_vizPresetKeys[next]);
+    }
+    function _vizTick() {
+      _vizRafId = requestAnimationFrame(_vizTick);
+      try {
+        _vizInstance.render();
+      } catch (e) {
+        console.warn("[viz] render error, cycling preset:", e?.message || e);
+        _vizCyclePreset();
+      }
+    }
+    async function enter() {
+      if (visualizerOverlay.classList.contains("open")) return;
+      if (!_vizSetupAudioOnce()) return;
+      if (!_vizSetupVisualizerOnce()) return;
+      if (_vizCtx.state === "suspended") {
+        try {
+          await _vizCtx.resume();
+        } catch (_) {
+        }
+      }
+      visualizerOverlay.classList.add("open");
+      visualizerOverlay.setAttribute("aria-hidden", "false");
+      _attachVizGestures();
+      _vizApplySize();
+      if (_vizCurrentPresetIdx < 0) _vizCyclePreset();
+      try {
+        requestWakeLock();
+      } catch (_) {
+      }
+      if (_vizRafId == null) _vizTick();
+    }
+    function exit() {
+      if (!visualizerOverlay.classList.contains("open")) return;
+      visualizerOverlay.classList.remove("open");
+      visualizerOverlay.setAttribute("aria-hidden", "true");
+      if (_vizRafId != null) {
+        cancelAnimationFrame(_vizRafId);
+        _vizRafId = null;
+      }
+      _detachVizGestures();
+      _vizClearHold();
+      visualizerPresetName.classList.remove("show");
+    }
+    function _vizClearHold() {
+      if (_vizHoldTimer != null) {
+        clearTimeout(_vizHoldTimer);
+        _vizHoldTimer = null;
+      }
+      _vizHoldStart = null;
+    }
+    function _vizOnPointerDown(e) {
+      _vizClearHold();
+      _vizHoldStart = { x: e.clientX, y: e.clientY, kind: "pending" };
+      _vizHoldTimer = setTimeout(() => {
+        _vizHoldTimer = null;
+        if (_vizHoldStart) _vizHoldStart.kind = "held";
+        exit();
+      }, _VIZ_HOLD_MS);
+    }
+    function _vizOnPointerMove(e) {
+      if (!_vizHoldStart || _vizHoldStart.kind !== "pending") return;
+      const dx = e.clientX - _vizHoldStart.x;
+      const dy = e.clientY - _vizHoldStart.y;
+      if (dx * dx + dy * dy > _VIZ_HOLD_MOVE_PX * _VIZ_HOLD_MOVE_PX) {
+        _vizHoldStart.kind = "moved";
+        if (_vizHoldTimer) {
+          clearTimeout(_vizHoldTimer);
+          _vizHoldTimer = null;
+        }
+      }
+    }
+    function _vizOnPointerUp() {
+      if (_vizHoldStart && _vizHoldStart.kind === "pending") {
+        _vizCyclePreset();
+      }
+      _vizClearHold();
+    }
+    function _attachVizGestures() {
+      visualizerOverlay.addEventListener("pointerdown", _vizOnPointerDown);
+      visualizerOverlay.addEventListener("pointermove", _vizOnPointerMove);
+      visualizerOverlay.addEventListener("pointerup", _vizOnPointerUp);
+      visualizerOverlay.addEventListener("pointercancel", _vizOnPointerUp);
+      visualizerOverlay.addEventListener("pointerleave", _vizOnPointerUp);
+    }
+    function _detachVizGestures() {
+      visualizerOverlay.removeEventListener("pointerdown", _vizOnPointerDown);
+      visualizerOverlay.removeEventListener("pointermove", _vizOnPointerMove);
+      visualizerOverlay.removeEventListener("pointerup", _vizOnPointerUp);
+      visualizerOverlay.removeEventListener("pointercancel", _vizOnPointerUp);
+      visualizerOverlay.removeEventListener("pointerleave", _vizOnPointerUp);
+    }
+    btnVisualize?.addEventListener("click", enter);
+    window.addEventListener("resize", () => {
+      if (visualizerOverlay.classList.contains("open")) _vizApplySize();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (visualizerOverlay?.classList.contains("open")) {
+        exit();
+        e.preventDefault();
+      }
+    });
+    return { enter, exit };
+  }
+  var import_process11, import_butterchurn, import_butterchurnPresetsMinimal_min;
+  var init_butterchurn = __esm({
+    "src/visualizers/butterchurn.js"() {
+      init_define_process_env();
+      import_process11 = __toESM(require_process());
+      import_butterchurn = __toESM(require_butterchurn());
+      import_butterchurnPresetsMinimal_min = __toESM(require_butterchurnPresetsMinimal_min());
+      init_utils();
+    }
+  });
+
+  // src/visualizers/piano-roll.js
+  function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock }) {
+    const $ = (id) => document.getElementById(id);
+    const pianoOverlay = $("piano-overlay");
+    const pianoCanvas = $("piano-canvas");
+    const pianoLoadingLabel = $("piano-loading-label");
+    const pianoSeekbar = $("piano-seekbar");
+    const pianoSeekbarFill = $("piano-seekbar-fill");
+    const pianoSeekbarHandle = $("piano-seekbar-handle");
+    const btnPiano = $("btn-piano");
+    let _pianoSeeking = false;
+    let _pianoCtx = null;
+    let _pianoNotes = null;
+    let _pianoCache = /* @__PURE__ */ new Map();
+    let _pianoAnalysisToken = 0;
+    let _pianoRafId = null;
+    let _pianoNextIdx = 0;
+    let _pianoKeyboardLayout = null;
+    let _pianoEnginesLoading = null;
+    let _pianoEnginesReady = false;
+    let _pianoModelInstance = null;
+    let _pianoMagentaModule = null;
+    let _pianoHoldTimer = null;
+    let _pianoHoldStart = null;
+    const _PIANO_HOLD_MS = 600;
+    const _PIANO_HOLD_MOVE_PX = 10;
+    const _PIANO_LOOK_AHEAD_S = 3.5;
+    const _PIANO_KEYBOARD_HEIGHT_FRAC = 0.22;
+    const _PIANO_MIDI_LOW = 21;
+    const _PIANO_MIDI_HIGH = 108;
+    const _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
+    const _PIANO_MAGENTA_URL = "https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/dist/magentamusic.min.js";
+    const _PIANO_OAF_CHECKPOINT = "https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni";
+    const _PIANO_NOTES_VERSION = 6;
+    function _pianoSetLoading(label) {
+      if (!pianoOverlay) return;
+      if (label === null) {
+        pianoOverlay.classList.remove("piano-loading");
+      } else {
+        pianoOverlay.classList.add("piano-loading");
+        if (pianoLoadingLabel) pianoLoadingLabel.textContent = label;
+      }
+    }
+    function _pianoSetWarning(on) {
+      pianoOverlay?.classList.toggle("piano-warn", !!on);
+    }
+    function _pianoBuildKeyboardLayout(canvasWidth) {
+      let whiteCount = 0;
+      for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
+        if (_PIANO_IS_WHITE[m % 12]) whiteCount++;
+      }
+      const whiteW = canvasWidth / whiteCount;
+      const blackW = whiteW * 0.62;
+      const layout = /* @__PURE__ */ new Map();
+      let whiteIdx = 0;
+      for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
+        const pc = m % 12;
+        if (_PIANO_IS_WHITE[pc]) {
+          layout.set(m, { isWhite: true, x: whiteIdx * whiteW, w: whiteW });
+          whiteIdx++;
+        } else {
+          const boundary = whiteIdx * whiteW;
+          layout.set(m, { isWhite: false, x: boundary - blackW / 2, w: blackW });
+        }
+      }
+      return { whiteW, blackW, layout, whiteCount };
+    }
+    function _pianoApplySize() {
+      if (!pianoCanvas) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = window.innerWidth, h = window.innerHeight;
+      pianoCanvas.width = Math.floor(w * dpr);
+      pianoCanvas.height = Math.floor(h * dpr);
+      pianoCanvas.style.width = w + "px";
+      pianoCanvas.style.height = h + "px";
+      _pianoCtx = pianoCanvas.getContext("2d");
+      _pianoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      _pianoKeyboardLayout = _pianoBuildKeyboardLayout(w);
+    }
+    function _pianoLoadScript(url) {
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-piano-src="' + url + '"]');
+        if (existing) {
+          if (existing.dataset.loaded === "1") return resolve();
+          existing.addEventListener("load", () => resolve(), { once: true });
+          existing.addEventListener("error", () => reject(new Error("script load failed: " + url)), { once: true });
+          return;
+        }
+        const s = document.createElement("script");
+        s.src = url;
+        s.async = true;
+        s.dataset.pianoSrc = url;
+        s.addEventListener("load", () => {
+          s.dataset.loaded = "1";
+          resolve();
+        }, { once: true });
+        s.addEventListener("error", () => reject(new Error("script load failed: " + url)), { once: true });
+        document.head.appendChild(s);
+      });
+    }
+    async function _pianoLoadEngines() {
+      if (_pianoEnginesReady) return true;
+      if (_pianoEnginesLoading) return _pianoEnginesLoading;
+      _pianoEnginesLoading = (async () => {
+        _pianoSetLoading("Loading piano engine\u2026");
+        await _pianoLoadScript(_PIANO_MAGENTA_URL);
+        const ns = window.mm && window.mm.OnsetsAndFrames ? window.mm : window.transcription && window.transcription.OnsetsAndFrames ? window.transcription : null;
+        if (!ns) {
+          throw new Error("@magenta/music did not register OnsetsAndFrames on window");
+        }
+        _pianoMagentaModule = ns;
+        _pianoEnginesReady = true;
+        return true;
+      })();
+      try {
+        return await _pianoEnginesLoading;
+      } catch (e) {
+        _pianoEnginesLoading = null;
+        throw e;
+      }
+    }
+    async function _pianoTranscribe(audioBuffer, progressCb) {
+      const ns = _pianoMagentaModule;
+      if (!ns || !ns.OnsetsAndFrames) throw new Error("@magenta/music did not load");
+      if (!_pianoModelInstance) {
+        if (progressCb) progressCb(0);
+        _pianoModelInstance = new ns.OnsetsAndFrames(_PIANO_OAF_CHECKPOINT);
+        await _pianoModelInstance.initialize();
+      }
+      if (progressCb) progressCb(0.05);
+      const seq = await _pianoModelInstance.transcribeFromAudioBuffer(audioBuffer);
+      if (progressCb) progressCb(1);
+      if (!seq || !Array.isArray(seq.notes)) return [];
+      const raw = seq.notes.filter((n) => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH).map((n) => ({
+        t0: Number(n.startTime) || 0,
+        t1: Number(n.endTime) || 0,
+        pitch: n.pitch
+      })).filter((n) => n.t1 > n.t0);
+      return _pianoTrimSustain(raw);
+    }
+    const _PIANO_MAX_NOTE_S = 1.2;
+    const _PIANO_REONSET_GAP_S = 0.06;
+    const _PIANO_MIN_NOTE_S = 0.05;
+    const _PIANO_NEIGHBOR_GUARD_S = 0.1;
+    function _pianoTrimSustain(notes) {
+      if (!Array.isArray(notes) || notes.length === 0) return notes;
+      const byPitch = /* @__PURE__ */ new Map();
+      for (const n of notes) {
+        let arr = byPitch.get(n.pitch);
+        if (!arr) {
+          arr = [];
+          byPitch.set(n.pitch, arr);
+        }
+        arr.push(n);
+      }
+      for (const arr of byPitch.values()) arr.sort((a, b) => a.t0 - b.t0);
+      const onsetsByPitch = /* @__PURE__ */ new Map();
+      for (const [p, arr] of byPitch.entries()) onsetsByPitch.set(p, arr.map((n) => n.t0));
+      const firstOnsetAfter = (pitch, after) => {
+        const arr = onsetsByPitch.get(pitch);
+        if (!arr) return Infinity;
+        for (const t of arr) if (t > after) return t;
+        return Infinity;
+      };
+      const out = [];
+      for (const arr of byPitch.values()) {
+        for (let i = 0; i < arr.length; i++) {
+          const n = arr[i];
+          const nextSame = arr[i + 1];
+          let t1 = Math.min(n.t1, n.t0 + _PIANO_MAX_NOTE_S);
+          if (nextSame && nextSame.t0 - n.t0 > _PIANO_MIN_NOTE_S) {
+            t1 = Math.min(t1, nextSame.t0 - _PIANO_REONSET_GAP_S);
+          }
+          const guardedAfter = n.t0 + _PIANO_NEIGHBOR_GUARD_S;
+          const nbLow = firstOnsetAfter(n.pitch - 1, guardedAfter);
+          const nbHigh = firstOnsetAfter(n.pitch + 1, guardedAfter);
+          const nb = Math.min(nbLow, nbHigh);
+          if (nb < Infinity) t1 = Math.min(t1, nb - _PIANO_REONSET_GAP_S);
+          if (t1 - n.t0 < _PIANO_MIN_NOTE_S) t1 = n.t0 + _PIANO_MIN_NOTE_S;
+          out.push({ t0: n.t0, t1, pitch: n.pitch });
+        }
+      }
+      out.sort((a, b) => a.t0 - b.t0 || a.pitch - b.pitch);
+      return out;
+    }
+    function _pianoFindCurrentTrack() {
+      const tracks = getPlayerTracks();
+      if (!Array.isArray(tracks)) return null;
+      const id = getCurrentTrackId();
+      return tracks.find((t) => t.id === id) || null;
+    }
+    async function _pianoAnalyzeCurrentTrack() {
+      const trackId = getCurrentTrackId();
+      if (trackId == null) {
+        _pianoSetLoading(null);
+        return;
+      }
+      const memHit = _pianoCache.get(trackId);
+      if (memHit) {
+        _pianoInstallNotes(trackId, memHit);
+        _pianoSetWarning(_pianoIsUnreliable(memHit));
+        _pianoSetLoading(null);
+        return;
+      }
+      const myToken = ++_pianoAnalysisToken;
+      const groupId = getPlayerGroupId();
+      try {
+        const row = await getCachedTrackRecord(groupId, trackId);
+        if (myToken !== _pianoAnalysisToken) return;
+        if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0 && row.pianoNotesVersion === _PIANO_NOTES_VERSION) {
+          _pianoCache.set(trackId, row.pianoNotes);
+          _pianoInstallNotes(trackId, row.pianoNotes);
+          _pianoSetWarning(_pianoIsUnreliable(row.pianoNotes));
+          _pianoSetLoading(null);
+          return;
+        }
+      } catch (_) {
+      }
+      if (myToken !== _pianoAnalysisToken) return;
+      try {
+        await _pianoLoadEngines();
+      } catch (e) {
+        if (myToken !== _pianoAnalysisToken) return;
+        console.warn("[piano] engine load failed:", e);
+        _pianoSetLoading("Could not load piano engine. Check connection.");
+        return;
+      }
+      if (myToken !== _pianoAnalysisToken) return;
+      _pianoSetLoading("Decoding audio\u2026");
+      const src = audio.currentSrc || audio.src;
+      if (!src) {
+        _pianoSetLoading(null);
+        return;
+      }
+      let ctx = null, audioBuffer = null;
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error("fetch " + res.status);
+        const buf = await res.arrayBuffer();
+        if (myToken !== _pianoAnalysisToken) return;
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        audioBuffer = await ctx.decodeAudioData(buf);
+      } catch (e) {
+        if (myToken !== _pianoAnalysisToken) return;
+        console.warn("[piano] audio decode failed:", e);
+        _pianoSetLoading("Could not decode audio.");
+        return;
+      } finally {
+        if (ctx && ctx.close) ctx.close().catch(() => {
+        });
+      }
+      if (myToken !== _pianoAnalysisToken) return;
+      let notes;
+      try {
+        _pianoSetLoading("Transcribing piano\u2026");
+        notes = await _pianoTranscribe(audioBuffer, () => {
+          if (myToken !== _pianoAnalysisToken) return;
+        });
+      } catch (e) {
+        if (myToken !== _pianoAnalysisToken) return;
+        console.warn("[piano] transcription failed:", e);
+        _pianoSetLoading("Transcription failed.");
+        return;
+      }
+      if (myToken !== _pianoAnalysisToken) return;
+      _pianoCache.set(trackId, notes);
+      try {
+        updateTrackPianoNotes(groupId, trackId, notes, { track: _pianoFindCurrentTrack(), pianoNotesVersion: _PIANO_NOTES_VERSION });
+      } catch (_) {
+      }
+      _pianoSetWarning(_pianoIsUnreliable(notes, audioBuffer.duration));
+      _pianoInstallNotes(trackId, notes);
+      _pianoSetLoading(null);
+      console.log(
+        "[piano] transcribed",
+        trackId,
+        "\u2192",
+        notes.length,
+        "notes (",
+        (notes.length / Math.max(1, audioBuffer.duration)).toFixed(2),
+        "/s )"
+      );
+    }
+    function _pianoIsUnreliable(notes, dur) {
+      if (!Array.isArray(notes)) return true;
+      if (notes.length < 10) return true;
+      if (dur && notes.length / dur < 0.3) return true;
+      return false;
+    }
+    function _pianoInstallNotes(trackId, notes) {
+      if (getCurrentTrackId() !== trackId) return;
+      _pianoNotes = notes;
+      _pianoNextIdx = 0;
+    }
+    function _pianoRoundRect(ctx, x, y, w, h, r) {
+      r = Math.max(0, Math.min(r, w / 2, h / 2));
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+    function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys) {
+      const layout = _pianoKeyboardLayout.layout;
+      for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
+        const k = layout.get(m);
+        if (!k || !k.isWhite) continue;
+        const isActive = activeKeys.has(m);
+        ctx.fillStyle = isActive ? "#7eb6f0" : "#f0eee5";
+        ctx.fillRect(k.x, kbTop, k.w, kbH);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+        ctx.fillRect(k.x + k.w - 0.5, kbTop, 0.5, kbH);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.20)";
+        ctx.fillRect(k.x, kbTop + kbH - 4, k.w, 4);
+      }
+      const blackH = kbH * 0.62;
+      for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
+        const k = layout.get(m);
+        if (!k || k.isWhite) continue;
+        const isActive = activeKeys.has(m);
+        const grad = ctx.createLinearGradient(0, kbTop, 0, kbTop + blackH);
+        if (isActive) {
+          grad.addColorStop(0, "#7eb6f0");
+          grad.addColorStop(1, "#3d6c9c");
+        } else {
+          grad.addColorStop(0, "#1c1c1c");
+          grad.addColorStop(1, "#070707");
+        }
+        ctx.fillStyle = grad;
+        ctx.fillRect(k.x, kbTop, k.w, blackH);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+        ctx.fillRect(k.x, kbTop, k.w, 2);
+      }
+    }
+    function _pianoTick() {
+      _pianoRafId = requestAnimationFrame(_pianoTick);
+      if (!_pianoCtx || !_pianoKeyboardLayout) return;
+      const w = pianoCanvas.clientWidth;
+      const h = pianoCanvas.clientHeight;
+      const ctx = _pianoCtx;
+      const kbH = h * _PIANO_KEYBOARD_HEIGHT_FRAC;
+      const kbTop = h - kbH;
+      const lookAhead = _PIANO_LOOK_AHEAD_S;
+      const pps = kbTop / lookAhead;
+      ctx.clearRect(0, 0, w, h);
+      const bg = ctx.createLinearGradient(0, 0, 0, kbTop);
+      bg.addColorStop(0, "#070910");
+      bg.addColorStop(1, "#11151e");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, kbTop);
+      ctx.fillStyle = "rgba(82, 136, 193, 0.10)";
+      ctx.fillRect(0, kbTop - 10, w, 10);
+      const activeKeys = /* @__PURE__ */ new Set();
+      if (_pianoNotes && _pianoNotes.length) {
+        const t = audio.currentTime;
+        const layout = _pianoKeyboardLayout.layout;
+        for (let i = 0; i < _pianoNotes.length; i++) {
+          const n = _pianoNotes[i];
+          if (t > n.t1 + 0.05) continue;
+          if (t < n.t0 - lookAhead) continue;
+          const k = layout.get(n.pitch);
+          if (!k) continue;
+          if (n.t0 <= t && t <= n.t1) activeKeys.add(n.pitch);
+          const yBottom = kbTop + (t - n.t0) * pps;
+          const yTop = yBottom - (n.t1 - n.t0) * pps;
+          const drawBottom = Math.min(yBottom, kbTop);
+          const drawTop = Math.max(yTop, 0);
+          if (drawBottom <= 0 || drawTop >= kbTop) continue;
+          const drawH = drawBottom - drawTop;
+          if (drawH < 1) continue;
+          const inset = k.isWhite ? 2 : 1;
+          const x = k.x + inset;
+          const ww = Math.max(1, k.w - inset * 2);
+          const gr = ctx.createLinearGradient(0, drawTop, 0, drawBottom);
+          if (k.isWhite) {
+            gr.addColorStop(0, "#9ec8f5");
+            gr.addColorStop(1, "#3a6595");
+          } else {
+            gr.addColorStop(0, "#6ea4d8");
+            gr.addColorStop(1, "#274c75");
+          }
+          ctx.fillStyle = gr;
+          _pianoRoundRect(ctx, x, drawTop, ww, drawH, 4);
+          ctx.fill();
+          ctx.fillStyle = "rgba(255, 255, 255, 0.30)";
+          ctx.fillRect(x + 1, drawTop, ww - 2, 1);
+        }
+      }
+      _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
+      if (audio.duration > 0 && pianoSeekbarFill) {
+        const pct = Math.max(0, Math.min(1, audio.currentTime / audio.duration));
+        const pctStr = (pct * 100).toFixed(2) + "%";
+        pianoSeekbarFill.style.width = pctStr;
+        if (pianoSeekbarHandle) pianoSeekbarHandle.style.left = pctStr;
+      }
+    }
+    async function enter() {
+      if (!pianoOverlay) return;
+      if (pianoOverlay.classList.contains("open")) return;
+      pianoOverlay.classList.add("open");
+      pianoOverlay.setAttribute("aria-hidden", "false");
+      _pianoSetWarning(false);
+      _pianoSetLoading("Loading piano model\u2026");
+      _attachPianoGestures();
+      _pianoApplySize();
+      try {
+        requestWakeLock();
+      } catch (_) {
+      }
+      if (_pianoRafId == null) _pianoRafId = requestAnimationFrame(_pianoTick);
+      _pianoAnalyzeCurrentTrack();
+    }
+    function exit() {
+      if (!pianoOverlay) return;
+      if (!pianoOverlay.classList.contains("open")) return;
+      pianoOverlay.classList.remove("open");
+      pianoOverlay.classList.remove("piano-loading");
+      pianoOverlay.classList.remove("piano-warn");
+      pianoOverlay.setAttribute("aria-hidden", "true");
+      if (_pianoRafId != null) {
+        cancelAnimationFrame(_pianoRafId);
+        _pianoRafId = null;
+      }
+      _detachPianoGestures();
+      _pianoClearHold();
+    }
+    function _pianoClearHold() {
+      if (_pianoHoldTimer != null) {
+        clearTimeout(_pianoHoldTimer);
+        _pianoHoldTimer = null;
+      }
+      _pianoHoldStart = null;
+    }
+    function _pianoOnPointerDown(e) {
+      _pianoClearHold();
+      _pianoHoldStart = { x: e.clientX, y: e.clientY };
+      _pianoHoldTimer = setTimeout(() => {
+        _pianoHoldTimer = null;
+        exit();
+      }, _PIANO_HOLD_MS);
+    }
+    function _pianoOnPointerMove(e) {
+      if (!_pianoHoldStart) return;
+      const dx = e.clientX - _pianoHoldStart.x;
+      const dy = e.clientY - _pianoHoldStart.y;
+      if (dx * dx + dy * dy > _PIANO_HOLD_MOVE_PX * _PIANO_HOLD_MOVE_PX) _pianoClearHold();
+    }
+    function _pianoOnPointerUp() {
+      _pianoClearHold();
+    }
+    function _attachPianoGestures() {
+      pianoOverlay.addEventListener("pointerdown", _pianoOnPointerDown);
+      pianoOverlay.addEventListener("pointermove", _pianoOnPointerMove);
+      pianoOverlay.addEventListener("pointerup", _pianoOnPointerUp);
+      pianoOverlay.addEventListener("pointercancel", _pianoOnPointerUp);
+      pianoOverlay.addEventListener("pointerleave", _pianoOnPointerUp);
+    }
+    function _detachPianoGestures() {
+      pianoOverlay.removeEventListener("pointerdown", _pianoOnPointerDown);
+      pianoOverlay.removeEventListener("pointermove", _pianoOnPointerMove);
+      pianoOverlay.removeEventListener("pointerup", _pianoOnPointerUp);
+      pianoOverlay.removeEventListener("pointercancel", _pianoOnPointerUp);
+      pianoOverlay.removeEventListener("pointerleave", _pianoOnPointerUp);
+    }
+    btnPiano?.addEventListener("click", enter);
+    window.addEventListener("resize", () => {
+      if (pianoOverlay?.classList.contains("open")) _pianoApplySize();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (pianoOverlay?.classList.contains("open")) {
+        exit();
+        e.preventDefault();
+      }
+    });
+    audio.addEventListener("loadstart", () => {
+      _pianoNotes = null;
+      _pianoNextIdx = 0;
+      _pianoAnalysisToken++;
+      if (pianoOverlay?.classList.contains("open")) _pianoAnalyzeCurrentTrack();
+    });
+    function _pianoSeekFromEvent(e) {
+      if (!audio.duration || !pianoSeekbar) return;
+      const rect = pianoSeekbar.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      audio.currentTime = fraction * audio.duration;
+    }
+    function _pianoOnSeekDown(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      _pianoSeeking = true;
+      try {
+        pianoSeekbar.setPointerCapture?.(e.pointerId);
+      } catch (_) {
+      }
+      _pianoSeekFromEvent(e);
+    }
+    function _pianoOnSeekMove(e) {
+      if (!_pianoSeeking) return;
+      e.stopPropagation();
+      _pianoSeekFromEvent(e);
+    }
+    function _pianoOnSeekUp(e) {
+      if (!_pianoSeeking) return;
+      e.stopPropagation();
+      _pianoSeeking = false;
+      try {
+        pianoSeekbar.releasePointerCapture?.(e.pointerId);
+      } catch (_) {
+      }
+    }
+    pianoSeekbar?.addEventListener("pointerdown", _pianoOnSeekDown);
+    pianoSeekbar?.addEventListener("pointermove", _pianoOnSeekMove);
+    pianoSeekbar?.addEventListener("pointerup", _pianoOnSeekUp);
+    pianoSeekbar?.addEventListener("pointercancel", _pianoOnSeekUp);
+    return { enter, exit };
+  }
+  var import_process12;
+  var init_piano_roll = __esm({
+    "src/visualizers/piano-roll.js"() {
+      init_define_process_env();
+      import_process12 = __toESM(require_process());
+      init_telegram();
+    }
+  });
+
   // src/main.js
   var require_main = __commonJS({
     "src/main.js"() {
       init_define_process_env();
-      var import_process7 = __toESM(require_process());
+      var import_process13 = __toESM(require_process());
       init_telegram();
       init_lyrics();
       init_artwork();
-      var import_aubiojs = __toESM(require_aubio());
-      var import_butterchurn = __toESM(require_butterchurn());
-      var import_butterchurnPresetsMinimal_min = __toESM(require_butterchurnPresetsMinimal_min());
+      init_utils();
+      init_picker();
+      init_recognize();
+      init_hypnotise();
+      init_butterchurn();
+      init_piano_roll();
       var browseGroupId = null;
       var browseGroupTitle = "";
       var browseTracks = [];
@@ -82361,16 +83801,6 @@ ${JSON.stringify(state)}`;
       var searchTracks = [];
       var _searchAbort = null;
       var pendingAddTrack = null;
-      var _SHARE_XOR_KEY = 5913726;
-      function _encodeTrackId(msgId) {
-        const encoded = (msgId ^ _SHARE_XOR_KEY) >>> 0;
-        return encoded.toString(36);
-      }
-      function _decodeTrackId(code) {
-        const decoded = parseInt(code, 36);
-        if (isNaN(decoded)) return null;
-        return (decoded ^ _SHARE_XOR_KEY) >>> 0;
-      }
       var $ = (id) => document.getElementById(id);
       var audio = $("audio-element");
       var sidePanel = $("side-panel");
@@ -82645,12 +84075,6 @@ ${JSON.stringify(state)}`;
         const ua = navigator.userAgent;
         return /iPad|iPhone|iPod/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
       }
-      function _formatBytes(n) {
-        if (!n) return "0 B";
-        const units = ["B", "KB", "MB", "GB", "TB"];
-        const i = Math.min(units.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
-        return (n / Math.pow(1024, i)).toFixed(i >= 2 ? 1 : 0) + " " + units[i];
-      }
       var storageUsageEl = $("storage-usage");
       var WARN_ICON = '<svg class="storage-warn-icon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2L1 21h22L12 2zm0 15h-.01M12 9v5"/></svg>';
       async function updateStorageUsage() {
@@ -82666,12 +84090,12 @@ ${JSON.stringify(state)}`;
           try {
             const { usage = 0, quota = 0 } = await navigator.storage.estimate();
             if (quota) {
-              parts.push(`${_formatBytes(usage)} / ${_formatBytes(quota)}`);
+              parts.push(`${formatBytes(usage)} / ${formatBytes(quota)}`);
               const pct = usage / quota;
               storageUsageEl.classList.toggle("warn", pct >= 0.7 && pct < 0.9);
               storageUsageEl.classList.toggle("crit", pct >= 0.9);
             } else {
-              parts.push(_formatBytes(usage));
+              parts.push(formatBytes(usage));
             }
           } catch {
           }
@@ -82857,191 +84281,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       document.addEventListener("click", (e) => {
         if (searchOverlay.classList.contains("open") && !searchOverlay.contains(e.target) && !btnSearch.contains(e.target)) closeSearch();
       });
-      var btnRecognize = $("btn-recognize");
-      var recognizeOverlay = $("recognize-overlay");
-      var btnRecognizeRecord = $("btn-recognize-record");
-      var recognizeStatus = $("recognize-status");
-      var recognizeResult = $("recognize-result");
-      var _recMediaRec = null;
-      var _recStream = null;
-      var _recAutoStopTimer = null;
-      function openRecognize() {
-        recognizeResult.innerHTML = "";
-        recognizeStatus.textContent = "Tap to listen";
-        btnRecognizeRecord.classList.remove("recording");
-        recognizeOverlay.classList.add("open");
-      }
-      function closeRecognize() {
-        recognizeOverlay.classList.remove("open");
-        _recStopRecording(true);
-      }
-      btnRecognize.addEventListener("click", () => {
-        if (recognizeOverlay.classList.contains("open")) {
-          closeRecognize();
-          return;
-        }
-        openRecognize();
-        _recStartRecording();
-      });
-      $("recognize-overlay-close").addEventListener("click", closeRecognize);
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && recognizeOverlay.classList.contains("open")) closeRecognize();
-      });
-      document.addEventListener("click", (e) => {
-        if (recognizeOverlay.classList.contains("open") && !recognizeOverlay.contains(e.target) && !btnRecognize.contains(e.target)) closeRecognize();
-      });
-      btnRecognizeRecord.addEventListener("click", async () => {
-        if (_recMediaRec?.state === "recording") {
-          _recStopRecording();
-          return;
-        }
-        await _recStartRecording();
-      });
-      async function _recStartRecording() {
-        recognizeResult.innerHTML = "";
-        recognizeStatus.textContent = "Listening\u2026";
-        btnRecognizeRecord.classList.add("recording");
-        let permState = null;
-        try {
-          const status = await navigator.permissions.query({ name: "microphone" });
-          permState = status.state;
-        } catch {
-        }
-        if (permState === "denied") {
-          _showMicBlockedHelp();
-          btnRecognizeRecord.classList.remove("recording");
-          return;
-        }
-        try {
-          _recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        } catch (e) {
-          const name = e && e.name;
-          if (name === "NotAllowedError" || name === "SecurityError") {
-            _showMicBlockedHelp();
-          } else if (name === "NotFoundError" || name === "OverconstrainedError") {
-            recognizeStatus.textContent = "No microphone found on this device.";
-          } else {
-            recognizeStatus.textContent = "Could not access microphone. Tap to try again.";
-          }
-          btnRecognizeRecord.classList.remove("recording");
-          return;
-        }
-        const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
-        _recMediaRec = new MediaRecorder(_recStream, mime ? { mimeType: mime } : {});
-        const chunks = [];
-        _recMediaRec.ondataavailable = (e) => {
-          if (e.data?.size > 0) chunks.push(e.data);
-        };
-        _recMediaRec.onstop = () => _recUpload(chunks, mime || (chunks[0]?.type || "audio/webm"));
-        _recMediaRec.start();
-        clearTimeout(_recAutoStopTimer);
-        _recAutoStopTimer = setTimeout(() => {
-          if (_recMediaRec?.state === "recording") _recMediaRec.stop();
-        }, 7e3);
-      }
-      function _showMicBlockedHelp() {
-        const ua = navigator.userAgent || "";
-        const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-        let steps;
-        if (/iPhone|iPad|iPod/i.test(ua)) {
-          steps = standalone ? "iOS Settings &rarr; <b>Music Player</b> &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>." : "Safari &rarr; tap <b>aA</b> in the address bar &rarr; <b>Website Settings</b> &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.";
-        } else if (/Android/i.test(ua)) {
-          steps = standalone ? "Android Settings &rarr; Apps &rarr; <b>Music Player</b> &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then come back and tap <b>Try again</b>." : "Chrome &rarr; tap the <b>lock icon</b> next to the URL &rarr; Permissions &rarr; Microphone &rarr; <b>Allow</b>, then tap <b>Try again</b>.";
-        } else {
-          steps = "Click the <b>lock icon</b> in the address bar &rarr; Site settings &rarr; Microphone &rarr; <b>Allow</b>, then click <b>Try again</b>.";
-        }
-        recognizeStatus.innerHTML = "";
-        recognizeResult.innerHTML = `
-        <div class="mic-blocked">
-            <div class="mic-blocked-title">Microphone is blocked</div>
-            <div class="mic-blocked-steps">${steps}</div>
-            <button id="mic-blocked-retry" class="text-btn accent">Try again</button>
-        </div>
-    `;
-        const btn = document.getElementById("mic-blocked-retry");
-        if (btn) btn.addEventListener("click", () => {
-          recognizeResult.innerHTML = "";
-          _recStartRecording();
-        });
-      }
-      function _recStopRecording(silent = false) {
-        clearTimeout(_recAutoStopTimer);
-        _recAutoStopTimer = null;
-        if (_recMediaRec && _recMediaRec.state === "recording") {
-          if (silent) {
-            _recMediaRec.onstop = null;
-            _recMediaRec.stop();
-          } else {
-            _recMediaRec.stop();
-          }
-        }
-        _recStream?.getTracks().forEach((t) => t.stop());
-        _recStream = null;
-        if (silent) {
-          btnRecognizeRecord.classList.remove("recording");
-          _recMediaRec = null;
-        }
-      }
-      async function _recUpload(chunks, mime) {
-        btnRecognizeRecord.classList.remove("recording");
-        _recStream?.getTracks().forEach((t) => t.stop());
-        _recStream = null;
-        _recMediaRec = null;
-        if (chunks.length === 0) {
-          recognizeStatus.textContent = "No audio captured. Tap to try again.";
-          return;
-        }
-        const blob = new Blob(chunks, { type: mime });
-        recognizeStatus.textContent = "Identifying\u2026";
-        try {
-          const fd = new FormData();
-          fd.append("audio", blob, "recording.webm");
-          const res = await fetch("/api/recognize", { method: "POST", body: fd });
-          if (!res.ok) {
-            if (res.status === 429) {
-              recognizeStatus.textContent = "Too many requests. Wait a moment and try again.";
-              return;
-            }
-            throw new Error(`server ${res.status}`);
-          }
-          const json = await res.json();
-          if (!json.recognized) {
-            recognizeStatus.textContent = "No match found. Tap to try again.";
-            return;
-          }
-          recognizeStatus.textContent = "";
-          _renderRecognizeResult(json);
-        } catch (e) {
-          console.warn("[recognize] upload failed", e);
-          recognizeStatus.textContent = "Recognition failed. Tap to try again.";
-        }
-      }
-      function _renderRecognizeResult(json) {
-        const title = json.title || "";
-        const artist = json.artist || "";
-        const cover = json.cover ? `<img class="recognize-cover" src="${json.cover}" alt="">` : "";
-        recognizeResult.innerHTML = `
-        <div class="recognize-tap" role="button" tabindex="0">
-            ${cover}
-            <div class="recognize-title">${escapeHtml(title)}</div>
-            <div class="recognize-artist">${escapeHtml(artist)}</div>
-            <div class="recognize-hint">Tap to search in your library</div>
-        </div>
-    `;
-        const tap = recognizeResult.querySelector(".recognize-tap");
-        const runSearch = (e) => {
-          if (e) e.stopPropagation();
-          const q = `${title} ${artist}`.trim();
-          closeRecognize();
-          openSearch();
-          searchQuery.value = q;
-          setTimeout(() => performSearch(), 50);
-        };
-        tap.addEventListener("click", runSearch);
-        tap.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") runSearch(e);
-        });
-      }
       searchQuery.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -84646,95 +85885,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         } catch {
         }
       }
-      function _pickerState() {
-        return {
-          chatsCache: [],
-          // recent dialogs preloaded by the modal opener
-          remoteHits: [],
-          // server-side search results for `remoteQuery`
-          remoteQuery: "",
-          // the lower-cased query those hits came from
-          searching: false,
-          // true while a debounced API call is in flight
-          debounce: null,
-          token: 0
-        };
-      }
-      function _pickerVisibleList(state, query) {
-        const q = (query || "").trim().toLowerCase();
-        if (!q) return state.chatsCache;
-        if (state.remoteQuery === q) return state.remoteHits;
-        return [];
-      }
-      function _pickerReset(state) {
-        state.remoteHits = [];
-        state.remoteQuery = "";
-        state.searching = false;
-        if (state.debounce) {
-          clearTimeout(state.debounce);
-          state.debounce = null;
-        }
-        state.token = 0;
-      }
-      function _pickerRenderRow(chat, opts) {
-        const { multiSelect, isSelected, showTypeTag, onClick } = opts;
-        const el = document.createElement("div");
-        el.className = (multiSelect ? "coplay-chat-item" : "share-chat-item") + (isSelected ? " selected" : "");
-        const initial = (chat.title.trim()[0] || "?").toUpperCase();
-        const sub = chat.username ? `@${chat.username}` : "";
-        const checkbox = multiSelect ? `
-        <div class="coplay-chat-check">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>` : "";
-        let typeTag = "";
-        if (showTypeTag) {
-          const label = chat.kind === "user" ? "DM" : chat.kind === "bot" ? "Bot" : chat.kind === "channel" ? "Channel" : "Group";
-          typeTag = `<div class="picker-row-type">${escapeHtml(label)}</div>`;
-        }
-        el.innerHTML = `
-        ${checkbox}
-        <div class="picker-row-avatar">${escapeHtml(initial)}</div>
-        <div class="picker-row-title">
-            <div class="picker-row-name">${escapeHtml(chat.title)}</div>
-            ${sub ? `<div class="picker-row-sub">${escapeHtml(sub)}</div>` : ""}
-        </div>
-        ${typeTag}
-    `;
-        el.addEventListener("click", () => onClick(chat, el));
-        return el;
-      }
-      function _pickerOnSearchInput(state, value, kinds, render) {
-        if (state.debounce) clearTimeout(state.debounce);
-        const q = (value || "").trim();
-        if (!q) {
-          state.remoteHits = [];
-          state.remoteQuery = "";
-          state.searching = false;
-          state.token = 0;
-          render();
-          return;
-        }
-        state.searching = true;
-        render();
-        const token = ++state.token;
-        state.debounce = setTimeout(async () => {
-          try {
-            const hits = await searchContactsByQuery(q, { kinds, limit: 30 });
-            if (token !== state.token) return;
-            state.remoteHits = hits;
-            state.remoteQuery = q.toLowerCase();
-          } catch (e) {
-            if (token !== state.token) return;
-            state.remoteHits = [];
-            state.remoteQuery = q.toLowerCase();
-          } finally {
-            if (token === state.token) {
-              state.searching = false;
-              render();
-            }
-          }
-        }, 220);
-      }
       var btnShare = $("btn-share");
       var shareModal = $("share-modal");
       var shareLinkRow = $("share-link-row");
@@ -84744,14 +85894,14 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var shareCancelBtn = $("share-cancel");
       var _shareCurrentLink = null;
       var _shareCurrentTrack = null;
-      var _share = _pickerState();
+      var _share = pickerState();
       var _SHARE_KINDS = ["user", "bot", "group", "channel"];
       function _shareCaption() {
         return `<a href="${escapeHtml(_shareCurrentLink)}">Listen on Telemusic app</a>`;
       }
       function _renderShareChats() {
         const rawQ = (shareChatSearch?.value || "").trim();
-        const list = _pickerVisibleList(_share, rawQ);
+        const list = pickerVisibleList(_share, rawQ);
         shareChatsEl.innerHTML = "";
         if (list.length === 0) {
           const text = rawQ ? _share.searching ? "Searching\u2026" : "No chats found" : "No chats found";
@@ -84759,7 +85909,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           return;
         }
         for (const chat of list) {
-          const el = _pickerRenderRow(chat, {
+          const el = pickerRenderRow(chat, {
             multiSelect: false,
             isSelected: false,
             showTypeTag: true,
@@ -84802,7 +85952,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         shareChatsEl.innerHTML = "";
         _shareCurrentLink = null;
         _shareCurrentTrack = null;
-        _pickerReset(_share);
+        pickerReset(_share);
         _share.chatsCache = [];
       }
       async function _copyShareLink() {
@@ -84855,7 +86005,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         const appUrl = window.location.origin + window.location.pathname;
         const currentSec = Math.floor(audio.currentTime || 0);
-        return `${appUrl}?track=${_encodeTrackId(sharedMsgId)}&t=${currentSec}`;
+        return `${appUrl}?track=${encodeTrackId(sharedMsgId)}&t=${currentSec}`;
       }
       btnShare.addEventListener("click", async () => {
         if (playerTracks.length === 0 || currentTrackIndex < 0) return;
@@ -84877,7 +86027,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       shareLinkRow.addEventListener("click", _copyShareLink);
       shareCancelBtn.addEventListener("click", _closeShareDialog);
       shareModal.querySelector(".modal-backdrop")?.addEventListener("click", _closeShareDialog);
-      shareChatSearch.addEventListener("input", (e) => _pickerOnSearchInput(_share, e.target.value, _SHARE_KINDS, _renderShareChats));
+      shareChatSearch.addEventListener("input", (e) => pickerOnSearchInput(_share, e.target.value, _SHARE_KINDS, _renderShareChats));
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && shareModal.style.display === "flex") _closeShareDialog();
       });
@@ -84905,7 +86055,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var coplayFabBadge = $("coplay-fab-badge");
       var _coplaySession = null;
       var _coplayInviteList = [];
-      var _coplay = _pickerState();
+      var _coplay = pickerState();
       var _COPLAY_KINDS = ["user"];
       var _pendingInvites = /* @__PURE__ */ new Map();
       var _coplayMyUserId = null;
@@ -85022,12 +86172,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         coplayChatsEl.innerHTML = "";
         coplaySearchInput.value = "";
         _coplayInviteList = [];
-        _pickerReset(_coplay);
+        pickerReset(_coplay);
         _coplay.chatsCache = [];
       }
       function _coplayRenderChats() {
         const rawQ = (coplaySearchInput?.value || "").trim();
-        const list = _pickerVisibleList(_coplay, rawQ);
+        const list = pickerVisibleList(_coplay, rawQ);
         const visibleIds = new Set(list.map((c) => c.id));
         const stickySelected = _coplayInviteList.filter((c) => !visibleIds.has(c.id));
         coplayChatsEl.innerHTML = "";
@@ -85038,7 +86188,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         const renderRow = (chat) => {
           const selected = !!_coplayInviteList.find((c) => c.id === chat.id);
-          const el = _pickerRenderRow(chat, {
+          const el = pickerRenderRow(chat, {
             multiSelect: true,
             isSelected: selected,
             showTypeTag: false,
@@ -85447,7 +86597,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       btnCoplay.addEventListener("click", _coplayOpenPicker);
       coplayCancelBtn.addEventListener("click", _coplayCloseModal);
       coplayModal.querySelector(".modal-backdrop")?.addEventListener("click", _coplayCloseModal);
-      coplaySearchInput.addEventListener("input", (e) => _pickerOnSearchInput(_coplay, e.target.value, _COPLAY_KINDS, _coplayRenderChats));
+      coplaySearchInput.addEventListener("input", (e) => pickerOnSearchInput(_coplay, e.target.value, _COPLAY_KINDS, _coplayRenderChats));
       coplayStartBtn.addEventListener("click", _coplayStartHost);
       coplayEndBtn.addEventListener("click", () => _coplayEndHost());
       coplayLeaveBtn.addEventListener("click", () => _coplayLeaveFollower("left"));
@@ -85618,27 +86768,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         } else if (e.code === "ArrowDown" || e.code === "KeyN") nextTrack();
         else if (e.code === "ArrowUp" || e.code === "KeyP") prevTrack();
       });
-      function formatTime(s) {
-        if (!s || isNaN(s)) return "0:00";
-        s = Math.floor(s);
-        return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-      }
-      function escapeHtml(str) {
-        const d = document.createElement("div");
-        d.textContent = str;
-        return d.innerHTML;
-      }
-      function showToast(msg) {
-        let toast = document.getElementById("toast");
-        if (!toast) {
-          toast = document.createElement("div");
-          toast.id = "toast";
-          document.body.appendChild(toast);
-        }
-        toast.textContent = msg;
-        toast.classList.add("visible");
-        setTimeout(() => toast.classList.remove("visible"), 2e3);
-      }
       function saveSession() {
         const session = {
           // UI state
@@ -86076,9 +87205,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const params = new URLSearchParams(window.location.search);
         const trackCode = params.get("track");
         const sharedTime = parseInt(params.get("t") || "0", 10);
-        const sharedMsgId = trackCode ? _decodeTrackId(trackCode) : null;
+        const sharedMsgId = trackCode ? decodeTrackId(trackCode) : null;
         const coplayCode = params.get("coplay");
-        const coplayMsgId = coplayCode ? _decodeTrackId(coplayCode) : null;
+        const coplayMsgId = coplayCode ? decodeTrackId(coplayCode) : null;
         if (sharedMsgId) {
           history.replaceState(null, "", window.location.pathname);
           try {
@@ -86169,1047 +87298,29 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           installBanner.style.display = "flex";
         }
       }
-      var btnHypnotise = $("btn-hypnotise");
-      var hypnotiseOverlay = $("hypnotise-overlay");
-      var hypnotiseFlashEl = $("hypnotise-flash");
-      var _hypRafId = null;
-      var _hypFlash = 0;
-      var _hypBeatCache = /* @__PURE__ */ new Map();
-      var _hypAnalysisToken = 0;
-      var _hypBeats = null;
-      var _hypNextBeatIdx = 0;
-      var _HYP_LATENCY_OFFSET = 0.06;
-      var _HYP_BEAT_DECAY = 0.18;
-      var _HYP_MIN_BEAT_GAP_S = 0.333;
-      function _hypThinOnsets(times, minGapS) {
-        if (!times || times.length === 0) return times;
-        const out = [times[0]];
-        for (let i = 1; i < times.length; i++) {
-          if (times[i] - out[out.length - 1] >= minGapS) out.push(times[i]);
-        }
-        return out;
-      }
-      var _hypHoldTimer = null;
-      var _hypHoldStart = null;
-      var _HYP_HOLD_MS = 600;
-      var _HYP_HOLD_MOVE_PX = 10;
-      function _hypSetLoading(on) {
-        if (!hypnotiseOverlay) return;
-        hypnotiseOverlay.classList.toggle("hyp-loading", !!on);
-      }
-      async function _hypAnalyzeCurrentTrack() {
-        const trackId = currentTrackId;
-        if (trackId == null) {
-          _hypSetLoading(false);
-          return;
-        }
-        const cached = _hypBeatCache.get(trackId);
-        if (cached) {
-          _hypInstallSchedule(trackId, cached);
-          _hypSetLoading(false);
-          return;
-        }
-        const myToken = ++_hypAnalysisToken;
-        const src = audio.currentSrc || audio.src;
-        if (!src) {
-          _hypSetLoading(false);
-          return;
-        }
-        let ctx = null;
-        try {
-          const res = await fetch(src);
-          if (!res.ok) throw new Error("fetch " + res.status);
-          const buf = await res.arrayBuffer();
-          if (myToken !== _hypAnalysisToken) return;
-          ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const audioBuffer = await ctx.decodeAudioData(buf);
-          if (myToken !== _hypAnalysisToken) return;
-          const rawBeatTimes = await _hypDetectOnsets(audioBuffer, () => myToken === _hypAnalysisToken);
-          if (myToken !== _hypAnalysisToken) return;
-          const beatTimes = _hypThinOnsets(rawBeatTimes, _HYP_MIN_BEAT_GAP_S);
-          const envelope = _hypComputeEnvelope(audioBuffer);
-          const dur = audioBuffer.duration;
-          const beatRate = beatTimes.length / Math.max(1, dur);
-          const data = { beatTimes, envelope, beatRate };
-          _hypBeatCache.set(trackId, data);
-          if (currentTrackId === trackId) _hypInstallSchedule(trackId, data);
-          console.log("[hypnotise] analyzed track", trackId, "\u2192", rawBeatTimes.length, "onsets,", beatTimes.length, "after thinning over", dur.toFixed(1), "s (avg", beatRate.toFixed(2), "/s)");
-        } catch (e) {
-          console.warn("[hypnotise] analysis failed for track", trackId, e);
-        } finally {
-          if (ctx && ctx.close) ctx.close().catch(() => {
-          });
-          if (myToken === _hypAnalysisToken) _hypSetLoading(false);
-        }
-      }
-      function _hypMakeLowpass(fc, sr, Q = 0.707) {
-        const omega = 2 * Math.PI * fc / sr;
-        const cs = Math.cos(omega), sn = Math.sin(omega);
-        const alpha = sn / (2 * Q);
-        const a0 = 1 + alpha;
-        return {
-          b0: (1 - cs) / 2 / a0,
-          b1: (1 - cs) / a0,
-          b2: (1 - cs) / 2 / a0,
-          a1: -2 * cs / a0,
-          a2: (1 - alpha) / a0
-        };
-      }
-      function _hypMakeHighpass(fc, sr, Q = 0.707) {
-        const omega = 2 * Math.PI * fc / sr;
-        const cs = Math.cos(omega), sn = Math.sin(omega);
-        const alpha = sn / (2 * Q);
-        const a0 = 1 + alpha;
-        return {
-          b0: (1 + cs) / 2 / a0,
-          b1: -(1 + cs) / a0,
-          b2: (1 + cs) / 2 / a0,
-          a1: -2 * cs / a0,
-          a2: (1 - alpha) / a0
-        };
-      }
-      function _hypRmsSeries(mono, stride, numSamples, biquad) {
-        const out = new Float32Array(numSamples);
-        let s1 = 0, s2 = 0;
-        let outIdx = 0, sumSq = 0, count = 0;
-        for (let i = 0; i < mono.length && outIdx < numSamples; i++) {
-          const x = mono[i];
-          let y;
-          if (biquad) {
-            y = biquad.b0 * x + s1;
-            s1 = biquad.b1 * x - biquad.a1 * y + s2;
-            s2 = biquad.b2 * x - biquad.a2 * y;
-          } else {
-            y = x;
-          }
-          sumSq += y * y;
-          count++;
-          if (count === stride) {
-            out[outIdx++] = Math.sqrt(sumSq / count);
-            sumSq = 0;
-            count = 0;
-          }
-        }
-        return out;
-      }
-      function _hypAttenuate(samples, attackAlpha, decayAlpha) {
-        const out = new Float32Array(samples.length);
-        let acc = samples[0] || 0;
-        out[0] = acc;
-        for (let i = 1; i < samples.length; i++) {
-          const x = samples[i];
-          const a = x > acc ? attackAlpha : decayAlpha;
-          acc += (x - acc) * a;
-          out[i] = acc;
-        }
-        return out;
-      }
-      function _hypBandStats(samples) {
-        const sorted = Float32Array.from(samples).sort();
-        const pct = (p) => sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor(sorted.length * p)))] || 0;
-        const lo = pct(0.1);
-        const hi = Math.max(pct(0.9), lo + 1e-3);
-        return { samples, lo, hi };
-      }
-      function _hypComputeEnvelope(audioBuffer) {
-        const ENV_HZ = 30;
-        const sr = audioBuffer.sampleRate;
-        const stride = Math.max(1, Math.floor(sr / ENV_HZ));
-        const ch0 = audioBuffer.getChannelData(0);
-        const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
-        const N = ch0.length;
-        const numSamples = Math.max(1, Math.floor(N / stride));
-        const mono = new Float32Array(N);
-        if (ch1) for (let i = 0; i < N; i++) mono[i] = (ch0[i] + ch1[i]) * 0.5;
-        else mono.set(ch0);
-        const lpBass = _hypMakeLowpass(200, sr);
-        const hpTreb = _hypMakeHighpass(4e3, sr);
-        const fullRaw = _hypRmsSeries(mono, stride, numSamples, null);
-        const bassRaw = _hypRmsSeries(mono, stride, numSamples, lpBass);
-        const trebRaw = _hypRmsSeries(mono, stride, numSamples, hpTreb);
-        const bassAtt = _hypAttenuate(bassRaw, 0.25, 0.04);
-        const trebAtt = _hypAttenuate(trebRaw, 0.3, 0.07);
-        return {
-          hz: ENV_HZ,
-          full: _hypBandStats(fullRaw),
-          bass: _hypBandStats(bassAtt),
-          treb: _hypBandStats(trebAtt)
-        };
-      }
-      var _aubioMod = null;
-      async function _hypGetAubio() {
-        if (_aubioMod) return _aubioMod;
-        _aubioMod = await (0, import_aubiojs.default)();
-        return _aubioMod;
-      }
-      async function _hypDetectOnsets(audioBuffer, stillValid) {
-        const sr = audioBuffer.sampleRate;
-        const Aubio = await _hypGetAubio();
-        if (stillValid && !stillValid()) return [];
-        const bufferSize = 1024;
-        const hopSize = 512;
-        const onset = new Aubio.Onset("specflux", bufferSize, hopSize, sr);
-        onset.setThreshold(0.25);
-        onset.setSilence(-45);
-        const ch0 = audioBuffer.getChannelData(0);
-        const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : null;
-        const N = ch0.length;
-        const onsets = [];
-        const chunk = new Float32Array(hopSize);
-        let hopCount = 0;
-        const yieldEvery = 2048;
-        for (let pos = 0; pos + hopSize <= N; pos += hopSize) {
-          if (ch1) {
-            for (let i = 0; i < hopSize; i++) chunk[i] = (ch0[pos + i] + ch1[pos + i]) * 0.5;
-          } else {
-            for (let i = 0; i < hopSize; i++) chunk[i] = ch0[pos + i];
-          }
-          if (onset.do(chunk)) onsets.push(onset.getLastS());
-          if ((++hopCount & yieldEvery - 1) === 0) {
-            await new Promise((r) => setTimeout(r, 0));
-            if (stillValid && !stillValid()) return [];
-          }
-        }
-        return onsets;
-      }
-      function _hypInstallSchedule(trackId, data) {
-        if (currentTrackId !== trackId) return;
-        _hypBeats = data;
-        _hypNextBeatIdx = 0;
-      }
-      function _hypTick() {
-        _hypRafId = requestAnimationFrame(_hypTick);
-        let target = 0;
-        if (!audio.paused && audio.readyState >= 2 && _hypBeats) {
-          const t = audio.currentTime - _HYP_LATENCY_OFFSET;
-          const env = _hypBeats.envelope;
-          if (env && env.bass) {
-            const idx = Math.max(0, Math.min(env.bass.samples.length - 1, Math.floor(t * env.hz)));
-            const bn = (b) => Math.max(0, Math.min(1, (b.samples[idx] - b.lo) / (b.hi - b.lo)));
-            const bassNorm = bn(env.bass);
-            const trebNorm = bn(env.treb);
-            target = 0.03 + 0.22 * bassNorm + 0.03 * trebNorm;
-          }
-          const beats = _hypBeats.beatTimes;
-          const rate = _hypBeats.beatRate || 1;
-          const decay = rate > 4 ? 0.07 : rate > 2 ? 0.11 : _HYP_BEAT_DECAY;
-          const peak = rate > 4 ? 0.65 : rate > 2 ? 0.85 : 1;
-          if (_hypNextBeatIdx > 0 && beats[_hypNextBeatIdx - 1] > t + 0.5) _hypNextBeatIdx = 0;
-          while (_hypNextBeatIdx < beats.length && beats[_hypNextBeatIdx] <= t) _hypNextBeatIdx++;
-          if (_hypNextBeatIdx > 0) {
-            const since = t - beats[_hypNextBeatIdx - 1];
-            if (since >= 0 && since < decay) {
-              target = Math.max(target, peak * (1 - since / decay));
-            }
-          }
-          if (_hypNextBeatIdx < beats.length) {
-            const until = beats[_hypNextBeatIdx] - t;
-            if (until >= 0 && until < 0.07) {
-              target = Math.max(target, 0.2 * (1 - until / 0.07));
-            }
-          }
-        }
-        const k = target > _hypFlash ? 0.55 : 0.12;
-        _hypFlash += (target - _hypFlash) * k;
-        const shaped = _hypFlash < 0.5 ? 4 * _hypFlash * _hypFlash * _hypFlash : 1 - 4 * (1 - _hypFlash) * (1 - _hypFlash) * (1 - _hypFlash);
-        hypnotiseFlashEl.style.setProperty("--flash", shaped.toFixed(3));
-      }
-      async function enterHypnotise() {
-        if (hypnotiseOverlay.classList.contains("open")) return;
-        _hypFlash = 0;
-        _hypBeats = null;
-        _hypNextBeatIdx = 0;
-        hypnotiseOverlay.classList.add("open");
-        hypnotiseOverlay.setAttribute("aria-hidden", "false");
-        _hypSetLoading(true);
-        _attachHypGestures();
-        try {
-          _requestWakeLock();
-        } catch (_) {
-        }
-        if (_hypRafId == null) _hypRafId = requestAnimationFrame(_hypTick);
-        _hypAnalyzeCurrentTrack();
-      }
-      function exitHypnotise() {
-        if (!hypnotiseOverlay.classList.contains("open")) return;
-        hypnotiseOverlay.classList.remove("open");
-        hypnotiseOverlay.classList.remove("hyp-loading");
-        hypnotiseOverlay.setAttribute("aria-hidden", "true");
-        hypnotiseFlashEl.style.setProperty("--flash", "0");
-        if (_hypRafId != null) {
-          cancelAnimationFrame(_hypRafId);
-          _hypRafId = null;
-        }
-        _detachHypGestures();
-        _hypClearHold();
-      }
-      function _hypClearHold() {
-        if (_hypHoldTimer != null) {
-          clearTimeout(_hypHoldTimer);
-          _hypHoldTimer = null;
-        }
-        _hypHoldStart = null;
-      }
-      function _hypOnPointerDown(e) {
-        _hypClearHold();
-        _hypHoldStart = { x: e.clientX, y: e.clientY };
-        _hypHoldTimer = setTimeout(() => {
-          _hypHoldTimer = null;
-          exitHypnotise();
-        }, _HYP_HOLD_MS);
-      }
-      function _hypOnPointerMove(e) {
-        if (!_hypHoldStart) return;
-        const dx = e.clientX - _hypHoldStart.x;
-        const dy = e.clientY - _hypHoldStart.y;
-        if (dx * dx + dy * dy > _HYP_HOLD_MOVE_PX * _HYP_HOLD_MOVE_PX) _hypClearHold();
-      }
-      function _hypOnPointerEnd() {
-        _hypClearHold();
-      }
-      function _attachHypGestures() {
-        hypnotiseOverlay.addEventListener("pointerdown", _hypOnPointerDown);
-        hypnotiseOverlay.addEventListener("pointermove", _hypOnPointerMove);
-        hypnotiseOverlay.addEventListener("pointerup", _hypOnPointerEnd);
-        hypnotiseOverlay.addEventListener("pointercancel", _hypOnPointerEnd);
-        hypnotiseOverlay.addEventListener("pointerleave", _hypOnPointerEnd);
-      }
-      function _detachHypGestures() {
-        hypnotiseOverlay.removeEventListener("pointerdown", _hypOnPointerDown);
-        hypnotiseOverlay.removeEventListener("pointermove", _hypOnPointerMove);
-        hypnotiseOverlay.removeEventListener("pointerup", _hypOnPointerEnd);
-        hypnotiseOverlay.removeEventListener("pointercancel", _hypOnPointerEnd);
-        hypnotiseOverlay.removeEventListener("pointerleave", _hypOnPointerEnd);
-      }
-      btnHypnotise?.addEventListener("click", enterHypnotise);
-      audio.addEventListener("loadstart", () => {
-        _hypBeats = null;
-        _hypNextBeatIdx = 0;
-        _hypAnalysisToken++;
-        if (hypnotiseOverlay.classList.contains("open")) _hypAnalyzeCurrentTrack();
-        _pianoNotes = null;
-        _pianoNextIdx = 0;
-        _pianoAnalysisToken++;
-        if (typeof pianoOverlay !== "undefined" && pianoOverlay?.classList.contains("open")) {
-          _pianoAnalyzeCurrentTrack();
+      installRecognize({
+        openSearch,
+        performSearch,
+        setSearchQuery: (q) => {
+          searchQuery.value = q;
         }
       });
-      document.addEventListener("keydown", (e) => {
-        if (e.key !== "Escape") return;
-        if (hypnotiseOverlay?.classList.contains("open")) {
-          exitHypnotise();
-          e.preventDefault();
-          return;
-        }
-        if (visualizerOverlay?.classList.contains("open")) {
-          exitVisualizer();
-          e.preventDefault();
-          return;
-        }
-        if (typeof pianoOverlay !== "undefined" && pianoOverlay?.classList.contains("open")) {
-          exitPiano();
-          e.preventDefault();
-        }
+      installHypnotise({
+        audio,
+        getCurrentTrackId: () => currentTrackId,
+        requestWakeLock: _requestWakeLock
       });
-      var visualizerOverlay = $("visualizer-overlay");
-      var visualizerCanvas = $("visualizer-canvas");
-      var visualizerHint = $("visualizer-hint");
-      var visualizerPresetName = $("visualizer-preset-name");
-      var btnVisualize = $("btn-visualize");
-      var _vizCtx = null;
-      var _vizSource = null;
-      var _vizInstance = null;
-      var _vizPresets = null;
-      var _vizPresetKeys = [];
-      var _vizCurrentPresetIdx = -1;
-      var _vizRafId = null;
-      var _vizHoldTimer = null;
-      var _vizHoldStart = null;
-      var _vizPresetWarnedIOS = false;
-      var _VIZ_HOLD_MS = 600;
-      var _VIZ_HOLD_MOVE_PX = 10;
-      var _VIZ_PRESET_BLEND_S = 1.5;
-      function _vizSetupAudioOnce() {
-        if (_vizSource) return true;
-        try {
-          _vizCtx = new (window.AudioContext || window.webkitAudioContext)();
-          _vizSource = _vizCtx.createMediaElementSource(audio);
-          _vizSource.connect(_vizCtx.destination);
-          if (!_vizPresetWarnedIOS) {
-            _vizPresetWarnedIOS = true;
-            showToast("Visualizer is on \u2014 lock-screen playback may stop until reload", 4500);
-          }
-          return true;
-        } catch (e) {
-          console.warn("[viz] failed to create audio context:", e?.message || e);
-          showToast("Visualizer not supported here");
-          return false;
-        }
-      }
-      function _vizSizing() {
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        return { w, h, pxW: Math.max(1, Math.floor(w * dpr)), pxH: Math.max(1, Math.floor(h * dpr)) };
-      }
-      function _vizApplySize() {
-        if (!_vizInstance) return;
-        const s = _vizSizing();
-        visualizerCanvas.width = s.pxW;
-        visualizerCanvas.height = s.pxH;
-        try {
-          _vizInstance.setRendererSize(s.pxW, s.pxH);
-        } catch (_) {
-        }
-      }
-      function _vizSetupVisualizerOnce() {
-        if (_vizInstance) return true;
-        if (!_vizCtx) return false;
-        try {
-          const s = _vizSizing();
-          visualizerCanvas.width = s.pxW;
-          visualizerCanvas.height = s.pxH;
-          _vizInstance = import_butterchurn.default.createVisualizer(_vizCtx, visualizerCanvas, {
-            width: s.pxW,
-            height: s.pxH,
-            pixelRatio: 1,
-            // we already account for DPR in canvas size
-            textureRatio: 1
-          });
-          _vizInstance.connectAudio(_vizSource);
-          const mod = import_butterchurnPresetsMinimal_min.default;
-          _vizPresets = typeof mod.getPresets === "function" ? mod.getPresets() : mod.default && typeof mod.default.getPresets === "function" ? mod.default.getPresets() : mod.default || mod;
-          _vizPresetKeys = Object.keys(_vizPresets);
-          if (_vizPresetKeys.length === 0) {
-            console.warn("[viz] no presets loaded");
-            return false;
-          }
-          return true;
-        } catch (e) {
-          console.warn("[viz] visualizer init failed:", e?.message || e);
-          return false;
-        }
-      }
-      function _vizPickPresetName(name) {
-        if (!_vizInstance || !_vizPresets) return;
-        const preset = _vizPresets[name];
-        if (!preset) return;
-        try {
-          _vizInstance.loadPreset(preset, _VIZ_PRESET_BLEND_S);
-          _vizCurrentPresetIdx = _vizPresetKeys.indexOf(name);
-          const display = name.replace(/^[^-]+\s*-\s*/, "").replace(/\.milk$/, "");
-          visualizerPresetName.textContent = display;
-          visualizerPresetName.classList.add("show");
-          clearTimeout(_vizPresetNameHide);
-          _vizPresetNameHide = setTimeout(() => {
-            visualizerPresetName.classList.remove("show");
-          }, 1800);
-        } catch (e) {
-          console.warn("[viz] preset load failed:", e?.message || e);
-        }
-      }
-      var _vizPresetNameHide = null;
-      function _vizCyclePreset() {
-        if (_vizPresetKeys.length < 2) return;
-        let next;
-        do {
-          next = Math.floor(Math.random() * _vizPresetKeys.length);
-        } while (next === _vizCurrentPresetIdx);
-        _vizPickPresetName(_vizPresetKeys[next]);
-      }
-      function _vizTick() {
-        _vizRafId = requestAnimationFrame(_vizTick);
-        try {
-          _vizInstance.render();
-        } catch (e) {
-          console.warn("[viz] render error, cycling preset:", e?.message || e);
-          _vizCyclePreset();
-        }
-      }
-      async function enterVisualizer() {
-        if (visualizerOverlay.classList.contains("open")) return;
-        if (!_vizSetupAudioOnce()) return;
-        if (!_vizSetupVisualizerOnce()) return;
-        if (_vizCtx.state === "suspended") {
-          try {
-            await _vizCtx.resume();
-          } catch (_) {
-          }
-        }
-        visualizerOverlay.classList.add("open");
-        visualizerOverlay.setAttribute("aria-hidden", "false");
-        _attachVizGestures();
-        _vizApplySize();
-        if (_vizCurrentPresetIdx < 0) _vizCyclePreset();
-        try {
-          _requestWakeLock();
-        } catch (_) {
-        }
-        if (_vizRafId == null) _vizTick();
-      }
-      function exitVisualizer() {
-        if (!visualizerOverlay.classList.contains("open")) return;
-        visualizerOverlay.classList.remove("open");
-        visualizerOverlay.setAttribute("aria-hidden", "true");
-        if (_vizRafId != null) {
-          cancelAnimationFrame(_vizRafId);
-          _vizRafId = null;
-        }
-        _detachVizGestures();
-        _vizClearHold();
-        visualizerPresetName.classList.remove("show");
-      }
-      function _vizClearHold() {
-        if (_vizHoldTimer != null) {
-          clearTimeout(_vizHoldTimer);
-          _vizHoldTimer = null;
-        }
-        _vizHoldStart = null;
-      }
-      function _vizOnPointerDown(e) {
-        _vizClearHold();
-        _vizHoldStart = { x: e.clientX, y: e.clientY, kind: "pending" };
-        _vizHoldTimer = setTimeout(() => {
-          _vizHoldTimer = null;
-          if (_vizHoldStart) _vizHoldStart.kind = "held";
-          exitVisualizer();
-        }, _VIZ_HOLD_MS);
-      }
-      function _vizOnPointerMove(e) {
-        if (!_vizHoldStart || _vizHoldStart.kind !== "pending") return;
-        const dx = e.clientX - _vizHoldStart.x;
-        const dy = e.clientY - _vizHoldStart.y;
-        if (dx * dx + dy * dy > _VIZ_HOLD_MOVE_PX * _VIZ_HOLD_MOVE_PX) {
-          _vizHoldStart.kind = "moved";
-          if (_vizHoldTimer) {
-            clearTimeout(_vizHoldTimer);
-            _vizHoldTimer = null;
-          }
-        }
-      }
-      function _vizOnPointerUp() {
-        if (_vizHoldStart && _vizHoldStart.kind === "pending") {
-          _vizCyclePreset();
-        }
-        _vizClearHold();
-      }
-      function _attachVizGestures() {
-        visualizerOverlay.addEventListener("pointerdown", _vizOnPointerDown);
-        visualizerOverlay.addEventListener("pointermove", _vizOnPointerMove);
-        visualizerOverlay.addEventListener("pointerup", _vizOnPointerUp);
-        visualizerOverlay.addEventListener("pointercancel", _vizOnPointerUp);
-        visualizerOverlay.addEventListener("pointerleave", _vizOnPointerUp);
-      }
-      function _detachVizGestures() {
-        visualizerOverlay.removeEventListener("pointerdown", _vizOnPointerDown);
-        visualizerOverlay.removeEventListener("pointermove", _vizOnPointerMove);
-        visualizerOverlay.removeEventListener("pointerup", _vizOnPointerUp);
-        visualizerOverlay.removeEventListener("pointercancel", _vizOnPointerUp);
-        visualizerOverlay.removeEventListener("pointerleave", _vizOnPointerUp);
-      }
-      btnVisualize?.addEventListener("click", enterVisualizer);
-      window.addEventListener("resize", () => {
-        if (visualizerOverlay.classList.contains("open")) _vizApplySize();
+      installButterchurn({
+        audio,
+        requestWakeLock: _requestWakeLock
       });
-      var pianoOverlay = $("piano-overlay");
-      var pianoCanvas = $("piano-canvas");
-      var pianoLoadingLabel = $("piano-loading-label");
-      var pianoSeekbar = $("piano-seekbar");
-      var pianoSeekbarFill = $("piano-seekbar-fill");
-      var pianoSeekbarHandle = $("piano-seekbar-handle");
-      var btnPiano = $("btn-piano");
-      var _pianoSeeking = false;
-      var _pianoCtx = null;
-      var _pianoNotes = null;
-      var _pianoCache = /* @__PURE__ */ new Map();
-      var _pianoAnalysisToken = 0;
-      var _pianoRafId = null;
-      var _pianoNextIdx = 0;
-      var _pianoKeyboardLayout = null;
-      var _pianoEnginesLoading = null;
-      var _pianoEnginesReady = false;
-      var _pianoModelInstance = null;
-      var _pianoMagentaModule = null;
-      var _pianoHoldTimer = null;
-      var _pianoHoldStart = null;
-      var _PIANO_HOLD_MS = 600;
-      var _PIANO_HOLD_MOVE_PX = 10;
-      var _PIANO_LOOK_AHEAD_S = 3.5;
-      var _PIANO_KEYBOARD_HEIGHT_FRAC = 0.22;
-      var _PIANO_MIDI_LOW = 21;
-      var _PIANO_MIDI_HIGH = 108;
-      var _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-      var _PIANO_MAGENTA_URL = "https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/dist/magentamusic.min.js";
-      var _PIANO_OAF_CHECKPOINT = "https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni";
-      var _PIANO_NOTES_VERSION = 6;
-      function _pianoSetLoading(label) {
-        if (!pianoOverlay) return;
-        if (label === null) {
-          pianoOverlay.classList.remove("piano-loading");
-        } else {
-          pianoOverlay.classList.add("piano-loading");
-          if (pianoLoadingLabel) pianoLoadingLabel.textContent = label;
-        }
-      }
-      function _pianoSetWarning(on) {
-        pianoOverlay?.classList.toggle("piano-warn", !!on);
-      }
-      function _pianoBuildKeyboardLayout(canvasWidth) {
-        let whiteCount = 0;
-        for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
-          if (_PIANO_IS_WHITE[m % 12]) whiteCount++;
-        }
-        const whiteW = canvasWidth / whiteCount;
-        const blackW = whiteW * 0.62;
-        const layout = /* @__PURE__ */ new Map();
-        let whiteIdx = 0;
-        for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
-          const pc = m % 12;
-          if (_PIANO_IS_WHITE[pc]) {
-            layout.set(m, { isWhite: true, x: whiteIdx * whiteW, w: whiteW });
-            whiteIdx++;
-          } else {
-            const boundary = whiteIdx * whiteW;
-            layout.set(m, { isWhite: false, x: boundary - blackW / 2, w: blackW });
-          }
-        }
-        return { whiteW, blackW, layout, whiteCount };
-      }
-      function _pianoApplySize() {
-        if (!pianoCanvas) return;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const w = window.innerWidth, h = window.innerHeight;
-        pianoCanvas.width = Math.floor(w * dpr);
-        pianoCanvas.height = Math.floor(h * dpr);
-        pianoCanvas.style.width = w + "px";
-        pianoCanvas.style.height = h + "px";
-        _pianoCtx = pianoCanvas.getContext("2d");
-        _pianoCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        _pianoKeyboardLayout = _pianoBuildKeyboardLayout(w);
-      }
-      function _pianoLoadScript(url) {
-        return new Promise((resolve, reject) => {
-          const existing = document.querySelector('script[data-piano-src="' + url + '"]');
-          if (existing) {
-            if (existing.dataset.loaded === "1") return resolve();
-            existing.addEventListener("load", () => resolve(), { once: true });
-            existing.addEventListener("error", () => reject(new Error("script load failed: " + url)), { once: true });
-            return;
-          }
-          const s = document.createElement("script");
-          s.src = url;
-          s.async = true;
-          s.dataset.pianoSrc = url;
-          s.addEventListener("load", () => {
-            s.dataset.loaded = "1";
-            resolve();
-          }, { once: true });
-          s.addEventListener("error", () => reject(new Error("script load failed: " + url)), { once: true });
-          document.head.appendChild(s);
-        });
-      }
-      async function _pianoLoadEngines() {
-        if (_pianoEnginesReady) return true;
-        if (_pianoEnginesLoading) return _pianoEnginesLoading;
-        _pianoEnginesLoading = (async () => {
-          _pianoSetLoading("Loading piano engine\u2026");
-          await _pianoLoadScript(_PIANO_MAGENTA_URL);
-          const ns = window.mm && window.mm.OnsetsAndFrames ? window.mm : window.transcription && window.transcription.OnsetsAndFrames ? window.transcription : null;
-          if (!ns) {
-            throw new Error("@magenta/music did not register OnsetsAndFrames on window");
-          }
-          _pianoMagentaModule = ns;
-          _pianoEnginesReady = true;
-          return true;
-        })();
-        try {
-          return await _pianoEnginesLoading;
-        } catch (e) {
-          _pianoEnginesLoading = null;
-          throw e;
-        }
-      }
-      async function _pianoTranscribe(audioBuffer, progressCb) {
-        const ns = _pianoMagentaModule;
-        if (!ns || !ns.OnsetsAndFrames) throw new Error("@magenta/music did not load");
-        if (!_pianoModelInstance) {
-          if (progressCb) progressCb(0);
-          _pianoModelInstance = new ns.OnsetsAndFrames(_PIANO_OAF_CHECKPOINT);
-          await _pianoModelInstance.initialize();
-        }
-        if (progressCb) progressCb(0.05);
-        const seq = await _pianoModelInstance.transcribeFromAudioBuffer(audioBuffer);
-        if (progressCb) progressCb(1);
-        if (!seq || !Array.isArray(seq.notes)) return [];
-        const raw = seq.notes.filter((n) => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH).map((n) => ({
-          t0: Number(n.startTime) || 0,
-          t1: Number(n.endTime) || 0,
-          pitch: n.pitch
-        })).filter((n) => n.t1 > n.t0);
-        return _pianoTrimSustain(raw);
-      }
-      var _PIANO_MAX_NOTE_S = 1.2;
-      var _PIANO_REONSET_GAP_S = 0.06;
-      var _PIANO_MIN_NOTE_S = 0.05;
-      var _PIANO_NEIGHBOR_GUARD_S = 0.1;
-      function _pianoTrimSustain(notes) {
-        if (!Array.isArray(notes) || notes.length === 0) return notes;
-        const byPitch = /* @__PURE__ */ new Map();
-        for (const n of notes) {
-          let arr = byPitch.get(n.pitch);
-          if (!arr) {
-            arr = [];
-            byPitch.set(n.pitch, arr);
-          }
-          arr.push(n);
-        }
-        for (const arr of byPitch.values()) arr.sort((a, b) => a.t0 - b.t0);
-        const onsetsByPitch = /* @__PURE__ */ new Map();
-        for (const [p, arr] of byPitch.entries()) onsetsByPitch.set(p, arr.map((n) => n.t0));
-        const firstOnsetAfter = (pitch, after) => {
-          const arr = onsetsByPitch.get(pitch);
-          if (!arr) return Infinity;
-          for (const t of arr) if (t > after) return t;
-          return Infinity;
-        };
-        const out = [];
-        for (const arr of byPitch.values()) {
-          for (let i = 0; i < arr.length; i++) {
-            const n = arr[i];
-            const nextSame = arr[i + 1];
-            let t1 = Math.min(n.t1, n.t0 + _PIANO_MAX_NOTE_S);
-            if (nextSame && nextSame.t0 - n.t0 > _PIANO_MIN_NOTE_S) {
-              t1 = Math.min(t1, nextSame.t0 - _PIANO_REONSET_GAP_S);
-            }
-            const guardedAfter = n.t0 + _PIANO_NEIGHBOR_GUARD_S;
-            const nbLow = firstOnsetAfter(n.pitch - 1, guardedAfter);
-            const nbHigh = firstOnsetAfter(n.pitch + 1, guardedAfter);
-            const nb = Math.min(nbLow, nbHigh);
-            if (nb < Infinity) t1 = Math.min(t1, nb - _PIANO_REONSET_GAP_S);
-            if (t1 - n.t0 < _PIANO_MIN_NOTE_S) t1 = n.t0 + _PIANO_MIN_NOTE_S;
-            out.push({ t0: n.t0, t1, pitch: n.pitch });
-          }
-        }
-        out.sort((a, b) => a.t0 - b.t0 || a.pitch - b.pitch);
-        return out;
-      }
-      function _pianoFindCurrentTrack() {
-        if (typeof playerTracks === "undefined") return null;
-        return playerTracks.find((t) => t.id === currentTrackId) || null;
-      }
-      async function _pianoAnalyzeCurrentTrack() {
-        const trackId = currentTrackId;
-        if (trackId == null) {
-          _pianoSetLoading(null);
-          return;
-        }
-        const memHit = _pianoCache.get(trackId);
-        if (memHit) {
-          _pianoInstallNotes(trackId, memHit);
-          _pianoSetWarning(_pianoIsUnreliable(memHit));
-          _pianoSetLoading(null);
-          return;
-        }
-        const myToken = ++_pianoAnalysisToken;
-        try {
-          const row = await getCachedTrackRecord(playerGroupId, trackId);
-          if (myToken !== _pianoAnalysisToken) return;
-          if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0 && row.pianoNotesVersion === _PIANO_NOTES_VERSION) {
-            _pianoCache.set(trackId, row.pianoNotes);
-            _pianoInstallNotes(trackId, row.pianoNotes);
-            _pianoSetWarning(_pianoIsUnreliable(row.pianoNotes));
-            _pianoSetLoading(null);
-            return;
-          }
-        } catch (_) {
-        }
-        if (myToken !== _pianoAnalysisToken) return;
-        try {
-          await _pianoLoadEngines();
-        } catch (e) {
-          if (myToken !== _pianoAnalysisToken) return;
-          console.warn("[piano] engine load failed:", e);
-          _pianoSetLoading("Could not load piano engine. Check connection.");
-          return;
-        }
-        if (myToken !== _pianoAnalysisToken) return;
-        _pianoSetLoading("Decoding audio\u2026");
-        const src = audio.currentSrc || audio.src;
-        if (!src) {
-          _pianoSetLoading(null);
-          return;
-        }
-        let ctx = null, audioBuffer = null;
-        try {
-          const res = await fetch(src);
-          if (!res.ok) throw new Error("fetch " + res.status);
-          const buf = await res.arrayBuffer();
-          if (myToken !== _pianoAnalysisToken) return;
-          ctx = new (window.AudioContext || window.webkitAudioContext)();
-          audioBuffer = await ctx.decodeAudioData(buf);
-        } catch (e) {
-          if (myToken !== _pianoAnalysisToken) return;
-          console.warn("[piano] audio decode failed:", e);
-          _pianoSetLoading("Could not decode audio.");
-          return;
-        } finally {
-          if (ctx && ctx.close) ctx.close().catch(() => {
-          });
-        }
-        if (myToken !== _pianoAnalysisToken) return;
-        let notes;
-        try {
-          _pianoSetLoading("Transcribing piano\u2026");
-          notes = await _pianoTranscribe(audioBuffer, () => {
-            if (myToken !== _pianoAnalysisToken) return;
-          });
-        } catch (e) {
-          if (myToken !== _pianoAnalysisToken) return;
-          console.warn("[piano] transcription failed:", e);
-          _pianoSetLoading("Transcription failed.");
-          return;
-        }
-        if (myToken !== _pianoAnalysisToken) return;
-        _pianoCache.set(trackId, notes);
-        try {
-          updateTrackPianoNotes(playerGroupId, trackId, notes, { track: _pianoFindCurrentTrack(), pianoNotesVersion: _PIANO_NOTES_VERSION });
-        } catch (_) {
-        }
-        _pianoSetWarning(_pianoIsUnreliable(notes, audioBuffer.duration));
-        _pianoInstallNotes(trackId, notes);
-        _pianoSetLoading(null);
-        console.log(
-          "[piano] transcribed",
-          trackId,
-          "\u2192",
-          notes.length,
-          "notes (",
-          (notes.length / Math.max(1, audioBuffer.duration)).toFixed(2),
-          "/s )"
-        );
-      }
-      function _pianoIsUnreliable(notes, dur) {
-        if (!Array.isArray(notes)) return true;
-        if (notes.length < 10) return true;
-        if (dur && notes.length / dur < 0.3) return true;
-        return false;
-      }
-      function _pianoInstallNotes(trackId, notes) {
-        if (currentTrackId !== trackId) return;
-        _pianoNotes = notes;
-        _pianoNextIdx = 0;
-      }
-      function _pianoRoundRect(ctx, x, y, w, h, r) {
-        r = Math.max(0, Math.min(r, w / 2, h / 2));
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.arcTo(x + w, y, x + w, y + h, r);
-        ctx.arcTo(x + w, y + h, x, y + h, r);
-        ctx.arcTo(x, y + h, x, y, r);
-        ctx.arcTo(x, y, x + w, y, r);
-        ctx.closePath();
-      }
-      function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys) {
-        const layout = _pianoKeyboardLayout.layout;
-        for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
-          const k = layout.get(m);
-          if (!k || !k.isWhite) continue;
-          const isActive = activeKeys.has(m);
-          ctx.fillStyle = isActive ? "#7eb6f0" : "#f0eee5";
-          ctx.fillRect(k.x, kbTop, k.w, kbH);
-          ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
-          ctx.fillRect(k.x + k.w - 0.5, kbTop, 0.5, kbH);
-          ctx.fillStyle = "rgba(0, 0, 0, 0.20)";
-          ctx.fillRect(k.x, kbTop + kbH - 4, k.w, 4);
-        }
-        const blackH = kbH * 0.62;
-        for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
-          const k = layout.get(m);
-          if (!k || k.isWhite) continue;
-          const isActive = activeKeys.has(m);
-          const grad = ctx.createLinearGradient(0, kbTop, 0, kbTop + blackH);
-          if (isActive) {
-            grad.addColorStop(0, "#7eb6f0");
-            grad.addColorStop(1, "#3d6c9c");
-          } else {
-            grad.addColorStop(0, "#1c1c1c");
-            grad.addColorStop(1, "#070707");
-          }
-          ctx.fillStyle = grad;
-          ctx.fillRect(k.x, kbTop, k.w, blackH);
-          ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-          ctx.fillRect(k.x, kbTop, k.w, 2);
-        }
-      }
-      function _pianoTick() {
-        _pianoRafId = requestAnimationFrame(_pianoTick);
-        if (!_pianoCtx || !_pianoKeyboardLayout) return;
-        const w = pianoCanvas.clientWidth;
-        const h = pianoCanvas.clientHeight;
-        const ctx = _pianoCtx;
-        const kbH = h * _PIANO_KEYBOARD_HEIGHT_FRAC;
-        const kbTop = h - kbH;
-        const lookAhead = _PIANO_LOOK_AHEAD_S;
-        const pps = kbTop / lookAhead;
-        ctx.clearRect(0, 0, w, h);
-        const bg = ctx.createLinearGradient(0, 0, 0, kbTop);
-        bg.addColorStop(0, "#070910");
-        bg.addColorStop(1, "#11151e");
-        ctx.fillStyle = bg;
-        ctx.fillRect(0, 0, w, kbTop);
-        ctx.fillStyle = "rgba(82, 136, 193, 0.10)";
-        ctx.fillRect(0, kbTop - 10, w, 10);
-        const activeKeys = /* @__PURE__ */ new Set();
-        if (_pianoNotes && _pianoNotes.length) {
-          const t = audio.currentTime;
-          const layout = _pianoKeyboardLayout.layout;
-          for (let i = 0; i < _pianoNotes.length; i++) {
-            const n = _pianoNotes[i];
-            if (t > n.t1 + 0.05) continue;
-            if (t < n.t0 - lookAhead) continue;
-            const k = layout.get(n.pitch);
-            if (!k) continue;
-            if (n.t0 <= t && t <= n.t1) activeKeys.add(n.pitch);
-            const yBottom = kbTop + (t - n.t0) * pps;
-            const yTop = yBottom - (n.t1 - n.t0) * pps;
-            const drawBottom = Math.min(yBottom, kbTop);
-            const drawTop = Math.max(yTop, 0);
-            if (drawBottom <= 0 || drawTop >= kbTop) continue;
-            const drawH = drawBottom - drawTop;
-            if (drawH < 1) continue;
-            const inset = k.isWhite ? 2 : 1;
-            const x = k.x + inset;
-            const ww = Math.max(1, k.w - inset * 2);
-            const gr = ctx.createLinearGradient(0, drawTop, 0, drawBottom);
-            if (k.isWhite) {
-              gr.addColorStop(0, "#9ec8f5");
-              gr.addColorStop(1, "#3a6595");
-            } else {
-              gr.addColorStop(0, "#6ea4d8");
-              gr.addColorStop(1, "#274c75");
-            }
-            ctx.fillStyle = gr;
-            _pianoRoundRect(ctx, x, drawTop, ww, drawH, 4);
-            ctx.fill();
-            ctx.fillStyle = "rgba(255, 255, 255, 0.30)";
-            ctx.fillRect(x + 1, drawTop, ww - 2, 1);
-          }
-        }
-        _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
-        if (audio.duration > 0 && pianoSeekbarFill) {
-          const pct = Math.max(0, Math.min(1, audio.currentTime / audio.duration));
-          const pctStr = (pct * 100).toFixed(2) + "%";
-          pianoSeekbarFill.style.width = pctStr;
-          if (pianoSeekbarHandle) pianoSeekbarHandle.style.left = pctStr;
-        }
-      }
-      async function enterPiano() {
-        if (!pianoOverlay) return;
-        if (pianoOverlay.classList.contains("open")) return;
-        pianoOverlay.classList.add("open");
-        pianoOverlay.setAttribute("aria-hidden", "false");
-        _pianoSetWarning(false);
-        _pianoSetLoading("Loading piano model\u2026");
-        _attachPianoGestures();
-        _pianoApplySize();
-        try {
-          _requestWakeLock();
-        } catch (_) {
-        }
-        if (_pianoRafId == null) _pianoRafId = requestAnimationFrame(_pianoTick);
-        _pianoAnalyzeCurrentTrack();
-      }
-      function exitPiano() {
-        if (!pianoOverlay) return;
-        if (!pianoOverlay.classList.contains("open")) return;
-        pianoOverlay.classList.remove("open");
-        pianoOverlay.classList.remove("piano-loading");
-        pianoOverlay.classList.remove("piano-warn");
-        pianoOverlay.setAttribute("aria-hidden", "true");
-        if (_pianoRafId != null) {
-          cancelAnimationFrame(_pianoRafId);
-          _pianoRafId = null;
-        }
-        _detachPianoGestures();
-        _pianoClearHold();
-      }
-      function _pianoClearHold() {
-        if (_pianoHoldTimer != null) {
-          clearTimeout(_pianoHoldTimer);
-          _pianoHoldTimer = null;
-        }
-        _pianoHoldStart = null;
-      }
-      function _pianoOnPointerDown(e) {
-        _pianoClearHold();
-        _pianoHoldStart = { x: e.clientX, y: e.clientY };
-        _pianoHoldTimer = setTimeout(() => {
-          _pianoHoldTimer = null;
-          exitPiano();
-        }, _PIANO_HOLD_MS);
-      }
-      function _pianoOnPointerMove(e) {
-        if (!_pianoHoldStart) return;
-        const dx = e.clientX - _pianoHoldStart.x;
-        const dy = e.clientY - _pianoHoldStart.y;
-        if (dx * dx + dy * dy > _PIANO_HOLD_MOVE_PX * _PIANO_HOLD_MOVE_PX) _pianoClearHold();
-      }
-      function _pianoOnPointerUp() {
-        _pianoClearHold();
-      }
-      function _attachPianoGestures() {
-        pianoOverlay.addEventListener("pointerdown", _pianoOnPointerDown);
-        pianoOverlay.addEventListener("pointermove", _pianoOnPointerMove);
-        pianoOverlay.addEventListener("pointerup", _pianoOnPointerUp);
-        pianoOverlay.addEventListener("pointercancel", _pianoOnPointerUp);
-        pianoOverlay.addEventListener("pointerleave", _pianoOnPointerUp);
-      }
-      function _detachPianoGestures() {
-        pianoOverlay.removeEventListener("pointerdown", _pianoOnPointerDown);
-        pianoOverlay.removeEventListener("pointermove", _pianoOnPointerMove);
-        pianoOverlay.removeEventListener("pointerup", _pianoOnPointerUp);
-        pianoOverlay.removeEventListener("pointercancel", _pianoOnPointerUp);
-        pianoOverlay.removeEventListener("pointerleave", _pianoOnPointerUp);
-      }
-      btnPiano?.addEventListener("click", enterPiano);
-      window.addEventListener("resize", () => {
-        if (pianoOverlay?.classList.contains("open")) _pianoApplySize();
+      installPiano({
+        audio,
+        getCurrentTrackId: () => currentTrackId,
+        getPlayerTracks: () => playerTracks,
+        getPlayerGroupId: () => playerGroupId,
+        requestWakeLock: _requestWakeLock
       });
-      function _pianoSeekFromEvent(e) {
-        if (!audio.duration || !pianoSeekbar) return;
-        const rect = pianoSeekbar.getBoundingClientRect();
-        if (rect.width <= 0) return;
-        const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-        audio.currentTime = fraction * audio.duration;
-      }
-      function _pianoOnSeekDown(e) {
-        e.stopPropagation();
-        e.preventDefault();
-        _pianoSeeking = true;
-        try {
-          pianoSeekbar.setPointerCapture?.(e.pointerId);
-        } catch (_) {
-        }
-        _pianoSeekFromEvent(e);
-      }
-      function _pianoOnSeekMove(e) {
-        if (!_pianoSeeking) return;
-        e.stopPropagation();
-        _pianoSeekFromEvent(e);
-      }
-      function _pianoOnSeekUp(e) {
-        if (!_pianoSeeking) return;
-        e.stopPropagation();
-        _pianoSeeking = false;
-        try {
-          pianoSeekbar.releasePointerCapture?.(e.pointerId);
-        } catch (_) {
-        }
-      }
-      pianoSeekbar?.addEventListener("pointerdown", _pianoOnSeekDown);
-      pianoSeekbar?.addEventListener("pointermove", _pianoOnSeekMove);
-      pianoSeekbar?.addEventListener("pointerup", _pianoOnSeekUp);
-      pianoSeekbar?.addEventListener("pointercancel", _pianoOnSeekUp);
       var _profilePhotoRetryScheduled = false;
       function setUserProfile(user) {
         const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "User";
