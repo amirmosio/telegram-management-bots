@@ -5208,7 +5208,8 @@ const _PIANO_OAF_CHECKPOINT = 'https://storage.googleapis.com/magentadata/js/che
 //   v2 = basic-pitch with tightened thresholds (0.65/0.45/11+amp≥0.3)
 //   v3 = Magenta Onsets & Frames (different engine entirely)
 //   v4 = Magenta + post-trim (cap + same-pitch reonset)
-const _PIANO_NOTES_VERSION = 4;
+//   v5 = Magenta + post-trim with 60 ms gap between same-pitch hits
+const _PIANO_NOTES_VERSION = 5;
 
 function _pianoSetLoading(label) {
     if (!pianoOverlay) return;
@@ -5343,12 +5344,15 @@ async function _pianoTranscribe(audioBuffer, progressCb) {
 // looks like notes "sticking" on the falling-bar view. We can't change
 // the model, so we trim its output:
 //   • cap every note at _PIANO_MAX_NOTE_S (a typical visual beat),
-//   • end any note when the same pitch is hit again (50 ms guard so
-//     the same detection doesn't kill itself).
+//   • end any note _PIANO_REONSET_GAP_S before the same pitch is hit
+//     again, so consecutive same-pitch bars don't kiss into one block.
+//   • enforce a minimum bar length so the gap subtraction never
+//     shrinks a real attack to nothing.
 // Shrinks bars to feel like discrete keystrokes instead of a held-pedal
 // blur. Tune the cap if real long notes start being chopped too short.
 const _PIANO_MAX_NOTE_S = 1.2;
-const _PIANO_REONSET_GUARD_S = 0.05;
+const _PIANO_REONSET_GAP_S = 0.06;   // visible gap (≈10 px at typical lookahead)
+const _PIANO_MIN_NOTE_S = 0.05;
 function _pianoTrimSustain(notes) {
     if (!Array.isArray(notes) || notes.length === 0) return notes;
     const byPitch = new Map();
@@ -5364,10 +5368,10 @@ function _pianoTrimSustain(notes) {
             const n = arr[i];
             const next = arr[i + 1];
             let t1 = Math.min(n.t1, n.t0 + _PIANO_MAX_NOTE_S);
-            if (next && next.t0 - n.t0 > _PIANO_REONSET_GUARD_S) {
-                t1 = Math.min(t1, next.t0);
+            if (next && next.t0 - n.t0 > _PIANO_MIN_NOTE_S) {
+                t1 = Math.min(t1, next.t0 - _PIANO_REONSET_GAP_S);
             }
-            if (t1 - n.t0 < _PIANO_REONSET_GUARD_S) t1 = n.t0 + _PIANO_REONSET_GUARD_S;
+            if (t1 - n.t0 < _PIANO_MIN_NOTE_S) t1 = n.t0 + _PIANO_MIN_NOTE_S;
             out.push({ t0: n.t0, t1, pitch: n.pitch });
         }
     }
