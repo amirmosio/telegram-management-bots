@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=143">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=143">
-    <link rel="stylesheet" href="style.css?v=143">
+    <link rel="manifest" href="/manifest.json?v=144">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=144">
+    <link rel="stylesheet" href="style.css?v=144">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -158,6 +158,11 @@
                             <circle cx="12" cy="12" r="10"/>
                             <circle cx="12" cy="12" r="6"/>
                             <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                        </svg>
+                    </button>
+                    <button id="btn-visualize" class="icon-btn" title="Visualizer (MilkDrop)" aria-label="Visualizer">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 12h2l2-7 4 14 3-10 2 6h5"/>
                         </svg>
                     </button>
                     <button id="btn-search" class="icon-btn" title="Search music">
@@ -388,6 +393,11 @@
         </div>
         <div id="hypnotise-hint">Hold anywhere to exit</div>
     </div>
+    <div id="visualizer-overlay" aria-hidden="true">
+        <canvas id="visualizer-canvas"></canvas>
+        <div id="visualizer-hint">Tap to change preset · Hold to exit</div>
+        <div id="visualizer-preset-name"></div>
+    </div>
     <audio id="audio-element" preload="auto"></audio>
     <script>
     // Register service worker for PWA + background audio
@@ -395,6 +405,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=143"></script>
+    <script src="app.bundle.js?v=144"></script>
 </body>
 </html>

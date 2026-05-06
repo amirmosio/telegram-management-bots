@@ -15,6 +15,8 @@
     "aubiojs": "^0.2.1",
     "browser-id3-writer": "^6.3.1",
     "buffer": "^6.0.3",
+    "butterchurn": "^2.6.7",
+    "butterchurn-presets": "^2.4.7",
     "crypto-browserify": "^3.12.1",
     "events": "^3.3.0",
     "input": "^1.0.1",
