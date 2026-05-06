@@ -2664,6 +2664,35 @@ const COPLAY_DRIFT_IGNORE_SEC = 0.03;
 const COPLAY_DRIFT_TRIM_SEC = 0.3;
 const COPLAY_RATE_TRIM_MAX = 0.05;     // cap the rate offset at ±5 %
 const COPLAY_RATE_TRIM_GAIN = 0.2;     // 200 ms drift → 4 % rate offset
+// Only re-write playbackRate when it changes by at least this much.
+// Frequent writes glitch the audio decoder on iOS Safari (sounds robotic).
+const COPLAY_RATE_WRITE_EPSILON = 0.005;
+// iOS Safari (incl. iPad-as-desktop and PWA) — disable the proportional
+// rate-trim band entirely because iOS's time-stretch produces audible
+// vocoder artifacts at sustained off-1.0 rates. Fall back to "ignore
+// small drift, hard-seek large drift" for these devices.
+const IS_IOS = (() => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    if (/iPad|iPhone|iPod/.test(ua)) return true;
+    // iPadOS 13+ reports as Mac with touch points.
+    return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+})();
+
+// Write audio.playbackRate only when the requested value differs from
+// the current one by more than the epsilon. On most browsers this is
+// a no-op optimisation; on iOS each write is expensive and audible,
+// so capping write frequency materially improves audio quality.
+function _coplaySetRateThrottled(target) {
+    const current = audio.playbackRate || 1.0;
+    if (Math.abs(current - target) >= COPLAY_RATE_WRITE_EPSILON) {
+        audio.playbackRate = target;
+    } else if (target === 1.0 && current !== 1.0) {
+        // Always snap exactly to 1.0 when we're done trimming so there
+        // isn't a permanent residual offset.
+        audio.playbackRate = 1.0;
+    }
+}
 
 const btnCoplay = $('btn-coplay');
 const coplayModal = $('coplay-modal');
@@ -3098,6 +3127,11 @@ async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
     coplayFab.style.display = 'none';
     document.body.classList.add('coplay-follower');
     coplayFollowerBanner.style.display = 'flex';
+    // Force pitch correction so any rate-trim doesn't pitch-shift the
+    // audio. Defaults are inconsistent on iOS Safari across versions.
+    try { audio.preservesPitch = true; } catch {}
+    try { audio.mozPreservesPitch = true; } catch {}
+    try { audio.webkitPreservesPitch = true; } catch {}
 
     _coplaySession = {
         role: 'follower',
@@ -3242,8 +3276,17 @@ async function _coplayPollTick(initial) {
     if (state.playing && audio.duration) {
         const drift = audio.currentTime - expected; // +ahead, -behind
         const absDrift = Math.abs(drift);
-        if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
+        // iOS Safari's time-stretch produces audible vocoder/robot
+        // artifacts at sustained off-1.0 rates, and re-writes flush the
+        // decoder. Skip the rate-trim band entirely there — only ignore
+        // small drift or hard-seek above the threshold.
+        if (IS_IOS) {
+            if (absDrift > COPLAY_DRIFT_TRIM_SEC) {
+                try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
+            }
             if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
+        } else if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
+            _coplaySetRateThrottled(1.0);
         } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
             // Proportional rate trim: rate = 1 - drift * GAIN, clamped.
             // 200 ms behind → 1.04, 200 ms ahead → 0.96, 30 ms → 1.006.
@@ -3251,10 +3294,10 @@ async function _coplayPollTick(initial) {
                 -COPLAY_RATE_TRIM_MAX,
                 Math.min(COPLAY_RATE_TRIM_MAX, drift * COPLAY_RATE_TRIM_GAIN),
             );
-            audio.playbackRate = 1 - offset;
+            _coplaySetRateThrottled(1 - offset);
         } else {
             try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
-            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
+            _coplaySetRateThrottled(1.0);
         }
     } else if (audio.playbackRate !== 1.0) {
         audio.playbackRate = 1.0;

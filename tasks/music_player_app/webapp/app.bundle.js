@@ -86037,6 +86037,21 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var COPLAY_DRIFT_TRIM_SEC = 0.3;
       var COPLAY_RATE_TRIM_MAX = 0.05;
       var COPLAY_RATE_TRIM_GAIN = 0.2;
+      var COPLAY_RATE_WRITE_EPSILON = 5e-3;
+      var IS_IOS = (() => {
+        if (typeof navigator === "undefined") return false;
+        const ua = navigator.userAgent || "";
+        if (/iPad|iPhone|iPod/.test(ua)) return true;
+        return navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
+      })();
+      function _coplaySetRateThrottled(target) {
+        const current = audio.playbackRate || 1;
+        if (Math.abs(current - target) >= COPLAY_RATE_WRITE_EPSILON) {
+          audio.playbackRate = target;
+        } else if (target === 1 && current !== 1) {
+          audio.playbackRate = 1;
+        }
+      }
       var btnCoplay = $("btn-coplay");
       var coplayModal = $("coplay-modal");
       var coplaySearchInput = $("coplay-search");
@@ -86397,6 +86412,18 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         coplayFab.style.display = "none";
         document.body.classList.add("coplay-follower");
         coplayFollowerBanner.style.display = "flex";
+        try {
+          audio.preservesPitch = true;
+        } catch {
+        }
+        try {
+          audio.mozPreservesPitch = true;
+        } catch {
+        }
+        try {
+          audio.webkitPreservesPitch = true;
+        } catch {
+        }
         _coplaySession = {
           role: "follower",
           syncMsgId,
@@ -86514,20 +86541,28 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (state.playing && audio.duration) {
           const drift = audio.currentTime - expected;
           const absDrift = Math.abs(drift);
-          if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
+          if (IS_IOS) {
+            if (absDrift > COPLAY_DRIFT_TRIM_SEC) {
+              try {
+                audio.currentTime = Math.max(0, Math.min(audio.duration, expected));
+              } catch {
+              }
+            }
             if (audio.playbackRate !== 1) audio.playbackRate = 1;
+          } else if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
+            _coplaySetRateThrottled(1);
           } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
             const offset = Math.max(
               -COPLAY_RATE_TRIM_MAX,
               Math.min(COPLAY_RATE_TRIM_MAX, drift * COPLAY_RATE_TRIM_GAIN)
             );
-            audio.playbackRate = 1 - offset;
+            _coplaySetRateThrottled(1 - offset);
           } else {
             try {
               audio.currentTime = Math.max(0, Math.min(audio.duration, expected));
             } catch {
             }
-            if (audio.playbackRate !== 1) audio.playbackRate = 1;
+            _coplaySetRateThrottled(1);
           }
         } else if (audio.playbackRate !== 1) {
           audio.playbackRate = 1;
