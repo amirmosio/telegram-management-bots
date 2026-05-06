@@ -3000,10 +3000,16 @@ document.addEventListener('keydown', e => {
 // ══════════════════════════════════════
 
 const COPLAY_HOST_KEY = 'coplay_host_msg';
-const COPLAY_POLL_MS = 1500;
-// 1.2 s drift threshold absorbs ~half a second of network round-trip plus
-// the typical NTP-aligned clock skew between two phones (≈100-500 ms).
-const COPLAY_DRIFT_MAX_SEC = 1.2;
+const COPLAY_POLL_MS = 700;
+// Drift correction is tiered:
+//   < 50 ms: do nothing (audio-engine jitter is already bigger than this).
+//   50-600 ms: nudge playbackRate so we converge over ~5-15 s without
+//              the audible glitch a seek would cause.
+//   > 600 ms: hard seek + reset rate.
+const COPLAY_DRIFT_IGNORE_SEC = 0.05;
+const COPLAY_DRIFT_TRIM_SEC = 0.6;
+const COPLAY_RATE_TRIM_FAST = 1.04;  // 4 % faster — catches up ~2.4 s/min
+const COPLAY_RATE_TRIM_SLOW = 0.96;
 
 const btnCoplay = $('btn-coplay');
 const coplayModal = $('coplay-modal');
@@ -3422,6 +3428,7 @@ function _coplayLeaveFollower(reason) {
     _coplaySession = null;
     document.body.classList.remove('coplay-follower');
     coplayFollowerBanner.style.display = 'none';
+    if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
     if (reason === 'ended') {
         showToast('Co-play ended');
     } else if (reason === 'left') {
@@ -3538,8 +3545,21 @@ async function _coplayPollTick(initial) {
     const anchor = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
     const elapsed = Math.max(0, (Date.now() / 1000) - anchor);
     const expected = (state.pos || 0) + (state.playing ? elapsed : 0);
-    if (audio.duration && Math.abs(audio.currentTime - expected) > COPLAY_DRIFT_MAX_SEC) {
-        try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
+    if (state.playing && audio.duration) {
+        const drift = audio.currentTime - expected; // +ahead, -behind
+        const absDrift = Math.abs(drift);
+        if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
+            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
+        } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
+            // Behind → speed up; ahead → slow down. Pitch shift at ±4 %
+            // is essentially imperceptible.
+            audio.playbackRate = drift < 0 ? COPLAY_RATE_TRIM_FAST : COPLAY_RATE_TRIM_SLOW;
+        } else {
+            try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
+            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
+        }
+    } else if (audio.playbackRate !== 1.0) {
+        audio.playbackRate = 1.0;
     }
     if (state.playing && audio.paused) {
         audio.play().catch(() => {});

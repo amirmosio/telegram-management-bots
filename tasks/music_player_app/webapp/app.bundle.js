@@ -84951,8 +84951,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (e.key === "Escape" && shareModal.style.display === "flex") _closeShareDialog();
       });
       var COPLAY_HOST_KEY = "coplay_host_msg";
-      var COPLAY_POLL_MS = 1500;
-      var COPLAY_DRIFT_MAX_SEC = 1.2;
+      var COPLAY_POLL_MS = 700;
+      var COPLAY_DRIFT_IGNORE_SEC = 0.05;
+      var COPLAY_DRIFT_TRIM_SEC = 0.6;
+      var COPLAY_RATE_TRIM_FAST = 1.04;
+      var COPLAY_RATE_TRIM_SLOW = 0.96;
       var btnCoplay = $("btn-coplay");
       var coplayModal = $("coplay-modal");
       var coplaySearchInput = $("coplay-search");
@@ -85306,6 +85309,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _coplaySession = null;
         document.body.classList.remove("coplay-follower");
         coplayFollowerBanner.style.display = "none";
+        if (audio.playbackRate !== 1) audio.playbackRate = 1;
         if (reason === "ended") {
           showToast("Co-play ended");
         } else if (reason === "left") {
@@ -85399,11 +85403,22 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const anchor = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
         const elapsed = Math.max(0, Date.now() / 1e3 - anchor);
         const expected = (state.pos || 0) + (state.playing ? elapsed : 0);
-        if (audio.duration && Math.abs(audio.currentTime - expected) > COPLAY_DRIFT_MAX_SEC) {
-          try {
-            audio.currentTime = Math.max(0, Math.min(audio.duration, expected));
-          } catch {
+        if (state.playing && audio.duration) {
+          const drift = audio.currentTime - expected;
+          const absDrift = Math.abs(drift);
+          if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
+            if (audio.playbackRate !== 1) audio.playbackRate = 1;
+          } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
+            audio.playbackRate = drift < 0 ? COPLAY_RATE_TRIM_FAST : COPLAY_RATE_TRIM_SLOW;
+          } else {
+            try {
+              audio.currentTime = Math.max(0, Math.min(audio.duration, expected));
+            } catch {
+            }
+            if (audio.playbackRate !== 1) audio.playbackRate = 1;
           }
+        } else if (audio.playbackRate !== 1) {
+          audio.playbackRate = 1;
         }
         if (state.playing && audio.paused) {
           audio.play().catch(() => {
