@@ -86074,8 +86074,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var coplayFabAvatarFallback = $("coplay-fab-avatar-fallback");
       var coplayFabBadge = $("coplay-fab-badge");
       var _COPLAY_DRAG_THRESHOLD_PX = 6;
-      function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
+      function _coplayMakeDraggable(el, opts = {}) {
         if (!el) return;
+        const { storageKey, skipSelector = null, onTap = null } = opts;
         el.classList.add("coplay-draggable");
         const apply = (left, top) => {
           const w = el.offsetWidth || 0;
@@ -86091,20 +86092,18 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           el.style.transform = "none";
         };
         const restore = () => {
-          const raw = localStorage.getItem(storageKey);
-          if (!raw) return;
+          if (!storageKey) return;
           try {
-            const { x, y } = JSON.parse(raw);
-            if (Number.isFinite(x) && Number.isFinite(y)) apply(x, y);
+            const v = JSON.parse(localStorage.getItem(storageKey) || "null");
+            if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) apply(v.x, v.y);
           } catch {
           }
         };
         let active = false;
         let dragging = false;
-        let suppressNextClick = false;
         let startX = 0, startY = 0, originX = 0, originY = 0;
-        const onStart = (e, x, y) => {
-          if (skipSelector && e.target.closest(skipSelector)) return false;
+        const begin = (target, x, y) => {
+          if (skipSelector && target.closest(skipSelector)) return false;
           active = true;
           dragging = false;
           const r = el.getBoundingClientRect();
@@ -86114,7 +86113,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           startY = y;
           return true;
         };
-        const onMove = (x, y, ePreventDefault) => {
+        const move = (x, y, prevent) => {
           if (!active) return;
           const dx = x - startX;
           const dy = y - startY;
@@ -86124,51 +86123,53 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           }
           if (dragging) {
             apply(originX + dx, originY + dy);
-            if (typeof ePreventDefault === "function") ePreventDefault();
+            if (prevent) prevent();
           }
         };
-        const onEnd = () => {
+        const finish = () => {
           if (!active) return;
+          const wasDragged = dragging;
           active = false;
-          if (dragging) {
+          dragging = false;
+          if (wasDragged) {
             el.classList.remove("dragging");
-            const r = el.getBoundingClientRect();
-            try {
-              localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top }));
-            } catch {
+            if (storageKey) {
+              const r = el.getBoundingClientRect();
+              try {
+                localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top }));
+              } catch {
+              }
             }
-            suppressNextClick = true;
-            dragging = false;
+          } else if (onTap) {
+            try {
+              onTap();
+            } catch (e) {
+              console.warn("onTap threw:", e);
+            }
           }
         };
         el.addEventListener("mousedown", (e) => {
           if (e.button !== 0) return;
-          if (!onStart(e, e.clientX, e.clientY)) return;
+          if (!begin(e.target, e.clientX, e.clientY)) return;
           e.preventDefault();
         });
         document.addEventListener("mousemove", (e) => {
-          onMove(e.clientX, e.clientY, () => e.preventDefault());
+          move(e.clientX, e.clientY, () => e.preventDefault());
         });
-        document.addEventListener("mouseup", onEnd);
+        document.addEventListener("mouseup", finish);
         el.addEventListener("touchstart", (e) => {
           if (e.touches.length !== 1) return;
           const t = e.touches[0];
-          if (!onStart(e, t.clientX, t.clientY)) return;
-        }, { passive: true });
+          if (!begin(e.target, t.clientX, t.clientY)) return;
+          e.preventDefault();
+        }, { passive: false });
         document.addEventListener("touchmove", (e) => {
           if (!active || e.touches.length !== 1) return;
           const t = e.touches[0];
-          onMove(t.clientX, t.clientY, () => e.preventDefault());
+          move(t.clientX, t.clientY, () => e.preventDefault());
         }, { passive: false });
-        document.addEventListener("touchend", onEnd);
-        document.addEventListener("touchcancel", onEnd);
-        el.addEventListener("click", (e) => {
-          if (suppressNextClick) {
-            suppressNextClick = false;
-            e.preventDefault();
-            e.stopImmediatePropagation();
-          }
-        }, true);
+        document.addEventListener("touchend", finish);
+        document.addEventListener("touchcancel", finish);
         window.addEventListener("resize", () => {
           if (el.style.left) {
             const r = el.getBoundingClientRect();
@@ -86179,9 +86180,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           if (el.style.display !== "none") restore();
         }).observe(el, { attributes: true, attributeFilter: ["style"] });
       }
-      _coplayMakeDraggable(coplayHostBanner, "coplay_pos_host", ".text-btn");
-      _coplayMakeDraggable(coplayFollowerBanner, "coplay_pos_follower", ".text-btn");
-      _coplayMakeDraggable(coplayFab, "coplay_pos_fab");
       var _coplaySession = null;
       var _coplayInviteList = [];
       var _coplay = pickerState();
@@ -86781,7 +86779,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       coplayStartBtn.addEventListener("click", _coplayStartHost);
       coplayEndBtn.addEventListener("click", () => _coplayEndHost());
       coplayLeaveBtn.addEventListener("click", () => _coplayLeaveFollower("left"));
-      coplayFab.addEventListener("click", () => {
+      function _coplayFabTap() {
         const msgId = parseInt(coplayFab.dataset.msgId || "0", 10);
         const channelId = parseInt(coplayFab.dataset.channelId || "0", 10);
         if (!msgId || !channelId) return;
@@ -86795,7 +86793,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const info = _pendingInvites.get(msgId);
         _pendingInvites.delete(msgId);
         _coplayEnterFollower(msgId, channelId, info?.hostName);
-      });
+      }
+      _coplayMakeDraggable(coplayHostBanner, { storageKey: "coplay_pos_host", skipSelector: ".text-btn" });
+      _coplayMakeDraggable(coplayFollowerBanner, { storageKey: "coplay_pos_follower", skipSelector: ".text-btn" });
+      _coplayMakeDraggable(coplayFab, { storageKey: "coplay_pos_fab", onTap: _coplayFabTap });
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape" && coplayModal.style.display === "flex") _coplayCloseModal();
       });

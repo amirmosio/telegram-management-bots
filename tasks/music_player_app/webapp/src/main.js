@@ -2752,22 +2752,30 @@ const coplayFabAvatarImg = $('coplay-fab-avatar-img');
 const coplayFabAvatarFallback = $('coplay-fab-avatar-fallback');
 const coplayFabBadge = $('coplay-fab-badge');
 
-// Make an element draggable using plain mouse + touch events. Drag
-// fires for any down anywhere on the element EXCEPT targets matching
-// `skipSelector` (e.g. the End/Leave button on a banner — those stay
-// pure click targets). Movement threshold keeps short taps as clicks;
-// the trailing click is suppressed if an actual drag happened.
-// Position is persisted per `storageKey` and re-applied when the
-// element becomes visible. Clamped to viewport.
+// ────────────────────────────────────────────────────────────────────
+//  Tap + drag for the three co-play overlays (host banner, follower
+//  banner, "Join" FAB). One helper, one event model, no pointer
+//  events (those have edge cases on mobile Safari that we don't need).
 //
-// We intentionally avoid Pointer Events here. They sometimes go
-// missing when the down-target is a child element and the finger /
-// cursor leaves it before any move events have fired (mobile Safari
-// in particular). Listening for moves on `document` solves that —
-// no matter where the finger ends up, document gets the events.
+//  Behaviour:
+//    • Down anywhere on `el`, EXCEPT children matching `skipSelector`
+//      (e.g. the End/Leave button) — those keep their normal click
+//      handlers and are entirely outside the drag system.
+//    • If the cursor / finger moves > THRESHOLD px → we're dragging.
+//      `apply()` updates the element's left/top, persisted in
+//      `localStorage` on release, clamped to viewport.
+//    • If the cursor / finger ends without moving past threshold →
+//      it was a tap. We invoke `onTap` ourselves (used by the FAB
+//      to trigger "Join co-play").
+//
+//  Move + end listeners live on `document` so the drag never breaks
+//  if the cursor / finger leaves the element. The element is never
+//  the move target after the down — `document` is, always.
+// ────────────────────────────────────────────────────────────────────
 const _COPLAY_DRAG_THRESHOLD_PX = 6;
-function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
+function _coplayMakeDraggable(el, opts = {}) {
     if (!el) return;
+    const { storageKey, skipSelector = null, onTap = null } = opts;
     el.classList.add('coplay-draggable');
 
     const apply = (left, top) => {
@@ -2785,21 +2793,21 @@ function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
     };
 
     const restore = () => {
-        const raw = localStorage.getItem(storageKey);
-        if (!raw) return;
+        if (!storageKey) return;
         try {
-            const { x, y } = JSON.parse(raw);
-            if (Number.isFinite(x) && Number.isFinite(y)) apply(x, y);
+            const v = JSON.parse(localStorage.getItem(storageKey) || 'null');
+            if (v && Number.isFinite(v.x) && Number.isFinite(v.y)) apply(v.x, v.y);
         } catch {}
     };
 
-    let active = false;        // press has begun, may or may not have crossed threshold
-    let dragging = false;      // crossed threshold → actually dragging
-    let suppressNextClick = false;
+    let active = false;     // press has started; may/may not have crossed threshold yet
+    let dragging = false;   // crossed threshold → actively dragging
     let startX = 0, startY = 0, originX = 0, originY = 0;
 
-    const onStart = (e, x, y) => {
-        if (skipSelector && e.target.closest(skipSelector)) return false;
+    const begin = (target, x, y) => {
+        // The skip selector keeps the End/Leave action button out of
+        // the drag system entirely so its native click handler runs.
+        if (skipSelector && target.closest(skipSelector)) return false;
         active = true;
         dragging = false;
         const r = el.getBoundingClientRect();
@@ -2809,7 +2817,7 @@ function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
         startY = y;
         return true;
     };
-    const onMove = (x, y, ePreventDefault) => {
+    const move = (x, y, prevent) => {
         if (!active) return;
         const dx = x - startX;
         const dy = y - startY;
@@ -2819,72 +2827,70 @@ function _coplayMakeDraggable(el, storageKey, skipSelector = null) {
         }
         if (dragging) {
             apply(originX + dx, originY + dy);
-            if (typeof ePreventDefault === 'function') ePreventDefault();
+            if (prevent) prevent();
         }
     };
-    const onEnd = () => {
+    const finish = () => {
         if (!active) return;
+        const wasDragged = dragging;
         active = false;
-        if (dragging) {
+        dragging = false;
+        if (wasDragged) {
             el.classList.remove('dragging');
-            const r = el.getBoundingClientRect();
-            try { localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top })); } catch {}
-            suppressNextClick = true;
-            dragging = false;
+            if (storageKey) {
+                const r = el.getBoundingClientRect();
+                try { localStorage.setItem(storageKey, JSON.stringify({ x: r.left, y: r.top })); } catch {}
+            }
+        } else if (onTap) {
+            // Pure tap (no drag). Trigger the action explicitly — we
+            // never rely on the synthetic click event that may or may
+            // not fire after a touch.
+            try { onTap(); } catch (e) { console.warn('onTap threw:', e); }
         }
     };
 
-    // Mouse path (desktop)
+    // ── Mouse (desktop) ──
     el.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
-        if (!onStart(e, e.clientX, e.clientY)) return;
+        if (!begin(e.target, e.clientX, e.clientY)) return;
         e.preventDefault();
     });
     document.addEventListener('mousemove', (e) => {
-        onMove(e.clientX, e.clientY, () => e.preventDefault());
+        move(e.clientX, e.clientY, () => e.preventDefault());
     });
-    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('mouseup', finish);
 
-    // Touch path (mobile). passive:false so we can preventDefault during a
-    // drag and stop the browser from scrolling the page underneath.
+    // ── Touch (mobile) ──
+    // touchstart preventDefault when the press is ours, so iOS doesn't
+    // fire synthetic mouse events that would double-trigger onTap.
+    // Skipped touches (skipSelector match) leave defaults intact so
+    // the End/Leave button receives its native click normally.
     el.addEventListener('touchstart', (e) => {
         if (e.touches.length !== 1) return;
         const t = e.touches[0];
-        if (!onStart(e, t.clientX, t.clientY)) return;
-        // Don't preventDefault here — that'd suppress the click that a
-        // pure tap should still produce. We only suppress on actual move.
-    }, { passive: true });
+        if (!begin(e.target, t.clientX, t.clientY)) return;
+        e.preventDefault();
+    }, { passive: false });
     document.addEventListener('touchmove', (e) => {
         if (!active || e.touches.length !== 1) return;
         const t = e.touches[0];
-        onMove(t.clientX, t.clientY, () => e.preventDefault());
+        move(t.clientX, t.clientY, () => e.preventDefault());
     }, { passive: false });
-    document.addEventListener('touchend', onEnd);
-    document.addEventListener('touchcancel', onEnd);
+    document.addEventListener('touchend', finish);
+    document.addEventListener('touchcancel', finish);
 
-    // Suppress the click that the OS fires after a tap turned into a drag.
-    el.addEventListener('click', (e) => {
-        if (suppressNextClick) {
-            suppressNextClick = false;
-            e.preventDefault();
-            e.stopImmediatePropagation();
-        }
-    }, true);
-
+    // Re-clamp on resize so a drag from yesterday isn't stranded.
     window.addEventListener('resize', () => {
         if (el.style.left) {
             const r = el.getBoundingClientRect();
             apply(r.left, r.top);
         }
     });
-
+    // Re-apply persisted position whenever the element becomes visible.
     new MutationObserver(() => {
         if (el.style.display !== 'none') restore();
     }).observe(el, { attributes: true, attributeFilter: ['style'] });
 }
-_coplayMakeDraggable(coplayHostBanner, 'coplay_pos_host', '.text-btn');
-_coplayMakeDraggable(coplayFollowerBanner, 'coplay_pos_follower', '.text-btn');
-_coplayMakeDraggable(coplayFab, 'coplay_pos_fab');
 
 let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastTid }
 let _coplayInviteList = [];        // multi-select buffer, [{ id, title, _entity }]
@@ -3597,12 +3603,12 @@ coplaySearchInput.addEventListener('input', e =>
 coplayStartBtn.addEventListener('click', _coplayStartHost);
 coplayEndBtn.addEventListener('click', () => _coplayEndHost());
 coplayLeaveBtn.addEventListener('click', () => _coplayLeaveFollower('left'));
-coplayFab.addEventListener('click', () => {
+function _coplayFabTap() {
     const msgId = parseInt(coplayFab.dataset.msgId || '0', 10);
     const channelId = parseInt(coplayFab.dataset.channelId || '0', 10);
     if (!msgId || !channelId) return;
     // iOS audio-gesture unlock: play+pause the (currently empty) audio
-    // element synchronously inside the click handler so the upcoming
+    // element synchronously inside the tap handler so the upcoming
     // async-chain audio.play() inherits the user-gesture privilege.
     try {
         const p = audio.play();
@@ -3612,7 +3618,15 @@ coplayFab.addEventListener('click', () => {
     const info = _pendingInvites.get(msgId);
     _pendingInvites.delete(msgId);
     _coplayEnterFollower(msgId, channelId, info?.hostName);
-});
+}
+
+// Wire all three overlays through the same tap-or-drag helper.
+//   - Banners: drag from the dot / chips / empty space; the End / Leave
+//     button keeps its native click (skipSelector excludes it from drag).
+//   - FAB: any tap → join the co-play; any drag → reposition.
+_coplayMakeDraggable(coplayHostBanner, { storageKey: 'coplay_pos_host', skipSelector: '.text-btn' });
+_coplayMakeDraggable(coplayFollowerBanner, { storageKey: 'coplay_pos_follower', skipSelector: '.text-btn' });
+_coplayMakeDraggable(coplayFab, { storageKey: 'coplay_pos_fab', onTap: _coplayFabTap });
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && coplayModal.style.display === 'flex') _coplayCloseModal();
 });
