@@ -86739,7 +86739,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _PIANO_MIDI_LOW = 21;
       var _PIANO_MIDI_HIGH = 108;
       var _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-      var _PIANO_MAGENTA_URL = "https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/es5/transcription.js";
+      var _PIANO_MAGENTA_URL = "https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/dist/magentamusic.min.js";
       var _PIANO_OAF_CHECKPOINT = "https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni";
       var _PIANO_NOTES_VERSION = 3;
       function _pianoSetLoading(label) {

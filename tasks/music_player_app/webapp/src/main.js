@@ -5190,14 +5190,14 @@ const _PIANO_MIDI_LOW = 21;   // A0
 const _PIANO_MIDI_HIGH = 108; // C8
 // Pitch class → white-key flag. Order: C C# D D# E F F# G G# A A# B
 const _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
-// @magenta/music UMD bundle from jsdelivr — the official browser
-// distribution. We loaded esm.sh first; it produced a "Lt is not a
-// constructor" error inside transcribeFromAudioBuffer because esm.sh's
-// transform of magenta's /esm/ subpath corrupted an internal class
-// reference. The /es5/ UMD is what magenta's own docs recommend, is
-// what every Glitch demo uses, and exposes a `mm` global with
-// OnsetsAndFrames already wired to its bundled TF.js.
-const _PIANO_MAGENTA_URL    = 'https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/es5/transcription.js';
+// @magenta/music full UMD bundle from jsdelivr — the package's
+// declared default file (and the only browser bundle that exists in
+// 1.23.1; per-module /es5/ subpaths are 404). The /esm/ subpath via
+// esm.sh broke a constructor at runtime ("Lt is not a constructor").
+// The full bundle is bigger (~7-8 MB) but is the official browser
+// distribution and exposes `mm` as a global with OnsetsAndFrames
+// wired to its bundled TF.js.
+const _PIANO_MAGENTA_URL    = 'https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/dist/magentamusic.min.js';
 // Official Magenta-hosted Onsets & Frames checkpoint (universal,
 // piano-trained on MAESTRO). ~30 MB. The model fetches a manifest +
 // weights from this base URL on initialize().
