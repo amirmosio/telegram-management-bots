@@ -86741,7 +86741,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _PIANO_IS_WHITE = [true, false, true, false, true, true, false, true, false, true, false, true];
       var _PIANO_MAGENTA_URL = "https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/dist/magentamusic.min.js";
       var _PIANO_OAF_CHECKPOINT = "https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni";
-      var _PIANO_NOTES_VERSION = 3;
+      var _PIANO_NOTES_VERSION = 4;
       function _pianoSetLoading(label) {
         if (!pianoOverlay) return;
         if (label === null) {
@@ -86841,11 +86841,42 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const seq = await _pianoModelInstance.transcribeFromAudioBuffer(audioBuffer);
         if (progressCb) progressCb(1);
         if (!seq || !Array.isArray(seq.notes)) return [];
-        return seq.notes.filter((n) => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH).map((n) => ({
+        const raw = seq.notes.filter((n) => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH).map((n) => ({
           t0: Number(n.startTime) || 0,
           t1: Number(n.endTime) || 0,
           pitch: n.pitch
         })).filter((n) => n.t1 > n.t0);
+        return _pianoTrimSustain(raw);
+      }
+      var _PIANO_MAX_NOTE_S = 1.2;
+      var _PIANO_REONSET_GUARD_S = 0.05;
+      function _pianoTrimSustain(notes) {
+        if (!Array.isArray(notes) || notes.length === 0) return notes;
+        const byPitch = /* @__PURE__ */ new Map();
+        for (const n of notes) {
+          let arr = byPitch.get(n.pitch);
+          if (!arr) {
+            arr = [];
+            byPitch.set(n.pitch, arr);
+          }
+          arr.push(n);
+        }
+        for (const arr of byPitch.values()) arr.sort((a, b) => a.t0 - b.t0);
+        const out = [];
+        for (const arr of byPitch.values()) {
+          for (let i = 0; i < arr.length; i++) {
+            const n = arr[i];
+            const next = arr[i + 1];
+            let t1 = Math.min(n.t1, n.t0 + _PIANO_MAX_NOTE_S);
+            if (next && next.t0 - n.t0 > _PIANO_REONSET_GUARD_S) {
+              t1 = Math.min(t1, next.t0);
+            }
+            if (t1 - n.t0 < _PIANO_REONSET_GUARD_S) t1 = n.t0 + _PIANO_REONSET_GUARD_S;
+            out.push({ t0: n.t0, t1, pitch: n.pitch });
+          }
+        }
+        out.sort((a, b) => a.t0 - b.t0 || a.pitch - b.pitch);
+        return out;
       }
       function _pianoFindCurrentTrack() {
         if (typeof playerTracks === "undefined") return null;

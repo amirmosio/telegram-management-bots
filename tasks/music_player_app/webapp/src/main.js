@@ -5207,7 +5207,8 @@ const _PIANO_OAF_CHECKPOINT = 'https://storage.googleapis.com/magentadata/js/che
 // instead of silently using stale output. Stored next to pianoNotes.
 //   v2 = basic-pitch with tightened thresholds (0.65/0.45/11+amp≥0.3)
 //   v3 = Magenta Onsets & Frames (different engine entirely)
-const _PIANO_NOTES_VERSION = 3;
+//   v4 = Magenta + post-trim (cap + same-pitch reonset)
+const _PIANO_NOTES_VERSION = 4;
 
 function _pianoSetLoading(label) {
     if (!pianoOverlay) return;
@@ -5326,7 +5327,7 @@ async function _pianoTranscribe(audioBuffer, progressCb) {
     if (progressCb) progressCb(1.0);
     if (!seq || !Array.isArray(seq.notes)) return [];
 
-    return seq.notes
+    const raw = seq.notes
         .filter(n => n.pitch >= _PIANO_MIDI_LOW && n.pitch <= _PIANO_MIDI_HIGH)
         .map(n => ({
             t0: Number(n.startTime) || 0,
@@ -5334,6 +5335,44 @@ async function _pianoTranscribe(audioBuffer, progressCb) {
             pitch: n.pitch,
         }))
         .filter(n => n.t1 > n.t0);
+    return _pianoTrimSustain(raw);
+}
+
+// Onsets & Frames is trained on MAESTRO, which has heavy sustain-pedal
+// usage. The model accordingly emits long note tails — visually this
+// looks like notes "sticking" on the falling-bar view. We can't change
+// the model, so we trim its output:
+//   • cap every note at _PIANO_MAX_NOTE_S (a typical visual beat),
+//   • end any note when the same pitch is hit again (50 ms guard so
+//     the same detection doesn't kill itself).
+// Shrinks bars to feel like discrete keystrokes instead of a held-pedal
+// blur. Tune the cap if real long notes start being chopped too short.
+const _PIANO_MAX_NOTE_S = 1.2;
+const _PIANO_REONSET_GUARD_S = 0.05;
+function _pianoTrimSustain(notes) {
+    if (!Array.isArray(notes) || notes.length === 0) return notes;
+    const byPitch = new Map();
+    for (const n of notes) {
+        let arr = byPitch.get(n.pitch);
+        if (!arr) { arr = []; byPitch.set(n.pitch, arr); }
+        arr.push(n);
+    }
+    for (const arr of byPitch.values()) arr.sort((a, b) => a.t0 - b.t0);
+    const out = [];
+    for (const arr of byPitch.values()) {
+        for (let i = 0; i < arr.length; i++) {
+            const n = arr[i];
+            const next = arr[i + 1];
+            let t1 = Math.min(n.t1, n.t0 + _PIANO_MAX_NOTE_S);
+            if (next && next.t0 - n.t0 > _PIANO_REONSET_GUARD_S) {
+                t1 = Math.min(t1, next.t0);
+            }
+            if (t1 - n.t0 < _PIANO_REONSET_GUARD_S) t1 = n.t0 + _PIANO_REONSET_GUARD_S;
+            out.push({ t0: n.t0, t1, pitch: n.pitch });
+        }
+    }
+    out.sort((a, b) => a.t0 - b.t0 || a.pitch - b.pitch);
+    return out;
 }
 
 function _pianoFindCurrentTrack() {
