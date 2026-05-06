@@ -4734,11 +4734,9 @@ async function enterHypnotise() {
 
     try { _requestWakeLock(); } catch (_) {}
 
-    if (hypnotiseOverlay.requestFullscreen) {
-        hypnotiseOverlay.requestFullscreen().catch(() => {});
-    } else if (hypnotiseOverlay.webkitRequestFullscreen) {
-        try { hypnotiseOverlay.webkitRequestFullscreen(); } catch (_) {}
-    }
+    // No requestFullscreen() — the overlay covers the webapp viewport
+    // via position: fixed; inset: 0; that's enough. Going OS-fullscreen
+    // would force-resize the browser window which the user doesn't want.
 
     if (_hypRafId == null) _hypRafId = requestAnimationFrame(_hypTick);
 
@@ -4756,12 +4754,6 @@ function exitHypnotise() {
     if (_hypRafId != null) { cancelAnimationFrame(_hypRafId); _hypRafId = null; }
     _detachHypGestures();
     _hypClearHold();
-
-    if (document.fullscreenElement === hypnotiseOverlay) {
-        document.exitFullscreen?.().catch(() => {});
-    } else if (document.webkitFullscreenElement === hypnotiseOverlay) {
-        try { document.webkitExitFullscreen?.(); } catch (_) {}
-    }
     // Don't release the wake lock — playback may still want it.
 }
 
@@ -4819,16 +4811,15 @@ audio.addEventListener('loadstart', () => {
     }
 });
 
-// If the user exits fullscreen via Esc / system gesture, also leave hypnotise mode.
-document.addEventListener('fullscreenchange', () => {
-    if (!document.fullscreenElement && hypnotiseOverlay.classList.contains('open')) {
-        exitHypnotise();
-    }
-    if (!document.fullscreenElement && visualizerOverlay?.classList.contains('open')) {
-        exitVisualizer();
-    }
-    if (!document.fullscreenElement && typeof pianoOverlay !== 'undefined' && pianoOverlay?.classList.contains('open')) {
-        exitPiano();
+// Esc / Backspace exits any of the overlay modes. Replaces the previous
+// fullscreenchange listener — the overlays no longer call requestFullscreen
+// (they just cover the webapp viewport), so we wire keyboard exit directly.
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (hypnotiseOverlay?.classList.contains('open')) { exitHypnotise(); e.preventDefault(); return; }
+    if (visualizerOverlay?.classList.contains('open')) { exitVisualizer(); e.preventDefault(); return; }
+    if (typeof pianoOverlay !== 'undefined' && pianoOverlay?.classList.contains('open')) {
+        exitPiano(); e.preventDefault();
     }
 });
 
@@ -4995,11 +4986,8 @@ async function enterVisualizer() {
     _vizApplySize();
     if (_vizCurrentPresetIdx < 0) _vizCyclePreset();
 
-    if (visualizerOverlay.requestFullscreen) {
-        visualizerOverlay.requestFullscreen().catch(() => {});
-    } else if (visualizerOverlay.webkitRequestFullscreen) {
-        try { visualizerOverlay.webkitRequestFullscreen(); } catch (_) {}
-    }
+    // No requestFullscreen() — the overlay covers the webapp viewport
+    // via position: fixed; inset: 0.
 
     try { _requestWakeLock(); } catch (_) {}
 
@@ -5015,12 +5003,6 @@ function exitVisualizer() {
     _detachVizGestures();
     _vizClearHold();
     visualizerPresetName.classList.remove('show');
-
-    if (document.fullscreenElement === visualizerOverlay) {
-        document.exitFullscreen?.().catch(() => {});
-    } else if (document.webkitFullscreenElement === visualizerOverlay) {
-        try { document.webkitExitFullscreen?.(); } catch (_) {}
-    }
     // Audio context stays connected — see top-of-block comment. We can't
     // un-route createMediaElementSource cleanly, and recreating the audio
     // element would interrupt playback.
@@ -5503,11 +5485,8 @@ async function enterPiano() {
 
     _pianoApplySize();
 
-    if (pianoOverlay.requestFullscreen) {
-        pianoOverlay.requestFullscreen().catch(() => {});
-    } else if (pianoOverlay.webkitRequestFullscreen) {
-        try { pianoOverlay.webkitRequestFullscreen(); } catch (_) {}
-    }
+    // No requestFullscreen() — the overlay covers the webapp viewport
+    // via position: fixed; inset: 0.
 
     try { _requestWakeLock(); } catch (_) {}
 
@@ -5528,12 +5507,6 @@ function exitPiano() {
     if (_pianoRafId != null) { cancelAnimationFrame(_pianoRafId); _pianoRafId = null; }
     _detachPianoGestures();
     _pianoClearHold();
-
-    if (document.fullscreenElement === pianoOverlay) {
-        document.exitFullscreen?.().catch(() => {});
-    } else if (document.webkitFullscreenElement === pianoOverlay) {
-        try { document.webkitExitFullscreen?.(); } catch (_) {}
-    }
 }
 
 function _pianoClearHold() {

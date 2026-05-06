@@ -86426,15 +86426,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           _requestWakeLock();
         } catch (_) {
         }
-        if (hypnotiseOverlay.requestFullscreen) {
-          hypnotiseOverlay.requestFullscreen().catch(() => {
-          });
-        } else if (hypnotiseOverlay.webkitRequestFullscreen) {
-          try {
-            hypnotiseOverlay.webkitRequestFullscreen();
-          } catch (_) {
-          }
-        }
         if (_hypRafId == null) _hypRafId = requestAnimationFrame(_hypTick);
         _hypAnalyzeCurrentTrack();
       }
@@ -86450,15 +86441,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         _detachHypGestures();
         _hypClearHold();
-        if (document.fullscreenElement === hypnotiseOverlay) {
-          document.exitFullscreen?.().catch(() => {
-          });
-        } else if (document.webkitFullscreenElement === hypnotiseOverlay) {
-          try {
-            document.webkitExitFullscreen?.();
-          } catch (_) {
-          }
-        }
       }
       function _hypClearHold() {
         if (_hypHoldTimer != null) {
@@ -86511,15 +86493,21 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           _pianoAnalyzeCurrentTrack();
         }
       });
-      document.addEventListener("fullscreenchange", () => {
-        if (!document.fullscreenElement && hypnotiseOverlay.classList.contains("open")) {
+      document.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape") return;
+        if (hypnotiseOverlay?.classList.contains("open")) {
           exitHypnotise();
+          e.preventDefault();
+          return;
         }
-        if (!document.fullscreenElement && visualizerOverlay?.classList.contains("open")) {
+        if (visualizerOverlay?.classList.contains("open")) {
           exitVisualizer();
+          e.preventDefault();
+          return;
         }
-        if (!document.fullscreenElement && typeof pianoOverlay !== "undefined" && pianoOverlay?.classList.contains("open")) {
+        if (typeof pianoOverlay !== "undefined" && pianoOverlay?.classList.contains("open")) {
           exitPiano();
+          e.preventDefault();
         }
       });
       var visualizerOverlay = $("visualizer-overlay");
@@ -86652,15 +86640,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _attachVizGestures();
         _vizApplySize();
         if (_vizCurrentPresetIdx < 0) _vizCyclePreset();
-        if (visualizerOverlay.requestFullscreen) {
-          visualizerOverlay.requestFullscreen().catch(() => {
-          });
-        } else if (visualizerOverlay.webkitRequestFullscreen) {
-          try {
-            visualizerOverlay.webkitRequestFullscreen();
-          } catch (_) {
-          }
-        }
         try {
           _requestWakeLock();
         } catch (_) {
@@ -86678,15 +86657,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _detachVizGestures();
         _vizClearHold();
         visualizerPresetName.classList.remove("show");
-        if (document.fullscreenElement === visualizerOverlay) {
-          document.exitFullscreen?.().catch(() => {
-          });
-        } else if (document.webkitFullscreenElement === visualizerOverlay) {
-          try {
-            document.webkitExitFullscreen?.();
-          } catch (_) {
-          }
-        }
       }
       function _vizClearHold() {
         if (_vizHoldTimer != null) {
@@ -87110,15 +87080,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _pianoSetLoading("Loading piano model\u2026");
         _attachPianoGestures();
         _pianoApplySize();
-        if (pianoOverlay.requestFullscreen) {
-          pianoOverlay.requestFullscreen().catch(() => {
-          });
-        } else if (pianoOverlay.webkitRequestFullscreen) {
-          try {
-            pianoOverlay.webkitRequestFullscreen();
-          } catch (_) {
-          }
-        }
         try {
           _requestWakeLock();
         } catch (_) {
@@ -87139,15 +87100,6 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         _detachPianoGestures();
         _pianoClearHold();
-        if (document.fullscreenElement === pianoOverlay) {
-          document.exitFullscreen?.().catch(() => {
-          });
-        } else if (document.webkitFullscreenElement === pianoOverlay) {
-          try {
-            document.webkitExitFullscreen?.();
-          } catch (_) {
-          }
-        }
       }
       function _pianoClearHold() {
         if (_pianoHoldTimer != null) {
