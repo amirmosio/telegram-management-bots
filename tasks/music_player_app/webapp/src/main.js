@@ -3002,14 +3002,14 @@ document.addEventListener('keydown', e => {
 const COPLAY_HOST_KEY = 'coplay_host_msg';
 const COPLAY_POLL_MS = 700;
 // Drift correction is tiered:
-//   < 50 ms: do nothing (audio-engine jitter is already bigger than this).
-//   50-600 ms: nudge playbackRate so we converge over ~5-15 s without
-//              the audible glitch a seek would cause.
-//   > 600 ms: hard seek + reset rate.
-const COPLAY_DRIFT_IGNORE_SEC = 0.05;
-const COPLAY_DRIFT_TRIM_SEC = 0.6;
-const COPLAY_RATE_TRIM_FAST = 1.04;  // 4 % faster — catches up ~2.4 s/min
-const COPLAY_RATE_TRIM_SLOW = 0.96;
+//   < 30 ms: do nothing (audio-engine jitter is already bigger than this).
+//   30-300 ms: nudge playbackRate *proportionally* so the trim shrinks
+//              as we converge (smooth approach to 0, not a bang-bang).
+//   > 300 ms: hard seek + reset rate.
+const COPLAY_DRIFT_IGNORE_SEC = 0.03;
+const COPLAY_DRIFT_TRIM_SEC = 0.3;
+const COPLAY_RATE_TRIM_MAX = 0.05;     // cap the rate offset at ±5 %
+const COPLAY_RATE_TRIM_GAIN = 0.2;     // 200 ms drift → 4 % rate offset
 
 const btnCoplay = $('btn-coplay');
 const coplayModal = $('coplay-modal');
@@ -3591,9 +3591,13 @@ async function _coplayPollTick(initial) {
         if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
             if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
         } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
-            // Behind → speed up; ahead → slow down. Pitch shift at ±4 %
-            // is essentially imperceptible.
-            audio.playbackRate = drift < 0 ? COPLAY_RATE_TRIM_FAST : COPLAY_RATE_TRIM_SLOW;
+            // Proportional rate trim: rate = 1 - drift * GAIN, clamped.
+            // 200 ms behind → 1.04, 200 ms ahead → 0.96, 30 ms → 1.006.
+            const offset = Math.max(
+                -COPLAY_RATE_TRIM_MAX,
+                Math.min(COPLAY_RATE_TRIM_MAX, drift * COPLAY_RATE_TRIM_GAIN),
+            );
+            audio.playbackRate = 1 - offset;
         } else {
             try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
             if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;

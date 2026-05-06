@@ -84883,10 +84883,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       });
       var COPLAY_HOST_KEY = "coplay_host_msg";
       var COPLAY_POLL_MS = 700;
-      var COPLAY_DRIFT_IGNORE_SEC = 0.05;
-      var COPLAY_DRIFT_TRIM_SEC = 0.6;
-      var COPLAY_RATE_TRIM_FAST = 1.04;
-      var COPLAY_RATE_TRIM_SLOW = 0.96;
+      var COPLAY_DRIFT_IGNORE_SEC = 0.03;
+      var COPLAY_DRIFT_TRIM_SEC = 0.3;
+      var COPLAY_RATE_TRIM_MAX = 0.05;
+      var COPLAY_RATE_TRIM_GAIN = 0.2;
       var btnCoplay = $("btn-coplay");
       var coplayModal = $("coplay-modal");
       var coplaySearchInput = $("coplay-search");
@@ -85367,7 +85367,11 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
             if (audio.playbackRate !== 1) audio.playbackRate = 1;
           } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
-            audio.playbackRate = drift < 0 ? COPLAY_RATE_TRIM_FAST : COPLAY_RATE_TRIM_SLOW;
+            const offset = Math.max(
+              -COPLAY_RATE_TRIM_MAX,
+              Math.min(COPLAY_RATE_TRIM_MAX, drift * COPLAY_RATE_TRIM_GAIN)
+            );
+            audio.playbackRate = 1 - offset;
           } else {
             try {
               audio.currentTime = Math.max(0, Math.min(audio.duration, expected));
