@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=192">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=192">
-    <link rel="stylesheet" href="style.css?v=192">
+    <link rel="manifest" href="/manifest.json?v=193">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=193">
+    <link rel="stylesheet" href="style.css?v=193">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -462,6 +462,10 @@
             <div id="piano-seekbar-fill"></div>
             <div id="piano-seekbar-handle"></div>
         </div>
+        <button id="piano-midi-toggle" type="button" aria-pressed="false" aria-label="Toggle MIDI keyboard input" title="Play along with a connected MIDI keyboard">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="1.5"/><line x1="6" y1="6" x2="6" y2="14"/><line x1="10" y1="6" x2="10" y2="14"/><line x1="14" y1="6" x2="14" y2="14"/><line x1="18" y1="6" x2="18" y2="14"/></svg>
+            <span class="piano-midi-label">MIDI</span>
+        </button>
         <div id="piano-loading" aria-hidden="true">
             <div class="piano-spinner"></div>
             <div id="piano-loading-label" class="piano-loading-label">Loading piano model…</div>
@@ -476,6 +480,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=192"></script>
+    <script src="app.bundle.js?v=193"></script>
 </body>
 </html>

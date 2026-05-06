@@ -11,6 +11,7 @@ import { installRecognize } from './recognize.js';
 import { installHypnotise } from './visualizers/hypnotise.js';
 import { installButterchurn } from './visualizers/butterchurn.js';
 import { installPiano } from './visualizers/piano-roll.js';
+import { installMidiKeyboard } from './midi-keyboard.js';
 
 // ══════════════════════════════════════
 //  STATE
@@ -4395,13 +4396,56 @@ installButterchurn({
     audio,
     requestWakeLock: _requestWakeLock,
 });
+// MIDI keyboard install lives BEFORE installPiano so the piano renderer
+// can capture its `getActiveNotes` getter for live-key highlighting. Also
+// wires the toggle button in the piano overlay.
+const midiKeyboard = installMidiKeyboard();
 installPiano({
     audio,
     getCurrentTrackId: () => currentTrackId,
     getPlayerTracks: () => playerTracks,
     getPlayerGroupId: () => playerGroupId,
     requestWakeLock: _requestWakeLock,
+    getMidiActiveNotes: () => midiKeyboard.getActiveNotes(),
 });
+
+// Piano-overlay MIDI toggle. Hidden when Web MIDI isn't available
+// (Safari, currently). Click toggles enable/disable; while enabled the
+// button shows an "on" state and notes pressed on the connected
+// keyboard play through the browser's audio output.
+(function wireMidiToggle() {
+    const btn = document.getElementById('piano-midi-toggle');
+    if (!btn) return;
+    if (!midiKeyboard.isAvailable()) {
+        btn.style.display = 'none';
+        return;
+    }
+    btn.addEventListener('pointerdown', e => e.stopPropagation()); // don't trigger hold-to-exit
+    btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (midiKeyboard.isEnabled()) {
+            midiKeyboard.disable();
+            btn.classList.remove('on');
+            btn.setAttribute('aria-pressed', 'false');
+            return;
+        }
+        btn.classList.add('loading');
+        const res = await midiKeyboard.enable();
+        btn.classList.remove('loading');
+        if (res.ok) {
+            btn.classList.add('on');
+            btn.setAttribute('aria-pressed', 'true');
+            showToast('MIDI on — play your keyboard');
+        } else if (res.reason === 'not-supported') {
+            showToast('MIDI not supported in this browser');
+            btn.style.display = 'none';
+        } else if (res.reason === 'SecurityError' || res.reason === 'NotAllowedError') {
+            showToast('MIDI access blocked — allow in browser settings');
+        } else {
+            showToast('Could not enable MIDI');
+        }
+    });
+})();
 
 // ══════════════════════════════════════
 //  BOOT

@@ -20,6 +20,7 @@
     "crypto-browserify": "^3.12.1",
     "events": "^3.3.0",
     "input": "^1.0.1",
+    "smplr": "^0.20.0",
     "stream-browserify": "^3.0.0",
     "telegram": "^2.26.22",
     "util": "^0.12.5"

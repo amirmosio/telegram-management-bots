@@ -52,7 +52,7 @@
     "node_modules/base64-js/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.byteLength = byteLength;
       exports.toByteArray = toByteArray;
       exports.fromByteArray = fromByteArray;
@@ -154,7 +154,7 @@
   var require_ieee754 = __commonJS({
     "node_modules/ieee754/index.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.read = function(buffer, offset, isLE, mLen, nBytes) {
         var e, m;
         var eLen = nBytes * 8 - mLen - 1;
@@ -240,7 +240,7 @@
     "node_modules/buffer/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var base64 = require_base64_js();
       var ieee754 = require_ieee754();
       var customInspectSymbol = typeof Symbol === "function" && typeof Symbol["for"] === "function" ? Symbol["for"]("nodejs.util.inspect.custom") : null;
@@ -1845,7 +1845,7 @@
     "node_modules/has-symbols/shams.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = function hasSymbols() {
         if (typeof Symbol !== "function" || typeof Object.getOwnPropertySymbols !== "function") {
           return false;
@@ -1902,7 +1902,7 @@
     "node_modules/has-tostringtag/shams.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var hasSymbols = require_shams();
       module.exports = function hasToStringTagShams() {
         return hasSymbols() && !!Symbol.toStringTag;
@@ -1915,7 +1915,7 @@
     "node_modules/es-object-atoms/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Object;
     }
   });
@@ -1925,7 +1925,7 @@
     "node_modules/es-errors/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Error;
     }
   });
@@ -1935,7 +1935,7 @@
     "node_modules/es-errors/eval.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = EvalError;
     }
   });
@@ -1945,7 +1945,7 @@
     "node_modules/es-errors/range.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = RangeError;
     }
   });
@@ -1955,7 +1955,7 @@
     "node_modules/es-errors/ref.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = ReferenceError;
     }
   });
@@ -1965,7 +1965,7 @@
     "node_modules/es-errors/syntax.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = SyntaxError;
     }
   });
@@ -1975,7 +1975,7 @@
     "node_modules/es-errors/type.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = TypeError;
     }
   });
@@ -1985,7 +1985,7 @@
     "node_modules/es-errors/uri.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = URIError;
     }
   });
@@ -1995,7 +1995,7 @@
     "node_modules/math-intrinsics/abs.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Math.abs;
     }
   });
@@ -2005,7 +2005,7 @@
     "node_modules/math-intrinsics/floor.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Math.floor;
     }
   });
@@ -2015,7 +2015,7 @@
     "node_modules/math-intrinsics/max.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Math.max;
     }
   });
@@ -2025,7 +2025,7 @@
     "node_modules/math-intrinsics/min.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Math.min;
     }
   });
@@ -2035,7 +2035,7 @@
     "node_modules/math-intrinsics/pow.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Math.pow;
     }
   });
@@ -2045,7 +2045,7 @@
     "node_modules/math-intrinsics/round.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Math.round;
     }
   });
@@ -2055,7 +2055,7 @@
     "node_modules/math-intrinsics/isNaN.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Number.isNaN || function isNaN2(a) {
         return a !== a;
       };
@@ -2067,7 +2067,7 @@
     "node_modules/math-intrinsics/sign.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var $isNaN = require_isNaN();
       module.exports = function sign(number) {
         if ($isNaN(number) || number === 0) {
@@ -2083,7 +2083,7 @@
     "node_modules/gopd/gOPD.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Object.getOwnPropertyDescriptor;
     }
   });
@@ -2093,7 +2093,7 @@
     "node_modules/gopd/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var $gOPD = require_gOPD();
       if ($gOPD) {
         try {
@@ -2111,7 +2111,7 @@
     "node_modules/es-define-property/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var $defineProperty = Object.defineProperty || false;
       if ($defineProperty) {
         try {
@@ -2129,7 +2129,7 @@
     "node_modules/has-symbols/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var origSymbol = typeof Symbol !== "undefined" && Symbol;
       var hasSymbolSham = require_shams();
       module.exports = function hasNativeSymbols() {
@@ -2155,7 +2155,7 @@
     "node_modules/get-proto/Reflect.getPrototypeOf.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = typeof Reflect !== "undefined" && Reflect.getPrototypeOf || null;
     }
   });
@@ -2165,7 +2165,7 @@
     "node_modules/get-proto/Object.getPrototypeOf.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var $Object = require_es_object_atoms();
       module.exports = $Object.getPrototypeOf || null;
     }
@@ -2176,7 +2176,7 @@
     "node_modules/function-bind/implementation.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var ERROR_MESSAGE = "Function.prototype.bind called on incompatible ";
       var toStr = Object.prototype.toString;
       var max = Math.max;
@@ -2254,7 +2254,7 @@
     "node_modules/function-bind/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var implementation = require_implementation();
       module.exports = Function.prototype.bind || implementation;
     }
@@ -2265,7 +2265,7 @@
     "node_modules/call-bind-apply-helpers/functionCall.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Function.prototype.call;
     }
   });
@@ -2275,7 +2275,7 @@
     "node_modules/call-bind-apply-helpers/functionApply.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Function.prototype.apply;
     }
   });
@@ -2285,7 +2285,7 @@
     "node_modules/call-bind-apply-helpers/reflectApply.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = typeof Reflect !== "undefined" && Reflect && Reflect.apply;
     }
   });
@@ -2295,7 +2295,7 @@
     "node_modules/call-bind-apply-helpers/actualApply.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var bind = require_function_bind();
       var $apply = require_functionApply();
       var $call = require_functionCall();
@@ -2309,7 +2309,7 @@
     "node_modules/call-bind-apply-helpers/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var bind = require_function_bind();
       var $TypeError = require_type();
       var $call = require_functionCall();
@@ -2328,7 +2328,7 @@
     "node_modules/dunder-proto/get.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var callBind = require_call_bind_apply_helpers();
       var gOPD = require_gopd();
       var hasProtoAccessor;
@@ -2361,7 +2361,7 @@
     "node_modules/get-proto/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var reflectGetProto = require_Reflect_getPrototypeOf();
       var originalGetProto = require_Object_getPrototypeOf();
       var getDunderProto = require_get();
@@ -2383,7 +2383,7 @@
     "node_modules/hasown/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var call = Function.prototype.call;
       var $hasOwn = Object.prototype.hasOwnProperty;
       var bind = require_function_bind();
@@ -2396,7 +2396,7 @@
     "node_modules/get-intrinsic/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var undefined2;
       var $Object = require_es_object_atoms();
       var $Error = require_es_errors();
@@ -2729,7 +2729,7 @@
     "node_modules/call-bound/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var GetIntrinsic = require_get_intrinsic();
       var callBindBasic = require_call_bind_apply_helpers();
       var $indexOf = callBindBasic([GetIntrinsic("%String.prototype.indexOf%")]);
@@ -2754,7 +2754,7 @@
     "node_modules/is-arguments/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var hasToStringTag = require_shams2()();
       var callBound = require_call_bound();
       var $toString = callBound("Object.prototype.toString");
@@ -2783,7 +2783,7 @@
     "node_modules/is-regex/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var callBound = require_call_bound();
       var hasToStringTag = require_shams2()();
       var hasOwn = require_hasown();
@@ -2854,7 +2854,7 @@
     "node_modules/safe-regex-test/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var callBound = require_call_bound();
       var isRegex = require_is_regex();
       var $exec = callBound("RegExp.prototype.exec");
@@ -2875,7 +2875,7 @@
     "node_modules/generator-function/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var cached = (
         /** @type {GeneratorFunctionConstructor} */
         function* () {
@@ -2890,7 +2890,7 @@
     "node_modules/is-generator-function/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var callBound = require_call_bound();
       var safeRegexTest = require_safe_regex_test();
       var isFnRegex = safeRegexTest(/^\s*(?:function)?\*/);
@@ -2924,7 +2924,7 @@
     "node_modules/is-callable/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var fnToStr = Function.prototype.toString;
       var reflectApply = typeof Reflect === "object" && Reflect !== null && Reflect.apply;
       var badArrayLike;
@@ -3044,7 +3044,7 @@
     "node_modules/for-each/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var isCallable = require_is_callable();
       var toStr = Object.prototype.toString;
       var hasOwnProperty = Object.prototype.hasOwnProperty;
@@ -3106,7 +3106,7 @@
     "node_modules/possible-typed-array-names/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = [
         "Float16Array",
         "Float32Array",
@@ -3129,7 +3129,7 @@
     "node_modules/available-typed-arrays/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var possibleNames = require_possible_typed_array_names();
       var g = typeof globalThis === "undefined" ? window : globalThis;
       module.exports = function availableTypedArrays() {
@@ -3149,7 +3149,7 @@
     "node_modules/define-data-property/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var $defineProperty = require_es_define_property();
       var $SyntaxError = require_syntax();
       var $TypeError = require_type();
@@ -3199,7 +3199,7 @@
     "node_modules/has-property-descriptors/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var $defineProperty = require_es_define_property();
       var hasPropertyDescriptors = function hasPropertyDescriptors2() {
         return !!$defineProperty;
@@ -3223,7 +3223,7 @@
     "node_modules/set-function-length/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var GetIntrinsic = require_get_intrinsic();
       var define2 = require_define_data_property();
       var hasDescriptors = require_has_property_descriptors()();
@@ -3278,7 +3278,7 @@
     "node_modules/call-bind-apply-helpers/applyBind.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var bind = require_function_bind();
       var $apply = require_functionApply();
       var actualApply = require_actualApply();
@@ -3293,7 +3293,7 @@
     "node_modules/call-bind/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var setFunctionLength = require_set_function_length();
       var $defineProperty = require_es_define_property();
       var callBindBasic = require_call_bind_apply_helpers();
@@ -3320,7 +3320,7 @@
     "node_modules/which-typed-array/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var forEach = require_for_each();
       var availableTypedArrays = require_available_typed_arrays();
       var callBind = require_call_bind();
@@ -3443,7 +3443,7 @@
     "node_modules/is-typed-array/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var whichTypedArray = require_which_typed_array();
       module.exports = function isTypedArray(value) {
         return !!whichTypedArray(value);
@@ -3456,7 +3456,7 @@
     "node_modules/util/support/types.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var isArgumentsObject = require_is_arguments();
       var isGeneratorFunction = require_is_generator_function();
       var whichTypedArray = require_which_typed_array();
@@ -3687,7 +3687,7 @@
   var require_isBufferBrowser = __commonJS({
     "node_modules/util/support/isBufferBrowser.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = function isBuffer(arg) {
         return arg && typeof arg === "object" && typeof arg.copy === "function" && typeof arg.fill === "function" && typeof arg.readUInt8 === "function";
       };
@@ -3698,7 +3698,7 @@
   var require_inherits_browser = __commonJS({
     "node_modules/inherits/inherits_browser.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       if (typeof Object.create === "function") {
         module.exports = function inherits(ctor, superCtor) {
           if (superCtor) {
@@ -3732,7 +3732,7 @@
   var require_util = __commonJS({
     "node_modules/util/util.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var getOwnPropertyDescriptors = Object.getOwnPropertyDescriptors || function getOwnPropertyDescriptors2(obj) {
         var keys = Object.keys(obj);
         var descriptors = {};
@@ -4294,7 +4294,7 @@
     "node_modules/telegram/inspect.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.inspect = void 0;
       var util_1 = require_util();
@@ -4308,7 +4308,7 @@
   var require_BigInteger = __commonJS({
     "node_modules/big-integer/BigInteger.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var bigInt2 = (function(undefined2) {
         "use strict";
         var BASE = 1e7, LOG_BASE = 7, MAX_INT = 9007199254740992, MAX_INT_ARR = smallToArray(MAX_INT), DEFAULT_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -5566,7 +5566,7 @@
   var require_safe_buffer = __commonJS({
     "node_modules/safe-buffer/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var buffer = require_buffer();
       var Buffer3 = buffer.Buffer;
       function copyProps(src, dst) {
@@ -5627,7 +5627,7 @@
     "node_modules/randombytes/browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var MAX_BYTES = 65536;
       var MAX_UINT32 = 4294967295;
       function oldBrowser() {
@@ -5667,7 +5667,7 @@
     "node_modules/events/events.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var R = typeof Reflect === "object" ? Reflect : null;
       var ReflectApply = R && typeof R.apply === "function" ? R.apply : function ReflectApply2(target, receiver, args) {
         return Function.prototype.apply.call(target, receiver, args);
@@ -6037,7 +6037,7 @@
   var require_stream_browser = __commonJS({
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/stream-browser.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = require_events().EventEmitter;
     }
   });
@@ -6046,7 +6046,7 @@
   var require_util2 = __commonJS({
     "(disabled):node_modules/util/util.js"() {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
     }
   });
 
@@ -6055,7 +6055,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/buffer_list.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function ownKeys2(object, enumerableOnly) {
         var keys = Object.keys(object);
         if (Object.getOwnPropertySymbols) {
@@ -6299,7 +6299,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/destroy.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function destroy(err, cb) {
         var _this = this;
         var readableDestroyed = this._readableState && this._readableState.destroyed;
@@ -6390,7 +6390,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/errors-browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function _inheritsLoose(subClass, superClass) {
         subClass.prototype = Object.create(superClass.prototype);
         subClass.prototype.constructor = subClass;
@@ -6501,7 +6501,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/state.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var ERR_INVALID_OPT_VALUE = require_errors_browser().codes.ERR_INVALID_OPT_VALUE;
       function highWaterMarkFrom(options, isDuplex, duplexKey) {
         return options.highWaterMark != null ? options.highWaterMark : isDuplex ? options[duplexKey] : null;
@@ -6527,7 +6527,7 @@
   var require_browser2 = __commonJS({
     "node_modules/util-deprecate/browser.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = deprecate;
       function deprecate(fn, msg) {
         if (config("noDeprecation")) {
@@ -6567,7 +6567,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_writable.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Writable;
       function CorkedRequest(state) {
         var _this = this;
@@ -7040,7 +7040,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_duplex.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var objectKeys = Object.keys || function(obj) {
         var keys2 = [];
         for (var key in obj) keys2.push(key);
@@ -7134,7 +7134,7 @@
   var require_safe_buffer2 = __commonJS({
     "node_modules/string_decoder/node_modules/safe-buffer/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var buffer = require_buffer();
       var Buffer3 = buffer.Buffer;
       function copyProps(src, dst) {
@@ -7194,7 +7194,7 @@
     "node_modules/string_decoder/lib/string_decoder.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer2().Buffer;
       var isEncoding = Buffer3.isEncoding || function(encoding) {
         encoding = "" + encoding;
@@ -7434,7 +7434,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/end-of-stream.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var ERR_STREAM_PREMATURE_CLOSE = require_errors_browser().codes.ERR_STREAM_PREMATURE_CLOSE;
       function once(callback) {
         var called = false;
@@ -7525,7 +7525,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/async_iterator.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var _Object$setPrototypeO;
       function _defineProperty(obj, key, value) {
         key = _toPropertyKey(key);
@@ -7709,7 +7709,7 @@
   var require_from_browser = __commonJS({
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/from-browser.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = function() {
         throw new Error("Readable.from is not available in the browser");
       };
@@ -7721,7 +7721,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_readable.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Readable;
       var Duplex;
       Readable.ReadableState = ReadableState;
@@ -8456,7 +8456,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_transform.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Transform;
       var _require$codes = require_errors_browser().codes;
       var ERR_METHOD_NOT_IMPLEMENTED = _require$codes.ERR_METHOD_NOT_IMPLEMENTED;
@@ -8559,7 +8559,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/_stream_passthrough.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = PassThrough;
       var Transform = require_stream_transform();
       require_inherits_browser()(PassThrough, Transform);
@@ -8578,7 +8578,7 @@
     "node_modules/stream-browserify/node_modules/readable-stream/lib/internal/streams/pipeline.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var eos;
       function once(callback) {
         var called = false;
@@ -8664,7 +8664,7 @@
   var require_stream_browserify = __commonJS({
     "node_modules/stream-browserify/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Stream;
       var EE = require_events().EventEmitter;
       var inherits = require_inherits_browser();
@@ -8744,7 +8744,7 @@
     "node_modules/hash-base/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var Transform = require_stream_browserify().Transform;
       var inherits = require_inherits_browser();
@@ -8834,7 +8834,7 @@
     "node_modules/md5.js/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var HashBase = require_hash_base();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -8964,7 +8964,7 @@
   var require_isarray = __commonJS({
     "node_modules/to-buffer/node_modules/isarray/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var toString = {}.toString;
       module.exports = Array.isArray || function(arr) {
         return toString.call(arr) == "[object Array]";
@@ -8977,7 +8977,7 @@
     "node_modules/typed-array-buffer/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var $TypeError = require_type();
       var callBound = require_call_bound();
       var $typedArrayBuffer = callBound("TypedArray.prototype.buffer", true);
@@ -8996,7 +8996,7 @@
     "node_modules/to-buffer/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var isArray = require_isarray();
       var typedArrayBuffer = require_typed_array_buffer();
@@ -9062,7 +9062,7 @@
     "node_modules/ripemd160/node_modules/hash-base/to-buffer.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var toBuffer = require_to_buffer();
       var useUint8Array = typeof Uint8Array !== "undefined";
@@ -9082,7 +9082,7 @@
     "node_modules/process-nextick-args/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       if (typeof process === "undefined" || !process.version || process.version.indexOf("v0.") === 0 || process.version.indexOf("v1.") === 0 && process.version.indexOf("v1.8.") !== 0) {
         module.exports = { nextTick };
       } else {
@@ -9128,7 +9128,7 @@
   var require_isarray2 = __commonJS({
     "node_modules/isarray/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var toString = {}.toString;
       module.exports = Array.isArray || function(arr) {
         return toString.call(arr) == "[object Array]";
@@ -9140,7 +9140,7 @@
   var require_stream_browser2 = __commonJS({
     "node_modules/readable-stream/lib/internal/streams/stream-browser.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = require_events().EventEmitter;
     }
   });
@@ -9149,7 +9149,7 @@
   var require_safe_buffer3 = __commonJS({
     "node_modules/readable-stream/node_modules/safe-buffer/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var buffer = require_buffer();
       var Buffer3 = buffer.Buffer;
       function copyProps(src, dst) {
@@ -9208,7 +9208,7 @@
   var require_util3 = __commonJS({
     "node_modules/core-util-is/lib/util.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function isArray(arg) {
         if (Array.isArray) {
           return Array.isArray(arg);
@@ -9281,7 +9281,7 @@
     "node_modules/readable-stream/lib/internal/streams/BufferList.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function _classCallCheck(instance, Constructor) {
         if (!(instance instanceof Constructor)) {
           throw new TypeError("Cannot call a class as a function");
@@ -9361,7 +9361,7 @@
     "node_modules/readable-stream/lib/internal/streams/destroy.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var pna = require_process_nextick_args();
       function destroy(err, cb) {
         var _this = this;
@@ -9432,7 +9432,7 @@
     "node_modules/readable-stream/lib/_stream_writable.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var pna = require_process_nextick_args();
       module.exports = Writable;
       function CorkedRequest(state) {
@@ -9874,7 +9874,7 @@
     "node_modules/readable-stream/lib/_stream_duplex.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var pna = require_process_nextick_args();
       var objectKeys = Object.keys || function(obj) {
         var keys2 = [];
@@ -9953,7 +9953,7 @@
     "node_modules/readable-stream/lib/_stream_readable.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var pna = require_process_nextick_args();
       module.exports = Readable;
       var isArray = require_isarray2();
@@ -10641,7 +10641,7 @@
     "node_modules/readable-stream/lib/_stream_transform.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = Transform;
       var Duplex = require_stream_duplex2();
       var util = Object.create(require_util3());
@@ -10743,7 +10743,7 @@
     "node_modules/readable-stream/lib/_stream_passthrough.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = PassThrough;
       var Transform = require_stream_transform2();
       var util = Object.create(require_util3());
@@ -10763,7 +10763,7 @@
   var require_readable_browser = __commonJS({
     "node_modules/readable-stream/readable-browser.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports = module.exports = require_stream_readable2();
       exports.Stream = exports;
       exports.Readable = exports;
@@ -10779,7 +10779,7 @@
     "node_modules/ripemd160/node_modules/hash-base/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var toBuffer = require_to_buffer2();
       var Transform = require_readable_browser().Transform;
@@ -10872,7 +10872,7 @@
     "node_modules/ripemd160/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_buffer().Buffer;
       var inherits = require_inherits_browser();
       var HashBase = require_hash_base2();
@@ -11315,7 +11315,7 @@
     "node_modules/sha.js/hash.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var toBuffer = require_to_buffer();
       function Hash(blockSize, finalSize) {
@@ -11378,7 +11378,7 @@
     "node_modules/sha.js/sha.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Hash = require_hash();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -11464,7 +11464,7 @@
     "node_modules/sha.js/sha1.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Hash = require_hash();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -11553,7 +11553,7 @@
     "node_modules/sha.js/sha256.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Hash = require_hash();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -11717,7 +11717,7 @@
     "node_modules/sha.js/sha224.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Sha256 = require_sha256();
       var Hash = require_hash();
@@ -11760,7 +11760,7 @@
     "node_modules/sha.js/sha512.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Hash = require_hash();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -12105,7 +12105,7 @@
     "node_modules/sha.js/sha384.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var SHA512 = require_sha512();
       var Hash = require_hash();
@@ -12159,7 +12159,7 @@
     "node_modules/sha.js/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = function SHA(algorithm) {
         var alg = algorithm.toLowerCase();
         var Algorithm = module.exports[alg];
@@ -12182,7 +12182,7 @@
     "node_modules/cipher-base/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var Transform = require_stream_browserify().Transform;
       var StringDecoder = require_string_decoder().StringDecoder;
@@ -12279,7 +12279,7 @@
     "node_modules/create-hash/browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var MD5 = require_md5();
       var RIPEMD160 = require_ripemd160();
@@ -12310,7 +12310,7 @@
     "node_modules/create-hmac/legacy.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Buffer3 = require_safe_buffer().Buffer;
       var Base = require_cipher_base();
@@ -12352,7 +12352,7 @@
   var require_md52 = __commonJS({
     "node_modules/create-hash/md5.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var MD5 = require_md5();
       module.exports = function(buffer) {
         return new MD5().update(buffer).digest();
@@ -12365,7 +12365,7 @@
     "node_modules/create-hmac/browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Legacy = require_legacy();
       var Base = require_cipher_base();
@@ -12582,7 +12582,7 @@
     "node_modules/browserify-sign/algos.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = require_algorithms();
     }
   });
@@ -12592,7 +12592,7 @@
     "node_modules/pbkdf2/lib/precondition.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var $isFinite = isFinite;
       var MAX_ALLOC = Math.pow(2, 30) - 1;
       module.exports = function(iterations, keylen) {
@@ -12617,7 +12617,7 @@
     "node_modules/pbkdf2/lib/default-encoding.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var defaultEncoding;
       if (window.process && window.process.browser) {
         defaultEncoding = "utf-8";
@@ -12637,7 +12637,7 @@
     "node_modules/pbkdf2/lib/to-buffer.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var toBuffer = require_to_buffer();
       var useUint8Array = typeof Uint8Array !== "undefined";
@@ -12657,7 +12657,7 @@
     "node_modules/pbkdf2/lib/sync-browser.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var md5 = require_md52();
       var RIPEMD160 = require_ripemd160();
       var sha = require_sha2();
@@ -12773,7 +12773,7 @@
     "node_modules/pbkdf2/lib/async.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var checkParameters = require_precondition();
       var defaultEncoding = require_default_encoding();
@@ -12897,7 +12897,7 @@
     "node_modules/pbkdf2/browser.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.pbkdf2 = require_async();
       exports.pbkdf2Sync = require_sync_browser();
     }
@@ -12908,7 +12908,7 @@
     "node_modules/des.js/lib/des/utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.readUInt32BE = function readUInt32BE(bytes, off) {
         var res = bytes[0 + off] << 24 | bytes[1 + off] << 16 | bytes[2 + off] << 8 | bytes[3 + off];
         return res >>> 0;
@@ -13675,7 +13675,7 @@
   var require_minimalistic_assert = __commonJS({
     "node_modules/minimalistic-assert/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = assert;
       function assert(val, msg) {
         if (!val)
@@ -13693,7 +13693,7 @@
     "node_modules/des.js/lib/des/cipher.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       function Cipher(options) {
         this.options = options;
@@ -13803,7 +13803,7 @@
     "node_modules/des.js/lib/des/des.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       var inherits = require_inherits_browser();
       var utils = require_utils();
@@ -13932,7 +13932,7 @@
     "node_modules/des.js/lib/des/cbc.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       var inherits = require_inherits_browser();
       var proto = {};
@@ -13989,7 +13989,7 @@
     "node_modules/des.js/lib/des/ede.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       var inherits = require_inherits_browser();
       var Cipher = require_cipher();
@@ -14039,7 +14039,7 @@
     "node_modules/des.js/lib/des.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.utils = require_utils();
       exports.Cipher = require_cipher();
       exports.DES = require_des();
@@ -14052,7 +14052,7 @@
   var require_browserify_des = __commonJS({
     "node_modules/browserify-des/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var CipherBase = require_cipher_base();
       var des = require_des2();
       var inherits = require_inherits_browser();
@@ -14109,7 +14109,7 @@
   var require_ecb = __commonJS({
     "node_modules/browserify-aes/modes/ecb.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.encrypt = function(self2, block) {
         return self2._cipher.encryptBlock(block);
       };
@@ -14123,7 +14123,7 @@
   var require_buffer_xor = __commonJS({
     "node_modules/buffer-xor/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = function xor(a, b) {
         var length = Math.min(a.length, b.length);
         var buffer = new Buffer(length);
@@ -14139,7 +14139,7 @@
   var require_cbc2 = __commonJS({
     "node_modules/browserify-aes/modes/cbc.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var xor = require_buffer_xor();
       exports.encrypt = function(self2, block) {
         var data = xor(block, self2._prev);
@@ -14159,7 +14159,7 @@
   var require_cfb = __commonJS({
     "node_modules/browserify-aes/modes/cfb.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var xor = require_buffer_xor();
       function encryptStart(self2, data, decrypt) {
@@ -14195,7 +14195,7 @@
   var require_cfb8 = __commonJS({
     "node_modules/browserify-aes/modes/cfb8.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       function encryptByte(self2, byteParam, decrypt) {
         var pad = self2._cipher.encryptBlock(self2._prev);
@@ -14222,7 +14222,7 @@
   var require_cfb1 = __commonJS({
     "node_modules/browserify-aes/modes/cfb1.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       function encryptByte(self2, byteParam, decrypt) {
         var pad;
@@ -14265,7 +14265,7 @@
   var require_ofb = __commonJS({
     "node_modules/browserify-aes/modes/ofb.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var xor = require_buffer_xor();
       function getBlock(self2) {
         self2._prev = self2._cipher.encryptBlock(self2._prev);
@@ -14286,7 +14286,7 @@
   var require_incr32 = __commonJS({
     "node_modules/browserify-aes/incr32.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function incr32(iv) {
         var len = iv.length;
         var item;
@@ -14309,7 +14309,7 @@
   var require_ctr = __commonJS({
     "node_modules/browserify-aes/modes/ctr.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var xor = require_buffer_xor();
       var Buffer3 = require_safe_buffer().Buffer;
       var incr32 = require_incr32();
@@ -14542,7 +14542,7 @@
   var require_modes = __commonJS({
     "node_modules/browserify-aes/modes/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var modeModules = {
         ECB: require_ecb(),
         CBC: require_cbc2(),
@@ -14566,7 +14566,7 @@
   var require_aes = __commonJS({
     "node_modules/browserify-aes/aes.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       function asUInt32Array(buf) {
         if (!Buffer3.isBuffer(buf)) buf = Buffer3.from(buf);
@@ -14742,7 +14742,7 @@
   var require_ghash = __commonJS({
     "node_modules/browserify-aes/ghash.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var ZEROES = Buffer3.alloc(16, 0);
       function toArray(buf) {
@@ -14821,7 +14821,7 @@
   var require_authCipher = __commonJS({
     "node_modules/browserify-aes/authCipher.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var aes = require_aes();
       var Buffer3 = require_safe_buffer().Buffer;
       var Transform = require_cipher_base();
@@ -14925,7 +14925,7 @@
   var require_streamCipher = __commonJS({
     "node_modules/browserify-aes/streamCipher.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var aes = require_aes();
       var Buffer3 = require_safe_buffer().Buffer;
       var Transform = require_cipher_base();
@@ -14954,7 +14954,7 @@
   var require_evp_bytestokey = __commonJS({
     "node_modules/evp_bytestokey/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var MD5 = require_md5();
       function EVP_BytesToKey(password, salt, keyBits, ivLen) {
@@ -14998,7 +14998,7 @@
   var require_encrypter = __commonJS({
     "node_modules/browserify-aes/encrypter.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var MODES = require_modes();
       var AuthCipher = require_authCipher();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -15096,7 +15096,7 @@
   var require_decrypter = __commonJS({
     "node_modules/browserify-aes/decrypter.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var AuthCipher = require_authCipher();
       var Buffer3 = require_safe_buffer().Buffer;
       var MODES = require_modes();
@@ -15207,7 +15207,7 @@
   var require_browser6 = __commonJS({
     "node_modules/browserify-aes/browser.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var ciphers = require_encrypter();
       var deciphers = require_decrypter();
       var modes = require_list();
@@ -15226,7 +15226,7 @@
   var require_modes2 = __commonJS({
     "node_modules/browserify-des/modes.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports["des-ecb"] = {
         key: 8,
         iv: 0
@@ -15258,7 +15258,7 @@
   var require_browser7 = __commonJS({
     "node_modules/browserify-cipher/browser.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var DES = require_browserify_des();
       var aes = require_browser6();
       var aesModes = require_modes();
@@ -15321,7 +15321,7 @@
   var require_buffer2 = __commonJS({
     "(disabled):node_modules/buffer/index.js"() {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
     }
   });
 
@@ -15329,7 +15329,7 @@
   var require_bn = __commonJS({
     "node_modules/diffie-hellman/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -18142,7 +18142,7 @@
   var require_bn2 = __commonJS({
     "node_modules/miller-rabin/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -20955,7 +20955,7 @@
   var require_brorand = __commonJS({
     "node_modules/brorand/index.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var r;
       module.exports = function rand2(len) {
         if (!r)
@@ -21014,7 +21014,7 @@
   var require_mr = __commonJS({
     "node_modules/miller-rabin/lib/mr.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var bn = require_bn2();
       var brorand = require_brorand();
       function MillerRabin(rand2) {
@@ -21107,7 +21107,7 @@
   var require_generatePrime = __commonJS({
     "node_modules/diffie-hellman/lib/generatePrime.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var randomBytes = require_browser();
       module.exports = findPrime;
       findPrime.simpleSieve = simpleSieve;
@@ -21245,7 +21245,7 @@
   var require_dh = __commonJS({
     "node_modules/diffie-hellman/lib/dh.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BN = require_bn();
       var MillerRabin = require_mr();
       var millerRabin = new MillerRabin();
@@ -21393,7 +21393,7 @@
   var require_browser8 = __commonJS({
     "node_modules/diffie-hellman/browser.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var generatePrime = require_generatePrime();
       var primes = require_primes();
       var DH = require_dh();
@@ -21434,7 +21434,7 @@
   var require_bn3 = __commonJS({
     "node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -24328,7 +24328,7 @@
     "node_modules/browserify-rsa/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BN = require_bn3();
       var randomBytes = require_browser();
       var Buffer3 = require_safe_buffer().Buffer;
@@ -24430,7 +24430,7 @@
   var require_bn4 = __commonJS({
     "node_modules/elliptic/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -27244,7 +27244,7 @@
     "node_modules/minimalistic-crypto-utils/lib/utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = exports;
       function toArray(msg, enc) {
         if (Array.isArray(msg))
@@ -27305,7 +27305,7 @@
     "node_modules/elliptic/lib/elliptic/utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = exports;
       var BN = require_bn4();
       var minAssert = require_minimalistic_assert();
@@ -27413,7 +27413,7 @@
     "node_modules/elliptic/lib/elliptic/curve/base.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BN = require_bn4();
       var utils = require_utils3();
       var getNAF = utils.getNAF;
@@ -27737,7 +27737,7 @@
     "node_modules/elliptic/lib/elliptic/curve/short.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils3();
       var BN = require_bn4();
       var inherits = require_inherits_browser();
@@ -28437,7 +28437,7 @@
     "node_modules/elliptic/lib/elliptic/curve/mont.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BN = require_bn4();
       var inherits = require_inherits_browser();
       var Base = require_base();
@@ -28567,7 +28567,7 @@
     "node_modules/elliptic/lib/elliptic/curve/edwards.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils3();
       var BN = require_bn4();
       var inherits = require_inherits_browser();
@@ -28870,7 +28870,7 @@
     "node_modules/elliptic/lib/elliptic/curve/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var curve = exports;
       curve.base = require_base();
       curve.short = require_short();
@@ -28884,7 +28884,7 @@
     "node_modules/hash.js/lib/hash/utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var assert = require_minimalistic_assert();
       var inherits = require_inherits_browser();
       exports.inherits = inherits;
@@ -29131,7 +29131,7 @@
     "node_modules/hash.js/lib/hash/common.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils4();
       var assert = require_minimalistic_assert();
       function BlockHash() {
@@ -29212,7 +29212,7 @@
     "node_modules/hash.js/lib/hash/sha/common.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils4();
       var rotr32 = utils.rotr32;
       function ft_1(s, x, y, z) {
@@ -29260,7 +29260,7 @@
     "node_modules/hash.js/lib/hash/sha/1.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils4();
       var common = require_common();
       var shaCommon = require_common2();
@@ -29334,7 +29334,7 @@
     "node_modules/hash.js/lib/hash/sha/256.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils4();
       var common = require_common();
       var shaCommon = require_common2();
@@ -29488,7 +29488,7 @@
     "node_modules/hash.js/lib/hash/sha/224.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils4();
       var SHA256 = require__2();
       function SHA224() {
@@ -29526,7 +29526,7 @@
     "node_modules/hash.js/lib/hash/sha/512.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils4();
       var common = require_common();
       var assert = require_minimalistic_assert();
@@ -29967,7 +29967,7 @@
     "node_modules/hash.js/lib/hash/sha/384.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils4();
       var SHA512 = require__4();
       function SHA384() {
@@ -30013,7 +30013,7 @@
     "node_modules/hash.js/lib/hash/sha.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.sha1 = require__();
       exports.sha224 = require__3();
       exports.sha256 = require__2();
@@ -30027,7 +30027,7 @@
     "node_modules/hash.js/lib/hash/ripemd.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils4();
       var common = require_common();
       var rotl32 = utils.rotl32;
@@ -30470,7 +30470,7 @@
     "node_modules/hash.js/lib/hash/hmac.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils4();
       var assert = require_minimalistic_assert();
       function Hmac(hash, key, enc) {
@@ -30512,7 +30512,7 @@
   var require_hash2 = __commonJS({
     "node_modules/hash.js/lib/hash.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var hash = exports;
       hash.utils = require_utils4();
       hash.common = require_common();
@@ -30532,7 +30532,7 @@
   var require_secp256k1 = __commonJS({
     "node_modules/elliptic/lib/elliptic/precomputed/secp256k1.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = {
         doubles: {
           step: 4,
@@ -31321,7 +31321,7 @@
     "node_modules/elliptic/lib/elliptic/curves.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var curves = exports;
       var hash = require_hash2();
       var curve = require_curve();
@@ -31499,7 +31499,7 @@
     "node_modules/hmac-drbg/lib/hmac-drbg.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var hash = require_hash2();
       var utils = require_utils2();
       var assert = require_minimalistic_assert();
@@ -31595,7 +31595,7 @@
     "node_modules/elliptic/lib/elliptic/ec/key.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BN = require_bn4();
       var utils = require_utils3();
       var assert = utils.assert;
@@ -31691,7 +31691,7 @@
     "node_modules/elliptic/lib/elliptic/ec/signature.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BN = require_bn4();
       var utils = require_utils3();
       var assert = utils.assert;
@@ -31848,7 +31848,7 @@
     "node_modules/elliptic/lib/elliptic/ec/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BN = require_bn4();
       var HmacDRBG = require_hmac_drbg();
       var utils = require_utils3();
@@ -32057,7 +32057,7 @@
     "node_modules/elliptic/lib/elliptic/eddsa/key.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var utils = require_utils3();
       var assert = utils.assert;
       var parseBytes = utils.parseBytes;
@@ -32133,7 +32133,7 @@
     "node_modules/elliptic/lib/elliptic/eddsa/signature.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BN = require_bn4();
       var utils = require_utils3();
       var assert = utils.assert;
@@ -32185,7 +32185,7 @@
     "node_modules/elliptic/lib/elliptic/eddsa/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var hash = require_hash2();
       var curves = require_curves();
       var utils = require_utils3();
@@ -32275,7 +32275,7 @@
     "node_modules/elliptic/lib/elliptic.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var elliptic = exports;
       elliptic.version = require_package().version;
       elliptic.utils = require_utils3();
@@ -32291,7 +32291,7 @@
   var require_bn5 = __commonJS({
     "node_modules/asn1.js/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -35104,7 +35104,7 @@
   var require_api = __commonJS({
     "node_modules/asn1.js/lib/asn1/api.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var asn1 = require_asn1();
       var inherits = require_inherits_browser();
       var api = exports;
@@ -35159,7 +35159,7 @@
   var require_reporter = __commonJS({
     "node_modules/asn1.js/lib/asn1/base/reporter.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       function Reporter(options) {
         this._reporterState = {
@@ -35261,7 +35261,7 @@
   var require_buffer3 = __commonJS({
     "node_modules/asn1.js/lib/asn1/base/buffer.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Reporter = require_base2().Reporter;
       var Buffer3 = require_buffer().Buffer;
@@ -35365,7 +35365,7 @@
   var require_node = __commonJS({
     "node_modules/asn1.js/lib/asn1/base/node.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Reporter = require_base2().Reporter;
       var EncoderBuffer = require_base2().EncoderBuffer;
       var DecoderBuffer = require_base2().DecoderBuffer;
@@ -35900,7 +35900,7 @@
   var require_base2 = __commonJS({
     "node_modules/asn1.js/lib/asn1/base/index.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var base = exports;
       base.Reporter = require_reporter().Reporter;
       base.DecoderBuffer = require_buffer3().DecoderBuffer;
@@ -35913,7 +35913,7 @@
   var require_der = __commonJS({
     "node_modules/asn1.js/lib/asn1/constants/der.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var constants = require_constants();
       exports.tagClass = {
         0: "universal",
@@ -35961,7 +35961,7 @@
   var require_constants = __commonJS({
     "node_modules/asn1.js/lib/asn1/constants/index.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var constants = exports;
       constants._reverse = function reverse(map) {
         var res = {};
@@ -35981,7 +35981,7 @@
   var require_der2 = __commonJS({
     "node_modules/asn1.js/lib/asn1/decoders/der.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var asn1 = require_asn1();
       var base = asn1.base;
@@ -36246,7 +36246,7 @@
   var require_pem = __commonJS({
     "node_modules/asn1.js/lib/asn1/decoders/pem.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Buffer3 = require_buffer().Buffer;
       var DERDecoder = require_der2();
@@ -36293,7 +36293,7 @@
   var require_decoders = __commonJS({
     "node_modules/asn1.js/lib/asn1/decoders/index.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var decoders = exports;
       decoders.der = require_der2();
       decoders.pem = require_pem();
@@ -36304,7 +36304,7 @@
   var require_der3 = __commonJS({
     "node_modules/asn1.js/lib/asn1/encoders/der.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var Buffer3 = require_buffer().Buffer;
       var asn1 = require_asn1();
@@ -36537,7 +36537,7 @@
   var require_pem2 = __commonJS({
     "node_modules/asn1.js/lib/asn1/encoders/pem.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var inherits = require_inherits_browser();
       var DEREncoder = require_der3();
       function PEMEncoder(entity) {
@@ -36562,7 +36562,7 @@
   var require_encoders = __commonJS({
     "node_modules/asn1.js/lib/asn1/encoders/index.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var encoders = exports;
       encoders.der = require_der3();
       encoders.pem = require_pem2();
@@ -36573,7 +36573,7 @@
   var require_asn1 = __commonJS({
     "node_modules/asn1.js/lib/asn1.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var asn1 = exports;
       asn1.bignum = require_bn5();
       asn1.define = require_api().define;
@@ -36589,7 +36589,7 @@
     "node_modules/parse-asn1/certificate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var asn = require_asn1();
       var Time = asn.define("Time", function() {
         this.choice({
@@ -36670,7 +36670,7 @@
     "node_modules/parse-asn1/asn1.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var asn1 = require_asn1();
       exports.certificate = require_certificate();
       var RSAPrivateKey = asn1.define("RSAPrivateKey", function() {
@@ -36805,7 +36805,7 @@
     "node_modules/parse-asn1/fixProc.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var findProc = /Proc-Type: 4,ENCRYPTED[\n\r]+DEK-Info: AES-((?:128)|(?:192)|(?:256))-CBC,([0-9A-H]+)[\n\r]+([0-9A-z\n\r+/=]+)[\n\r]+/m;
       var startRegex = /^-----BEGIN ((?:.*? KEY)|CERTIFICATE)-----/m;
       var fullRegex = /^-----BEGIN ((?:.*? KEY)|CERTIFICATE)-----([0-9A-z\n\r+/=]+)-----END \1-----$/m;
@@ -36844,7 +36844,7 @@
     "node_modules/parse-asn1/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var asn1 = require_asn12();
       var aesid = require_aesid();
       var fixProc = require_fixProc();
@@ -36974,7 +36974,7 @@
     "node_modules/browserify-sign/browser/sign.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var createHmac = require_browser4();
       var crt = require_browserify_rsa();
@@ -37130,7 +37130,7 @@
     "node_modules/browserify-sign/browser/verify.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var BN = require_bn3();
       var EC = require_elliptic().ec;
@@ -37222,7 +37222,7 @@
     "node_modules/browserify-sign/browser/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Buffer3 = require_safe_buffer().Buffer;
       var createHash = require_browser3();
       var stream = require_readable_browser();
@@ -37304,7 +37304,7 @@
   var require_bn6 = __commonJS({
     "node_modules/create-ecdh/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -40117,7 +40117,7 @@
   var require_browser10 = __commonJS({
     "node_modules/create-ecdh/browser.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var elliptic = require_elliptic();
       var BN = require_bn6();
       module.exports = function createECDH(curve) {
@@ -40237,7 +40237,7 @@
   var require_mgf = __commonJS({
     "node_modules/public-encrypt/mgf.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var createHash = require_browser3();
       var Buffer3 = require_safe_buffer().Buffer;
       module.exports = function(seed, len) {
@@ -40262,7 +40262,7 @@
   var require_xor = __commonJS({
     "node_modules/public-encrypt/xor.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = function xor(a, b) {
         var len = a.length;
         var i = -1;
@@ -40278,7 +40278,7 @@
   var require_bn7 = __commonJS({
     "node_modules/public-encrypt/node_modules/bn.js/lib/bn.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function(module2, exports2) {
         "use strict";
         function assert(val, msg) {
@@ -43091,7 +43091,7 @@
   var require_withPublic = __commonJS({
     "node_modules/public-encrypt/withPublic.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BN = require_bn7();
       var Buffer3 = require_safe_buffer().Buffer;
       function withPublic(paddedMsg, key) {
@@ -43105,7 +43105,7 @@
   var require_publicEncrypt = __commonJS({
     "node_modules/public-encrypt/publicEncrypt.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var parseKeys = require_parse_asn1();
       var randomBytes = require_browser();
       var createHash = require_browser3();
@@ -43199,7 +43199,7 @@
   var require_privateDecrypt = __commonJS({
     "node_modules/public-encrypt/privateDecrypt.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var parseKeys = require_parse_asn1();
       var mgf = require_mgf();
       var xor = require_xor();
@@ -43307,7 +43307,7 @@
   var require_browser11 = __commonJS({
     "node_modules/public-encrypt/browser.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.publicEncrypt = require_publicEncrypt();
       exports.privateDecrypt = require_privateDecrypt();
       exports.privateEncrypt = function privateEncrypt(key, buf) {
@@ -43324,7 +43324,7 @@
     "node_modules/randomfill/browser.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function oldBrowser() {
         throw new Error("secure random number generation not supported by this browser\nuse chrome, FireFox or Internet Explorer 11");
       }
@@ -43428,7 +43428,7 @@
     "node_modules/crypto-browserify/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.randomBytes = exports.rng = exports.pseudoRandomBytes = exports.prng = require_browser();
       exports.createHash = exports.Hash = require_browser3();
       exports.createHmac = exports.Hmac = require_browser4();
@@ -43508,7 +43508,7 @@
     "node_modules/telegram/CryptoFile.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -43547,7 +43547,7 @@
     "node_modules/telegram/platform.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.isNode = exports.isBrowser = exports.isDeno = void 0;
       exports.isDeno = "Deno" in globalThis;
@@ -43561,7 +43561,7 @@
     "node_modules/telegram/Helpers.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod2) {
         return mod2 && mod2.__esModule ? mod2 : { "default": mod2 };
       };
@@ -43898,7 +43898,7 @@
     "node_modules/telegram/tl/apiTl.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = `boolFalse#bc799737 = Bool;
 boolTrue#997275b5 = Bool;
 true#3fedd339 = True;
@@ -46000,7 +46000,7 @@ fragment.getCollectibleInfo#be1e85ba collectible:InputCollectible = fragment.Col
     "node_modules/telegram/tl/schemaTl.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = `
 resPQ#05162463 nonce:int128 server_nonce:int128 pq:string server_public_key_fingerprints:Vector<long> = ResPQ;
 p_q_inner_data#83c95aec pq:string p:string q:string nonce:int128 server_nonce:int128 new_nonce:int256 = P_Q_inner_data;
@@ -46073,7 +46073,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/generationHelpers.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.variableSnakeToCamelCase = exports.snakeToCamelCase = exports.CORE_TYPES = exports.fromLine = exports.parseTl = exports.findAll = void 0;
       exports.serializeBytes = serializeBytes;
@@ -46326,7 +46326,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/api.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var { inspect } = require_inspect();
       var bigInt2 = require_BigInteger();
       var { generateRandomBytes, readBigIntFromBuffer, isArrayLike, betterConsoleLog } = require_Helpers();
@@ -46786,7 +46786,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/chatGetter.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __asyncValues2 = exports && exports.__asyncValues || function(o) {
         if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
         var m = o[Symbol.asyncIterator], i;
@@ -46915,7 +46915,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/senderGetter.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.SenderGetter = void 0;
       var api_1 = require_api2();
@@ -46975,7 +46975,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/mime/Mime.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function Mime() {
         this._types = /* @__PURE__ */ Object.create(null);
         this._extensions = /* @__PURE__ */ Object.create(null);
@@ -47030,7 +47030,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_standard = __commonJS({
     "node_modules/mime/types/standard.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = { "application/andrew-inset": ["ez"], "application/applixware": ["aw"], "application/atom+xml": ["atom"], "application/atomcat+xml": ["atomcat"], "application/atomdeleted+xml": ["atomdeleted"], "application/atomsvc+xml": ["atomsvc"], "application/atsc-dwd+xml": ["dwd"], "application/atsc-held+xml": ["held"], "application/atsc-rsat+xml": ["rsat"], "application/bdoc": ["bdoc"], "application/calendar+xml": ["xcs"], "application/ccxml+xml": ["ccxml"], "application/cdfx+xml": ["cdfx"], "application/cdmi-capability": ["cdmia"], "application/cdmi-container": ["cdmic"], "application/cdmi-domain": ["cdmid"], "application/cdmi-object": ["cdmio"], "application/cdmi-queue": ["cdmiq"], "application/cu-seeme": ["cu"], "application/dash+xml": ["mpd"], "application/davmount+xml": ["davmount"], "application/docbook+xml": ["dbk"], "application/dssc+der": ["dssc"], "application/dssc+xml": ["xdssc"], "application/ecmascript": ["es", "ecma"], "application/emma+xml": ["emma"], "application/emotionml+xml": ["emotionml"], "application/epub+zip": ["epub"], "application/exi": ["exi"], "application/express": ["exp"], "application/fdt+xml": ["fdt"], "application/font-tdpfr": ["pfr"], "application/geo+json": ["geojson"], "application/gml+xml": ["gml"], "application/gpx+xml": ["gpx"], "application/gxf": ["gxf"], "application/gzip": ["gz"], "application/hjson": ["hjson"], "application/hyperstudio": ["stk"], "application/inkml+xml": ["ink", "inkml"], "application/ipfix": ["ipfix"], "application/its+xml": ["its"], "application/java-archive": ["jar", "war", "ear"], "application/java-serialized-object": ["ser"], "application/java-vm": ["class"], "application/javascript": ["js", "mjs"], "application/json": ["json", "map"], "application/json5": ["json5"], "application/jsonml+json": ["jsonml"], "application/ld+json": ["jsonld"], "application/lgr+xml": ["lgr"], "application/lost+xml": ["lostxml"], "application/mac-binhex40": ["hqx"], "application/mac-compactpro": ["cpt"], "application/mads+xml": ["mads"], "application/manifest+json": ["webmanifest"], "application/marc": ["mrc"], "application/marcxml+xml": ["mrcx"], "application/mathematica": ["ma", "nb", "mb"], "application/mathml+xml": ["mathml"], "application/mbox": ["mbox"], "application/mediaservercontrol+xml": ["mscml"], "application/metalink+xml": ["metalink"], "application/metalink4+xml": ["meta4"], "application/mets+xml": ["mets"], "application/mmt-aei+xml": ["maei"], "application/mmt-usd+xml": ["musd"], "application/mods+xml": ["mods"], "application/mp21": ["m21", "mp21"], "application/mp4": ["mp4s", "m4p"], "application/msword": ["doc", "dot"], "application/mxf": ["mxf"], "application/n-quads": ["nq"], "application/n-triples": ["nt"], "application/node": ["cjs"], "application/octet-stream": ["bin", "dms", "lrf", "mar", "so", "dist", "distz", "pkg", "bpk", "dump", "elc", "deploy", "exe", "dll", "deb", "dmg", "iso", "img", "msi", "msp", "msm", "buffer"], "application/oda": ["oda"], "application/oebps-package+xml": ["opf"], "application/ogg": ["ogx"], "application/omdoc+xml": ["omdoc"], "application/onenote": ["onetoc", "onetoc2", "onetmp", "onepkg"], "application/oxps": ["oxps"], "application/p2p-overlay+xml": ["relo"], "application/patch-ops-error+xml": ["xer"], "application/pdf": ["pdf"], "application/pgp-encrypted": ["pgp"], "application/pgp-signature": ["asc", "sig"], "application/pics-rules": ["prf"], "application/pkcs10": ["p10"], "application/pkcs7-mime": ["p7m", "p7c"], "application/pkcs7-signature": ["p7s"], "application/pkcs8": ["p8"], "application/pkix-attr-cert": ["ac"], "application/pkix-cert": ["cer"], "application/pkix-crl": ["crl"], "application/pkix-pkipath": ["pkipath"], "application/pkixcmp": ["pki"], "application/pls+xml": ["pls"], "application/postscript": ["ai", "eps", "ps"], "application/provenance+xml": ["provx"], "application/pskc+xml": ["pskcxml"], "application/raml+yaml": ["raml"], "application/rdf+xml": ["rdf", "owl"], "application/reginfo+xml": ["rif"], "application/relax-ng-compact-syntax": ["rnc"], "application/resource-lists+xml": ["rl"], "application/resource-lists-diff+xml": ["rld"], "application/rls-services+xml": ["rs"], "application/route-apd+xml": ["rapd"], "application/route-s-tsid+xml": ["sls"], "application/route-usd+xml": ["rusd"], "application/rpki-ghostbusters": ["gbr"], "application/rpki-manifest": ["mft"], "application/rpki-roa": ["roa"], "application/rsd+xml": ["rsd"], "application/rss+xml": ["rss"], "application/rtf": ["rtf"], "application/sbml+xml": ["sbml"], "application/scvp-cv-request": ["scq"], "application/scvp-cv-response": ["scs"], "application/scvp-vp-request": ["spq"], "application/scvp-vp-response": ["spp"], "application/sdp": ["sdp"], "application/senml+xml": ["senmlx"], "application/sensml+xml": ["sensmlx"], "application/set-payment-initiation": ["setpay"], "application/set-registration-initiation": ["setreg"], "application/shf+xml": ["shf"], "application/sieve": ["siv", "sieve"], "application/smil+xml": ["smi", "smil"], "application/sparql-query": ["rq"], "application/sparql-results+xml": ["srx"], "application/srgs": ["gram"], "application/srgs+xml": ["grxml"], "application/sru+xml": ["sru"], "application/ssdl+xml": ["ssdl"], "application/ssml+xml": ["ssml"], "application/swid+xml": ["swidtag"], "application/tei+xml": ["tei", "teicorpus"], "application/thraud+xml": ["tfi"], "application/timestamped-data": ["tsd"], "application/toml": ["toml"], "application/trig": ["trig"], "application/ttml+xml": ["ttml"], "application/ubjson": ["ubj"], "application/urc-ressheet+xml": ["rsheet"], "application/urc-targetdesc+xml": ["td"], "application/voicexml+xml": ["vxml"], "application/wasm": ["wasm"], "application/widget": ["wgt"], "application/winhlp": ["hlp"], "application/wsdl+xml": ["wsdl"], "application/wspolicy+xml": ["wspolicy"], "application/xaml+xml": ["xaml"], "application/xcap-att+xml": ["xav"], "application/xcap-caps+xml": ["xca"], "application/xcap-diff+xml": ["xdf"], "application/xcap-el+xml": ["xel"], "application/xcap-ns+xml": ["xns"], "application/xenc+xml": ["xenc"], "application/xhtml+xml": ["xhtml", "xht"], "application/xliff+xml": ["xlf"], "application/xml": ["xml", "xsl", "xsd", "rng"], "application/xml-dtd": ["dtd"], "application/xop+xml": ["xop"], "application/xproc+xml": ["xpl"], "application/xslt+xml": ["*xsl", "xslt"], "application/xspf+xml": ["xspf"], "application/xv+xml": ["mxml", "xhvml", "xvml", "xvm"], "application/yang": ["yang"], "application/yin+xml": ["yin"], "application/zip": ["zip"], "audio/3gpp": ["*3gpp"], "audio/adpcm": ["adp"], "audio/amr": ["amr"], "audio/basic": ["au", "snd"], "audio/midi": ["mid", "midi", "kar", "rmi"], "audio/mobile-xmf": ["mxmf"], "audio/mp3": ["*mp3"], "audio/mp4": ["m4a", "mp4a"], "audio/mpeg": ["mpga", "mp2", "mp2a", "mp3", "m2a", "m3a"], "audio/ogg": ["oga", "ogg", "spx", "opus"], "audio/s3m": ["s3m"], "audio/silk": ["sil"], "audio/wav": ["wav"], "audio/wave": ["*wav"], "audio/webm": ["weba"], "audio/xm": ["xm"], "font/collection": ["ttc"], "font/otf": ["otf"], "font/ttf": ["ttf"], "font/woff": ["woff"], "font/woff2": ["woff2"], "image/aces": ["exr"], "image/apng": ["apng"], "image/avif": ["avif"], "image/bmp": ["bmp"], "image/cgm": ["cgm"], "image/dicom-rle": ["drle"], "image/emf": ["emf"], "image/fits": ["fits"], "image/g3fax": ["g3"], "image/gif": ["gif"], "image/heic": ["heic"], "image/heic-sequence": ["heics"], "image/heif": ["heif"], "image/heif-sequence": ["heifs"], "image/hej2k": ["hej2"], "image/hsj2": ["hsj2"], "image/ief": ["ief"], "image/jls": ["jls"], "image/jp2": ["jp2", "jpg2"], "image/jpeg": ["jpeg", "jpg", "jpe"], "image/jph": ["jph"], "image/jphc": ["jhc"], "image/jpm": ["jpm"], "image/jpx": ["jpx", "jpf"], "image/jxr": ["jxr"], "image/jxra": ["jxra"], "image/jxrs": ["jxrs"], "image/jxs": ["jxs"], "image/jxsc": ["jxsc"], "image/jxsi": ["jxsi"], "image/jxss": ["jxss"], "image/ktx": ["ktx"], "image/ktx2": ["ktx2"], "image/png": ["png"], "image/sgi": ["sgi"], "image/svg+xml": ["svg", "svgz"], "image/t38": ["t38"], "image/tiff": ["tif", "tiff"], "image/tiff-fx": ["tfx"], "image/webp": ["webp"], "image/wmf": ["wmf"], "message/disposition-notification": ["disposition-notification"], "message/global": ["u8msg"], "message/global-delivery-status": ["u8dsn"], "message/global-disposition-notification": ["u8mdn"], "message/global-headers": ["u8hdr"], "message/rfc822": ["eml", "mime"], "model/3mf": ["3mf"], "model/gltf+json": ["gltf"], "model/gltf-binary": ["glb"], "model/iges": ["igs", "iges"], "model/mesh": ["msh", "mesh", "silo"], "model/mtl": ["mtl"], "model/obj": ["obj"], "model/step+xml": ["stpx"], "model/step+zip": ["stpz"], "model/step-xml+zip": ["stpxz"], "model/stl": ["stl"], "model/vrml": ["wrl", "vrml"], "model/x3d+binary": ["*x3db", "x3dbz"], "model/x3d+fastinfoset": ["x3db"], "model/x3d+vrml": ["*x3dv", "x3dvz"], "model/x3d+xml": ["x3d", "x3dz"], "model/x3d-vrml": ["x3dv"], "text/cache-manifest": ["appcache", "manifest"], "text/calendar": ["ics", "ifb"], "text/coffeescript": ["coffee", "litcoffee"], "text/css": ["css"], "text/csv": ["csv"], "text/html": ["html", "htm", "shtml"], "text/jade": ["jade"], "text/jsx": ["jsx"], "text/less": ["less"], "text/markdown": ["markdown", "md"], "text/mathml": ["mml"], "text/mdx": ["mdx"], "text/n3": ["n3"], "text/plain": ["txt", "text", "conf", "def", "list", "log", "in", "ini"], "text/richtext": ["rtx"], "text/rtf": ["*rtf"], "text/sgml": ["sgml", "sgm"], "text/shex": ["shex"], "text/slim": ["slim", "slm"], "text/spdx": ["spdx"], "text/stylus": ["stylus", "styl"], "text/tab-separated-values": ["tsv"], "text/troff": ["t", "tr", "roff", "man", "me", "ms"], "text/turtle": ["ttl"], "text/uri-list": ["uri", "uris", "urls"], "text/vcard": ["vcard"], "text/vtt": ["vtt"], "text/xml": ["*xml"], "text/yaml": ["yaml", "yml"], "video/3gpp": ["3gp", "3gpp"], "video/3gpp2": ["3g2"], "video/h261": ["h261"], "video/h263": ["h263"], "video/h264": ["h264"], "video/iso.segment": ["m4s"], "video/jpeg": ["jpgv"], "video/jpm": ["*jpm", "jpgm"], "video/mj2": ["mj2", "mjp2"], "video/mp2t": ["ts"], "video/mp4": ["mp4", "mp4v", "mpg4"], "video/mpeg": ["mpeg", "mpg", "mpe", "m1v", "m2v"], "video/ogg": ["ogv"], "video/quicktime": ["qt", "mov"], "video/webm": ["webm"] };
     }
   });
@@ -47039,7 +47039,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_other = __commonJS({
     "node_modules/mime/types/other.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = { "application/prs.cww": ["cww"], "application/vnd.1000minds.decision-model+xml": ["1km"], "application/vnd.3gpp.pic-bw-large": ["plb"], "application/vnd.3gpp.pic-bw-small": ["psb"], "application/vnd.3gpp.pic-bw-var": ["pvb"], "application/vnd.3gpp2.tcap": ["tcap"], "application/vnd.3m.post-it-notes": ["pwn"], "application/vnd.accpac.simply.aso": ["aso"], "application/vnd.accpac.simply.imp": ["imp"], "application/vnd.acucobol": ["acu"], "application/vnd.acucorp": ["atc", "acutc"], "application/vnd.adobe.air-application-installer-package+zip": ["air"], "application/vnd.adobe.formscentral.fcdt": ["fcdt"], "application/vnd.adobe.fxp": ["fxp", "fxpl"], "application/vnd.adobe.xdp+xml": ["xdp"], "application/vnd.adobe.xfdf": ["xfdf"], "application/vnd.ahead.space": ["ahead"], "application/vnd.airzip.filesecure.azf": ["azf"], "application/vnd.airzip.filesecure.azs": ["azs"], "application/vnd.amazon.ebook": ["azw"], "application/vnd.americandynamics.acc": ["acc"], "application/vnd.amiga.ami": ["ami"], "application/vnd.android.package-archive": ["apk"], "application/vnd.anser-web-certificate-issue-initiation": ["cii"], "application/vnd.anser-web-funds-transfer-initiation": ["fti"], "application/vnd.antix.game-component": ["atx"], "application/vnd.apple.installer+xml": ["mpkg"], "application/vnd.apple.keynote": ["key"], "application/vnd.apple.mpegurl": ["m3u8"], "application/vnd.apple.numbers": ["numbers"], "application/vnd.apple.pages": ["pages"], "application/vnd.apple.pkpass": ["pkpass"], "application/vnd.aristanetworks.swi": ["swi"], "application/vnd.astraea-software.iota": ["iota"], "application/vnd.audiograph": ["aep"], "application/vnd.balsamiq.bmml+xml": ["bmml"], "application/vnd.blueice.multipass": ["mpm"], "application/vnd.bmi": ["bmi"], "application/vnd.businessobjects": ["rep"], "application/vnd.chemdraw+xml": ["cdxml"], "application/vnd.chipnuts.karaoke-mmd": ["mmd"], "application/vnd.cinderella": ["cdy"], "application/vnd.citationstyles.style+xml": ["csl"], "application/vnd.claymore": ["cla"], "application/vnd.cloanto.rp9": ["rp9"], "application/vnd.clonk.c4group": ["c4g", "c4d", "c4f", "c4p", "c4u"], "application/vnd.cluetrust.cartomobile-config": ["c11amc"], "application/vnd.cluetrust.cartomobile-config-pkg": ["c11amz"], "application/vnd.commonspace": ["csp"], "application/vnd.contact.cmsg": ["cdbcmsg"], "application/vnd.cosmocaller": ["cmc"], "application/vnd.crick.clicker": ["clkx"], "application/vnd.crick.clicker.keyboard": ["clkk"], "application/vnd.crick.clicker.palette": ["clkp"], "application/vnd.crick.clicker.template": ["clkt"], "application/vnd.crick.clicker.wordbank": ["clkw"], "application/vnd.criticaltools.wbs+xml": ["wbs"], "application/vnd.ctc-posml": ["pml"], "application/vnd.cups-ppd": ["ppd"], "application/vnd.curl.car": ["car"], "application/vnd.curl.pcurl": ["pcurl"], "application/vnd.dart": ["dart"], "application/vnd.data-vision.rdz": ["rdz"], "application/vnd.dbf": ["dbf"], "application/vnd.dece.data": ["uvf", "uvvf", "uvd", "uvvd"], "application/vnd.dece.ttml+xml": ["uvt", "uvvt"], "application/vnd.dece.unspecified": ["uvx", "uvvx"], "application/vnd.dece.zip": ["uvz", "uvvz"], "application/vnd.denovo.fcselayout-link": ["fe_launch"], "application/vnd.dna": ["dna"], "application/vnd.dolby.mlp": ["mlp"], "application/vnd.dpgraph": ["dpg"], "application/vnd.dreamfactory": ["dfac"], "application/vnd.ds-keypoint": ["kpxx"], "application/vnd.dvb.ait": ["ait"], "application/vnd.dvb.service": ["svc"], "application/vnd.dynageo": ["geo"], "application/vnd.ecowin.chart": ["mag"], "application/vnd.enliven": ["nml"], "application/vnd.epson.esf": ["esf"], "application/vnd.epson.msf": ["msf"], "application/vnd.epson.quickanime": ["qam"], "application/vnd.epson.salt": ["slt"], "application/vnd.epson.ssf": ["ssf"], "application/vnd.eszigno3+xml": ["es3", "et3"], "application/vnd.ezpix-album": ["ez2"], "application/vnd.ezpix-package": ["ez3"], "application/vnd.fdf": ["fdf"], "application/vnd.fdsn.mseed": ["mseed"], "application/vnd.fdsn.seed": ["seed", "dataless"], "application/vnd.flographit": ["gph"], "application/vnd.fluxtime.clip": ["ftc"], "application/vnd.framemaker": ["fm", "frame", "maker", "book"], "application/vnd.frogans.fnc": ["fnc"], "application/vnd.frogans.ltf": ["ltf"], "application/vnd.fsc.weblaunch": ["fsc"], "application/vnd.fujitsu.oasys": ["oas"], "application/vnd.fujitsu.oasys2": ["oa2"], "application/vnd.fujitsu.oasys3": ["oa3"], "application/vnd.fujitsu.oasysgp": ["fg5"], "application/vnd.fujitsu.oasysprs": ["bh2"], "application/vnd.fujixerox.ddd": ["ddd"], "application/vnd.fujixerox.docuworks": ["xdw"], "application/vnd.fujixerox.docuworks.binder": ["xbd"], "application/vnd.fuzzysheet": ["fzs"], "application/vnd.genomatix.tuxedo": ["txd"], "application/vnd.geogebra.file": ["ggb"], "application/vnd.geogebra.tool": ["ggt"], "application/vnd.geometry-explorer": ["gex", "gre"], "application/vnd.geonext": ["gxt"], "application/vnd.geoplan": ["g2w"], "application/vnd.geospace": ["g3w"], "application/vnd.gmx": ["gmx"], "application/vnd.google-apps.document": ["gdoc"], "application/vnd.google-apps.presentation": ["gslides"], "application/vnd.google-apps.spreadsheet": ["gsheet"], "application/vnd.google-earth.kml+xml": ["kml"], "application/vnd.google-earth.kmz": ["kmz"], "application/vnd.grafeq": ["gqf", "gqs"], "application/vnd.groove-account": ["gac"], "application/vnd.groove-help": ["ghf"], "application/vnd.groove-identity-message": ["gim"], "application/vnd.groove-injector": ["grv"], "application/vnd.groove-tool-message": ["gtm"], "application/vnd.groove-tool-template": ["tpl"], "application/vnd.groove-vcard": ["vcg"], "application/vnd.hal+xml": ["hal"], "application/vnd.handheld-entertainment+xml": ["zmm"], "application/vnd.hbci": ["hbci"], "application/vnd.hhe.lesson-player": ["les"], "application/vnd.hp-hpgl": ["hpgl"], "application/vnd.hp-hpid": ["hpid"], "application/vnd.hp-hps": ["hps"], "application/vnd.hp-jlyt": ["jlt"], "application/vnd.hp-pcl": ["pcl"], "application/vnd.hp-pclxl": ["pclxl"], "application/vnd.hydrostatix.sof-data": ["sfd-hdstx"], "application/vnd.ibm.minipay": ["mpy"], "application/vnd.ibm.modcap": ["afp", "listafp", "list3820"], "application/vnd.ibm.rights-management": ["irm"], "application/vnd.ibm.secure-container": ["sc"], "application/vnd.iccprofile": ["icc", "icm"], "application/vnd.igloader": ["igl"], "application/vnd.immervision-ivp": ["ivp"], "application/vnd.immervision-ivu": ["ivu"], "application/vnd.insors.igm": ["igm"], "application/vnd.intercon.formnet": ["xpw", "xpx"], "application/vnd.intergeo": ["i2g"], "application/vnd.intu.qbo": ["qbo"], "application/vnd.intu.qfx": ["qfx"], "application/vnd.ipunplugged.rcprofile": ["rcprofile"], "application/vnd.irepository.package+xml": ["irp"], "application/vnd.is-xpr": ["xpr"], "application/vnd.isac.fcs": ["fcs"], "application/vnd.jam": ["jam"], "application/vnd.jcp.javame.midlet-rms": ["rms"], "application/vnd.jisp": ["jisp"], "application/vnd.joost.joda-archive": ["joda"], "application/vnd.kahootz": ["ktz", "ktr"], "application/vnd.kde.karbon": ["karbon"], "application/vnd.kde.kchart": ["chrt"], "application/vnd.kde.kformula": ["kfo"], "application/vnd.kde.kivio": ["flw"], "application/vnd.kde.kontour": ["kon"], "application/vnd.kde.kpresenter": ["kpr", "kpt"], "application/vnd.kde.kspread": ["ksp"], "application/vnd.kde.kword": ["kwd", "kwt"], "application/vnd.kenameaapp": ["htke"], "application/vnd.kidspiration": ["kia"], "application/vnd.kinar": ["kne", "knp"], "application/vnd.koan": ["skp", "skd", "skt", "skm"], "application/vnd.kodak-descriptor": ["sse"], "application/vnd.las.las+xml": ["lasxml"], "application/vnd.llamagraphics.life-balance.desktop": ["lbd"], "application/vnd.llamagraphics.life-balance.exchange+xml": ["lbe"], "application/vnd.lotus-1-2-3": ["123"], "application/vnd.lotus-approach": ["apr"], "application/vnd.lotus-freelance": ["pre"], "application/vnd.lotus-notes": ["nsf"], "application/vnd.lotus-organizer": ["org"], "application/vnd.lotus-screencam": ["scm"], "application/vnd.lotus-wordpro": ["lwp"], "application/vnd.macports.portpkg": ["portpkg"], "application/vnd.mapbox-vector-tile": ["mvt"], "application/vnd.mcd": ["mcd"], "application/vnd.medcalcdata": ["mc1"], "application/vnd.mediastation.cdkey": ["cdkey"], "application/vnd.mfer": ["mwf"], "application/vnd.mfmp": ["mfm"], "application/vnd.micrografx.flo": ["flo"], "application/vnd.micrografx.igx": ["igx"], "application/vnd.mif": ["mif"], "application/vnd.mobius.daf": ["daf"], "application/vnd.mobius.dis": ["dis"], "application/vnd.mobius.mbk": ["mbk"], "application/vnd.mobius.mqy": ["mqy"], "application/vnd.mobius.msl": ["msl"], "application/vnd.mobius.plc": ["plc"], "application/vnd.mobius.txf": ["txf"], "application/vnd.mophun.application": ["mpn"], "application/vnd.mophun.certificate": ["mpc"], "application/vnd.mozilla.xul+xml": ["xul"], "application/vnd.ms-artgalry": ["cil"], "application/vnd.ms-cab-compressed": ["cab"], "application/vnd.ms-excel": ["xls", "xlm", "xla", "xlc", "xlt", "xlw"], "application/vnd.ms-excel.addin.macroenabled.12": ["xlam"], "application/vnd.ms-excel.sheet.binary.macroenabled.12": ["xlsb"], "application/vnd.ms-excel.sheet.macroenabled.12": ["xlsm"], "application/vnd.ms-excel.template.macroenabled.12": ["xltm"], "application/vnd.ms-fontobject": ["eot"], "application/vnd.ms-htmlhelp": ["chm"], "application/vnd.ms-ims": ["ims"], "application/vnd.ms-lrm": ["lrm"], "application/vnd.ms-officetheme": ["thmx"], "application/vnd.ms-outlook": ["msg"], "application/vnd.ms-pki.seccat": ["cat"], "application/vnd.ms-pki.stl": ["*stl"], "application/vnd.ms-powerpoint": ["ppt", "pps", "pot"], "application/vnd.ms-powerpoint.addin.macroenabled.12": ["ppam"], "application/vnd.ms-powerpoint.presentation.macroenabled.12": ["pptm"], "application/vnd.ms-powerpoint.slide.macroenabled.12": ["sldm"], "application/vnd.ms-powerpoint.slideshow.macroenabled.12": ["ppsm"], "application/vnd.ms-powerpoint.template.macroenabled.12": ["potm"], "application/vnd.ms-project": ["mpp", "mpt"], "application/vnd.ms-word.document.macroenabled.12": ["docm"], "application/vnd.ms-word.template.macroenabled.12": ["dotm"], "application/vnd.ms-works": ["wps", "wks", "wcm", "wdb"], "application/vnd.ms-wpl": ["wpl"], "application/vnd.ms-xpsdocument": ["xps"], "application/vnd.mseq": ["mseq"], "application/vnd.musician": ["mus"], "application/vnd.muvee.style": ["msty"], "application/vnd.mynfc": ["taglet"], "application/vnd.neurolanguage.nlu": ["nlu"], "application/vnd.nitf": ["ntf", "nitf"], "application/vnd.noblenet-directory": ["nnd"], "application/vnd.noblenet-sealer": ["nns"], "application/vnd.noblenet-web": ["nnw"], "application/vnd.nokia.n-gage.ac+xml": ["*ac"], "application/vnd.nokia.n-gage.data": ["ngdat"], "application/vnd.nokia.n-gage.symbian.install": ["n-gage"], "application/vnd.nokia.radio-preset": ["rpst"], "application/vnd.nokia.radio-presets": ["rpss"], "application/vnd.novadigm.edm": ["edm"], "application/vnd.novadigm.edx": ["edx"], "application/vnd.novadigm.ext": ["ext"], "application/vnd.oasis.opendocument.chart": ["odc"], "application/vnd.oasis.opendocument.chart-template": ["otc"], "application/vnd.oasis.opendocument.database": ["odb"], "application/vnd.oasis.opendocument.formula": ["odf"], "application/vnd.oasis.opendocument.formula-template": ["odft"], "application/vnd.oasis.opendocument.graphics": ["odg"], "application/vnd.oasis.opendocument.graphics-template": ["otg"], "application/vnd.oasis.opendocument.image": ["odi"], "application/vnd.oasis.opendocument.image-template": ["oti"], "application/vnd.oasis.opendocument.presentation": ["odp"], "application/vnd.oasis.opendocument.presentation-template": ["otp"], "application/vnd.oasis.opendocument.spreadsheet": ["ods"], "application/vnd.oasis.opendocument.spreadsheet-template": ["ots"], "application/vnd.oasis.opendocument.text": ["odt"], "application/vnd.oasis.opendocument.text-master": ["odm"], "application/vnd.oasis.opendocument.text-template": ["ott"], "application/vnd.oasis.opendocument.text-web": ["oth"], "application/vnd.olpc-sugar": ["xo"], "application/vnd.oma.dd2+xml": ["dd2"], "application/vnd.openblox.game+xml": ["obgx"], "application/vnd.openofficeorg.extension": ["oxt"], "application/vnd.openstreetmap.data+xml": ["osm"], "application/vnd.openxmlformats-officedocument.presentationml.presentation": ["pptx"], "application/vnd.openxmlformats-officedocument.presentationml.slide": ["sldx"], "application/vnd.openxmlformats-officedocument.presentationml.slideshow": ["ppsx"], "application/vnd.openxmlformats-officedocument.presentationml.template": ["potx"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ["xlsx"], "application/vnd.openxmlformats-officedocument.spreadsheetml.template": ["xltx"], "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"], "application/vnd.openxmlformats-officedocument.wordprocessingml.template": ["dotx"], "application/vnd.osgeo.mapguide.package": ["mgp"], "application/vnd.osgi.dp": ["dp"], "application/vnd.osgi.subsystem": ["esa"], "application/vnd.palm": ["pdb", "pqa", "oprc"], "application/vnd.pawaafile": ["paw"], "application/vnd.pg.format": ["str"], "application/vnd.pg.osasli": ["ei6"], "application/vnd.picsel": ["efif"], "application/vnd.pmi.widget": ["wg"], "application/vnd.pocketlearn": ["plf"], "application/vnd.powerbuilder6": ["pbd"], "application/vnd.previewsystems.box": ["box"], "application/vnd.proteus.magazine": ["mgz"], "application/vnd.publishare-delta-tree": ["qps"], "application/vnd.pvi.ptid1": ["ptid"], "application/vnd.quark.quarkxpress": ["qxd", "qxt", "qwd", "qwt", "qxl", "qxb"], "application/vnd.rar": ["rar"], "application/vnd.realvnc.bed": ["bed"], "application/vnd.recordare.musicxml": ["mxl"], "application/vnd.recordare.musicxml+xml": ["musicxml"], "application/vnd.rig.cryptonote": ["cryptonote"], "application/vnd.rim.cod": ["cod"], "application/vnd.rn-realmedia": ["rm"], "application/vnd.rn-realmedia-vbr": ["rmvb"], "application/vnd.route66.link66+xml": ["link66"], "application/vnd.sailingtracker.track": ["st"], "application/vnd.seemail": ["see"], "application/vnd.sema": ["sema"], "application/vnd.semd": ["semd"], "application/vnd.semf": ["semf"], "application/vnd.shana.informed.formdata": ["ifm"], "application/vnd.shana.informed.formtemplate": ["itp"], "application/vnd.shana.informed.interchange": ["iif"], "application/vnd.shana.informed.package": ["ipk"], "application/vnd.simtech-mindmapper": ["twd", "twds"], "application/vnd.smaf": ["mmf"], "application/vnd.smart.teacher": ["teacher"], "application/vnd.software602.filler.form+xml": ["fo"], "application/vnd.solent.sdkm+xml": ["sdkm", "sdkd"], "application/vnd.spotfire.dxp": ["dxp"], "application/vnd.spotfire.sfs": ["sfs"], "application/vnd.stardivision.calc": ["sdc"], "application/vnd.stardivision.draw": ["sda"], "application/vnd.stardivision.impress": ["sdd"], "application/vnd.stardivision.math": ["smf"], "application/vnd.stardivision.writer": ["sdw", "vor"], "application/vnd.stardivision.writer-global": ["sgl"], "application/vnd.stepmania.package": ["smzip"], "application/vnd.stepmania.stepchart": ["sm"], "application/vnd.sun.wadl+xml": ["wadl"], "application/vnd.sun.xml.calc": ["sxc"], "application/vnd.sun.xml.calc.template": ["stc"], "application/vnd.sun.xml.draw": ["sxd"], "application/vnd.sun.xml.draw.template": ["std"], "application/vnd.sun.xml.impress": ["sxi"], "application/vnd.sun.xml.impress.template": ["sti"], "application/vnd.sun.xml.math": ["sxm"], "application/vnd.sun.xml.writer": ["sxw"], "application/vnd.sun.xml.writer.global": ["sxg"], "application/vnd.sun.xml.writer.template": ["stw"], "application/vnd.sus-calendar": ["sus", "susp"], "application/vnd.svd": ["svd"], "application/vnd.symbian.install": ["sis", "sisx"], "application/vnd.syncml+xml": ["xsm"], "application/vnd.syncml.dm+wbxml": ["bdm"], "application/vnd.syncml.dm+xml": ["xdm"], "application/vnd.syncml.dmddf+xml": ["ddf"], "application/vnd.tao.intent-module-archive": ["tao"], "application/vnd.tcpdump.pcap": ["pcap", "cap", "dmp"], "application/vnd.tmobile-livetv": ["tmo"], "application/vnd.trid.tpt": ["tpt"], "application/vnd.triscape.mxs": ["mxs"], "application/vnd.trueapp": ["tra"], "application/vnd.ufdl": ["ufd", "ufdl"], "application/vnd.uiq.theme": ["utz"], "application/vnd.umajin": ["umj"], "application/vnd.unity": ["unityweb"], "application/vnd.uoml+xml": ["uoml"], "application/vnd.vcx": ["vcx"], "application/vnd.visio": ["vsd", "vst", "vss", "vsw"], "application/vnd.visionary": ["vis"], "application/vnd.vsf": ["vsf"], "application/vnd.wap.wbxml": ["wbxml"], "application/vnd.wap.wmlc": ["wmlc"], "application/vnd.wap.wmlscriptc": ["wmlsc"], "application/vnd.webturbo": ["wtb"], "application/vnd.wolfram.player": ["nbp"], "application/vnd.wordperfect": ["wpd"], "application/vnd.wqd": ["wqd"], "application/vnd.wt.stf": ["stf"], "application/vnd.xara": ["xar"], "application/vnd.xfdl": ["xfdl"], "application/vnd.yamaha.hv-dic": ["hvd"], "application/vnd.yamaha.hv-script": ["hvs"], "application/vnd.yamaha.hv-voice": ["hvp"], "application/vnd.yamaha.openscoreformat": ["osf"], "application/vnd.yamaha.openscoreformat.osfpvg+xml": ["osfpvg"], "application/vnd.yamaha.smaf-audio": ["saf"], "application/vnd.yamaha.smaf-phrase": ["spf"], "application/vnd.yellowriver-custom-menu": ["cmp"], "application/vnd.zul": ["zir", "zirz"], "application/vnd.zzazz.deck+xml": ["zaz"], "application/x-7z-compressed": ["7z"], "application/x-abiword": ["abw"], "application/x-ace-compressed": ["ace"], "application/x-apple-diskimage": ["*dmg"], "application/x-arj": ["arj"], "application/x-authorware-bin": ["aab", "x32", "u32", "vox"], "application/x-authorware-map": ["aam"], "application/x-authorware-seg": ["aas"], "application/x-bcpio": ["bcpio"], "application/x-bdoc": ["*bdoc"], "application/x-bittorrent": ["torrent"], "application/x-blorb": ["blb", "blorb"], "application/x-bzip": ["bz"], "application/x-bzip2": ["bz2", "boz"], "application/x-cbr": ["cbr", "cba", "cbt", "cbz", "cb7"], "application/x-cdlink": ["vcd"], "application/x-cfs-compressed": ["cfs"], "application/x-chat": ["chat"], "application/x-chess-pgn": ["pgn"], "application/x-chrome-extension": ["crx"], "application/x-cocoa": ["cco"], "application/x-conference": ["nsc"], "application/x-cpio": ["cpio"], "application/x-csh": ["csh"], "application/x-debian-package": ["*deb", "udeb"], "application/x-dgc-compressed": ["dgc"], "application/x-director": ["dir", "dcr", "dxr", "cst", "cct", "cxt", "w3d", "fgd", "swa"], "application/x-doom": ["wad"], "application/x-dtbncx+xml": ["ncx"], "application/x-dtbook+xml": ["dtb"], "application/x-dtbresource+xml": ["res"], "application/x-dvi": ["dvi"], "application/x-envoy": ["evy"], "application/x-eva": ["eva"], "application/x-font-bdf": ["bdf"], "application/x-font-ghostscript": ["gsf"], "application/x-font-linux-psf": ["psf"], "application/x-font-pcf": ["pcf"], "application/x-font-snf": ["snf"], "application/x-font-type1": ["pfa", "pfb", "pfm", "afm"], "application/x-freearc": ["arc"], "application/x-futuresplash": ["spl"], "application/x-gca-compressed": ["gca"], "application/x-glulx": ["ulx"], "application/x-gnumeric": ["gnumeric"], "application/x-gramps-xml": ["gramps"], "application/x-gtar": ["gtar"], "application/x-hdf": ["hdf"], "application/x-httpd-php": ["php"], "application/x-install-instructions": ["install"], "application/x-iso9660-image": ["*iso"], "application/x-iwork-keynote-sffkey": ["*key"], "application/x-iwork-numbers-sffnumbers": ["*numbers"], "application/x-iwork-pages-sffpages": ["*pages"], "application/x-java-archive-diff": ["jardiff"], "application/x-java-jnlp-file": ["jnlp"], "application/x-keepass2": ["kdbx"], "application/x-latex": ["latex"], "application/x-lua-bytecode": ["luac"], "application/x-lzh-compressed": ["lzh", "lha"], "application/x-makeself": ["run"], "application/x-mie": ["mie"], "application/x-mobipocket-ebook": ["prc", "mobi"], "application/x-ms-application": ["application"], "application/x-ms-shortcut": ["lnk"], "application/x-ms-wmd": ["wmd"], "application/x-ms-wmz": ["wmz"], "application/x-ms-xbap": ["xbap"], "application/x-msaccess": ["mdb"], "application/x-msbinder": ["obd"], "application/x-mscardfile": ["crd"], "application/x-msclip": ["clp"], "application/x-msdos-program": ["*exe"], "application/x-msdownload": ["*exe", "*dll", "com", "bat", "*msi"], "application/x-msmediaview": ["mvb", "m13", "m14"], "application/x-msmetafile": ["*wmf", "*wmz", "*emf", "emz"], "application/x-msmoney": ["mny"], "application/x-mspublisher": ["pub"], "application/x-msschedule": ["scd"], "application/x-msterminal": ["trm"], "application/x-mswrite": ["wri"], "application/x-netcdf": ["nc", "cdf"], "application/x-ns-proxy-autoconfig": ["pac"], "application/x-nzb": ["nzb"], "application/x-perl": ["pl", "pm"], "application/x-pilot": ["*prc", "*pdb"], "application/x-pkcs12": ["p12", "pfx"], "application/x-pkcs7-certificates": ["p7b", "spc"], "application/x-pkcs7-certreqresp": ["p7r"], "application/x-rar-compressed": ["*rar"], "application/x-redhat-package-manager": ["rpm"], "application/x-research-info-systems": ["ris"], "application/x-sea": ["sea"], "application/x-sh": ["sh"], "application/x-shar": ["shar"], "application/x-shockwave-flash": ["swf"], "application/x-silverlight-app": ["xap"], "application/x-sql": ["sql"], "application/x-stuffit": ["sit"], "application/x-stuffitx": ["sitx"], "application/x-subrip": ["srt"], "application/x-sv4cpio": ["sv4cpio"], "application/x-sv4crc": ["sv4crc"], "application/x-t3vm-image": ["t3"], "application/x-tads": ["gam"], "application/x-tar": ["tar"], "application/x-tcl": ["tcl", "tk"], "application/x-tex": ["tex"], "application/x-tex-tfm": ["tfm"], "application/x-texinfo": ["texinfo", "texi"], "application/x-tgif": ["*obj"], "application/x-ustar": ["ustar"], "application/x-virtualbox-hdd": ["hdd"], "application/x-virtualbox-ova": ["ova"], "application/x-virtualbox-ovf": ["ovf"], "application/x-virtualbox-vbox": ["vbox"], "application/x-virtualbox-vbox-extpack": ["vbox-extpack"], "application/x-virtualbox-vdi": ["vdi"], "application/x-virtualbox-vhd": ["vhd"], "application/x-virtualbox-vmdk": ["vmdk"], "application/x-wais-source": ["src"], "application/x-web-app-manifest+json": ["webapp"], "application/x-x509-ca-cert": ["der", "crt", "pem"], "application/x-xfig": ["fig"], "application/x-xliff+xml": ["*xlf"], "application/x-xpinstall": ["xpi"], "application/x-xz": ["xz"], "application/x-zmachine": ["z1", "z2", "z3", "z4", "z5", "z6", "z7", "z8"], "audio/vnd.dece.audio": ["uva", "uvva"], "audio/vnd.digital-winds": ["eol"], "audio/vnd.dra": ["dra"], "audio/vnd.dts": ["dts"], "audio/vnd.dts.hd": ["dtshd"], "audio/vnd.lucent.voice": ["lvp"], "audio/vnd.ms-playready.media.pya": ["pya"], "audio/vnd.nuera.ecelp4800": ["ecelp4800"], "audio/vnd.nuera.ecelp7470": ["ecelp7470"], "audio/vnd.nuera.ecelp9600": ["ecelp9600"], "audio/vnd.rip": ["rip"], "audio/x-aac": ["aac"], "audio/x-aiff": ["aif", "aiff", "aifc"], "audio/x-caf": ["caf"], "audio/x-flac": ["flac"], "audio/x-m4a": ["*m4a"], "audio/x-matroska": ["mka"], "audio/x-mpegurl": ["m3u"], "audio/x-ms-wax": ["wax"], "audio/x-ms-wma": ["wma"], "audio/x-pn-realaudio": ["ram", "ra"], "audio/x-pn-realaudio-plugin": ["rmp"], "audio/x-realaudio": ["*ra"], "audio/x-wav": ["*wav"], "chemical/x-cdx": ["cdx"], "chemical/x-cif": ["cif"], "chemical/x-cmdf": ["cmdf"], "chemical/x-cml": ["cml"], "chemical/x-csml": ["csml"], "chemical/x-xyz": ["xyz"], "image/prs.btif": ["btif"], "image/prs.pti": ["pti"], "image/vnd.adobe.photoshop": ["psd"], "image/vnd.airzip.accelerator.azv": ["azv"], "image/vnd.dece.graphic": ["uvi", "uvvi", "uvg", "uvvg"], "image/vnd.djvu": ["djvu", "djv"], "image/vnd.dvb.subtitle": ["*sub"], "image/vnd.dwg": ["dwg"], "image/vnd.dxf": ["dxf"], "image/vnd.fastbidsheet": ["fbs"], "image/vnd.fpx": ["fpx"], "image/vnd.fst": ["fst"], "image/vnd.fujixerox.edmics-mmr": ["mmr"], "image/vnd.fujixerox.edmics-rlc": ["rlc"], "image/vnd.microsoft.icon": ["ico"], "image/vnd.ms-dds": ["dds"], "image/vnd.ms-modi": ["mdi"], "image/vnd.ms-photo": ["wdp"], "image/vnd.net-fpx": ["npx"], "image/vnd.pco.b16": ["b16"], "image/vnd.tencent.tap": ["tap"], "image/vnd.valve.source.texture": ["vtf"], "image/vnd.wap.wbmp": ["wbmp"], "image/vnd.xiff": ["xif"], "image/vnd.zbrush.pcx": ["pcx"], "image/x-3ds": ["3ds"], "image/x-cmu-raster": ["ras"], "image/x-cmx": ["cmx"], "image/x-freehand": ["fh", "fhc", "fh4", "fh5", "fh7"], "image/x-icon": ["*ico"], "image/x-jng": ["jng"], "image/x-mrsid-image": ["sid"], "image/x-ms-bmp": ["*bmp"], "image/x-pcx": ["*pcx"], "image/x-pict": ["pic", "pct"], "image/x-portable-anymap": ["pnm"], "image/x-portable-bitmap": ["pbm"], "image/x-portable-graymap": ["pgm"], "image/x-portable-pixmap": ["ppm"], "image/x-rgb": ["rgb"], "image/x-tga": ["tga"], "image/x-xbitmap": ["xbm"], "image/x-xpixmap": ["xpm"], "image/x-xwindowdump": ["xwd"], "message/vnd.wfa.wsc": ["wsc"], "model/vnd.collada+xml": ["dae"], "model/vnd.dwf": ["dwf"], "model/vnd.gdl": ["gdl"], "model/vnd.gtw": ["gtw"], "model/vnd.mts": ["mts"], "model/vnd.opengex": ["ogex"], "model/vnd.parasolid.transmit.binary": ["x_b"], "model/vnd.parasolid.transmit.text": ["x_t"], "model/vnd.sap.vds": ["vds"], "model/vnd.usdz+zip": ["usdz"], "model/vnd.valve.source.compiled-map": ["bsp"], "model/vnd.vtu": ["vtu"], "text/prs.lines.tag": ["dsc"], "text/vnd.curl": ["curl"], "text/vnd.curl.dcurl": ["dcurl"], "text/vnd.curl.mcurl": ["mcurl"], "text/vnd.curl.scurl": ["scurl"], "text/vnd.dvb.subtitle": ["sub"], "text/vnd.fly": ["fly"], "text/vnd.fmi.flexstor": ["flx"], "text/vnd.graphviz": ["gv"], "text/vnd.in3d.3dml": ["3dml"], "text/vnd.in3d.spot": ["spot"], "text/vnd.sun.j2me.app-descriptor": ["jad"], "text/vnd.wap.wml": ["wml"], "text/vnd.wap.wmlscript": ["wmls"], "text/x-asm": ["s", "asm"], "text/x-c": ["c", "cc", "cxx", "cpp", "h", "hh", "dic"], "text/x-component": ["htc"], "text/x-fortran": ["f", "for", "f77", "f90"], "text/x-handlebars-template": ["hbs"], "text/x-java-source": ["java"], "text/x-lua": ["lua"], "text/x-markdown": ["mkd"], "text/x-nfo": ["nfo"], "text/x-opml": ["opml"], "text/x-org": ["*org"], "text/x-pascal": ["p", "pas"], "text/x-processing": ["pde"], "text/x-sass": ["sass"], "text/x-scss": ["scss"], "text/x-setext": ["etx"], "text/x-sfv": ["sfv"], "text/x-suse-ymp": ["ymp"], "text/x-uuencode": ["uu"], "text/x-vcalendar": ["vcs"], "text/x-vcard": ["vcf"], "video/vnd.dece.hd": ["uvh", "uvvh"], "video/vnd.dece.mobile": ["uvm", "uvvm"], "video/vnd.dece.pd": ["uvp", "uvvp"], "video/vnd.dece.sd": ["uvs", "uvvs"], "video/vnd.dece.video": ["uvv", "uvvv"], "video/vnd.dvb.file": ["dvb"], "video/vnd.fvt": ["fvt"], "video/vnd.mpegurl": ["mxu", "m4u"], "video/vnd.ms-playready.media.pyv": ["pyv"], "video/vnd.uvvu.mp4": ["uvu", "uvvu"], "video/vnd.vivo": ["viv"], "video/x-f4v": ["f4v"], "video/x-fli": ["fli"], "video/x-flv": ["flv"], "video/x-m4v": ["m4v"], "video/x-matroska": ["mkv", "mk3d", "mks"], "video/x-mng": ["mng"], "video/x-ms-asf": ["asf", "asx"], "video/x-ms-vob": ["vob"], "video/x-ms-wm": ["wm"], "video/x-ms-wmv": ["wmv"], "video/x-ms-wmx": ["wmx"], "video/x-ms-wvx": ["wvx"], "video/x-msvideo": ["avi"], "video/x-sgi-movie": ["movie"], "video/x-smv": ["smv"], "x-conference/x-cooltalk": ["ice"] };
     }
   });
@@ -47049,7 +47049,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/mime/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Mime = require_Mime();
       module.exports = new Mime(require_standard(), require_other());
     }
@@ -47067,7 +47067,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/entities/lib/decode_codepoint.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -47125,7 +47125,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/htmlparser2/lib/Tokenizer.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -47995,7 +47995,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/htmlparser2/lib/Parser.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -48326,7 +48326,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domelementtype/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Doctype = exports.CDATA = exports.Tag = exports.Style = exports.Script = exports.Comment = exports.Directive = exports.Text = exports.Root = exports.isTag = exports.ElementType = void 0;
       var ElementType;
@@ -48362,7 +48362,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domhandler/lib/node.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __extends2 = exports && exports.__extends || /* @__PURE__ */ (function() {
         var extendStatics2 = function(d, b) {
           extendStatics2 = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
@@ -48759,7 +48759,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domhandler/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -48930,7 +48930,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/entities/lib/decode.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -48994,7 +48994,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/entities/lib/encode.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -49089,7 +49089,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/entities/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.decodeXMLStrict = exports.decodeHTML5Strict = exports.decodeHTML4Strict = exports.decodeHTML5 = exports.decodeHTML4 = exports.decodeHTMLStrict = exports.decodeHTML = exports.decodeXML = exports.encodeHTML5 = exports.encodeHTML4 = exports.escapeUTF8 = exports.escape = exports.encodeNonAsciiHTML = exports.encodeHTML = exports.encodeXML = exports.encode = exports.decodeStrict = exports.decode = void 0;
       var decode_1 = require_decode2();
@@ -49161,7 +49161,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/dom-serializer/lib/foreignNames.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.attributeNames = exports.elementNames = void 0;
       exports.elementNames = /* @__PURE__ */ new Map([
@@ -49272,7 +49272,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/dom-serializer/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __assign2 = exports && exports.__assign || function() {
         __assign2 = Object.assign || function(t) {
           for (var s, i = 1, n = arguments.length; i < n; i++) {
@@ -49461,7 +49461,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/stringify.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -49522,7 +49522,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/traversal.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.prevElementSibling = exports.nextElementSibling = exports.getName = exports.hasAttrib = exports.getAttributeValue = exports.getSiblings = exports.getParent = exports.getChildren = void 0;
       var domhandler_1 = require_lib2();
@@ -49591,7 +49591,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/manipulation.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.prepend = exports.prependChild = exports.append = exports.appendChild = exports.replaceElement = exports.removeElement = void 0;
       function removeElement(elem) {
@@ -49690,7 +49690,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/querying.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.findAll = exports.existsOne = exports.findOne = exports.findOneChild = exports.find = exports.filter = void 0;
       var domhandler_1 = require_lib2();
@@ -49778,7 +49778,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/legacy.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.getElementsByTagType = exports.getElementsByTagName = exports.getElementById = exports.getElements = exports.testElement = void 0;
       var domhandler_1 = require_lib2();
@@ -49889,7 +49889,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/helpers.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.uniqueSort = exports.compareDocumentPosition = exports.removeSubsets = void 0;
       var domhandler_1 = require_lib2();
@@ -49975,7 +49975,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/feeds.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.getFeed = void 0;
       var stringify_1 = require_stringify();
@@ -50118,7 +50118,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/domutils/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         Object.defineProperty(o, k2, { enumerable: true, get: function() {
@@ -50167,7 +50167,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/htmlparser2/lib/FeedHandler.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __extends2 = exports && exports.__extends || /* @__PURE__ */ (function() {
         var extendStatics2 = function(d, b) {
           extendStatics2 = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d2, b2) {
@@ -50413,7 +50413,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/htmlparser2/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         Object.defineProperty(o, k2, { enumerable: true, get: function() {
@@ -50491,7 +50491,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/html.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.HTMLParser = void 0;
       var htmlparser2_1 = require_lib6();
@@ -50689,7 +50689,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/messageParse.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -50864,7 +50864,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/markdown.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MarkdownParser = void 0;
       var messageParse_1 = require_messageParse();
@@ -50946,7 +50946,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/markdownv2.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MarkdownV2Parser = void 0;
       var html_1 = require_html();
@@ -50986,7 +50986,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/Utils.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -51843,7 +51843,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/forward.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Forward = void 0;
       var chatGetter_1 = require_chatGetter();
@@ -51896,7 +51896,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/file.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.File = void 0;
       var api_1 = require_api2();
@@ -51970,7 +51970,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/Logger.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Logger = exports.LogLevel = void 0;
       var platform_1 = require_platform();
@@ -52093,7 +52093,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/Deferred.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       var Deferred = class _Deferred {
         constructor() {
@@ -52117,7 +52117,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/RequestState.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -52159,7 +52159,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/users.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -52574,7 +52574,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/button.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Button = void 0;
       var api_1 = require_api2();
@@ -52656,7 +52656,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/Password.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -53059,7 +53059,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/messageButton.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MessageButton = void 0;
       var api_1 = require_api2();
@@ -53207,7 +53207,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/message.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -53877,7 +53877,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/patched/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.patchAll = patchAll;
       var api_1 = require_api2();
@@ -53958,7 +53958,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.serializeDate = exports.serializeBytes = exports.Api = void 0;
       var api_1 = require_api2();
@@ -53982,7 +53982,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/BinaryWriter.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.BinaryWriter = void 0;
       var BinaryWriter = class {
@@ -54004,7 +54004,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_custom_error = __commonJS({
     "node_modules/ts-custom-error/dist/custom-error.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function fixProto(target, prototype) {
         var setPrototypeOf = Object.setPrototypeOf;
         setPrototypeOf ? setPrototypeOf(target, prototype) : target.__proto__ = prototype;
@@ -54104,7 +54104,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/errors/RPCBaseErrors.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.TimedOutError = exports.ServerError = exports.FloodError = exports.AuthKeyError = exports.NotFoundError = exports.ForbiddenError = exports.UnauthorizedError = exports.BadRequestError = exports.InvalidDCError = exports.RPCError = void 0;
       var ts_custom_error_1 = require_custom_error();
@@ -54203,7 +54203,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/errors/RPCErrorList.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.rpcErrorRe = exports.MsgWaitError = exports.EmailUnconfirmedError = exports.NetworkMigrateError = exports.FileMigrateError = exports.FloodTestPhoneWaitError = exports.FloodWaitError = exports.SlowModeWaitError = exports.PhoneMigrateError = exports.UserMigrateError = void 0;
       var RPCBaseErrors_1 = require_RPCBaseErrors();
@@ -54306,7 +54306,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/errors/Common.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.BadMessageError = exports.CdnFileTamperedError = exports.SecurityError = exports.InvalidBufferError = exports.InvalidChecksumError = exports.TypeNotFoundError = exports.ReadCancelledError = void 0;
       var ReadCancelledError = class extends Error {
@@ -54396,7 +54396,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/errors/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -54438,7 +54438,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/TLMessage.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.TLMessage = void 0;
       var TLMessage = class {
@@ -54460,7 +54460,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/RPCResult.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.RPCResult = void 0;
       var api_1 = require_api2();
@@ -54497,7 +54497,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/MessageContainer.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MessageContainer = void 0;
       var TLMessage_1 = require_TLMessage();
@@ -54536,7 +54536,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/trees.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Z_FIXED = 4;
       var Z_BINARY = 0;
       var Z_TEXT = 1;
@@ -55176,7 +55176,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/adler32.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var adler32 = (adler, buf, len, pos) => {
         let s1 = adler & 65535 | 0, s2 = adler >>> 16 & 65535 | 0, n = 0;
         while (len !== 0) {
@@ -55200,7 +55200,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/crc32.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var makeTable = () => {
         let c, table = [];
         for (var n = 0; n < 256; n++) {
@@ -55231,7 +55231,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/messages.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = {
         2: "need dictionary",
         /* Z_NEED_DICT       2  */
@@ -55260,7 +55260,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/constants.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = {
         /* Allowed flush values; see deflate() and inflate() below for details */
         Z_NO_FLUSH: 0,
@@ -55309,7 +55309,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/deflate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var { _tr_init, _tr_stored_block, _tr_flush_block, _tr_tally, _tr_align } = require_trees();
       var adler32 = require_adler32();
       var crc32 = require_crc32();
@@ -56451,7 +56451,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/utils/common.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var _has = (obj, key) => {
         return Object.prototype.hasOwnProperty.call(obj, key);
       };
@@ -56494,7 +56494,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/utils/strings.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var STR_APPLY_UIA_OK = true;
       try {
         String.fromCharCode.apply(null, new Uint8Array(1));
@@ -56625,7 +56625,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/zstream.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function ZStream() {
         this.input = null;
         this.next_in = 0;
@@ -56649,7 +56649,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/deflate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var zlib_deflate = require_deflate();
       var utils = require_common3();
       var strings = require_strings();
@@ -56812,7 +56812,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/inffast.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var BAD = 16209;
       var TYPE = 16191;
       module.exports = function inflate_fast(strm, start) {
@@ -57042,7 +57042,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/inftrees.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var MAXBITS = 15;
       var ENOUGH_LENS = 852;
       var ENOUGH_DISTS = 592;
@@ -57356,7 +57356,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/inflate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var adler32 = require_adler32();
       var crc32 = require_crc32();
       var inflate_fast = require_inffast();
@@ -58609,7 +58609,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/zlib/gzheader.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       function GZheader() {
         this.text = 0;
         this.time = 0;
@@ -58631,7 +58631,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/lib/inflate.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var zlib_inflate = require_inflate();
       var utils = require_common3();
       var strings = require_strings();
@@ -58808,7 +58808,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/pako/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var { Deflate, deflate, deflateRaw, gzip } = require_deflate2();
       var { Inflate, inflate, inflateRaw, ungzip } = require_inflate2();
       var constants = require_constants2();
@@ -58829,7 +58829,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/GZIPPacked.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.GZIPPacked = void 0;
       var __1 = require_tl();
@@ -58886,7 +58886,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/core/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.GZIPPacked = exports.MessageContainer = exports.TLMessage = exports.RPCResult = exports.coreObjects = void 0;
       var TLMessage_1 = require_TLMessage();
@@ -58918,7 +58918,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/AllTLObjects.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.tlobjects = exports.LAYER = void 0;
       exports.LAYER = 198;
@@ -58942,7 +58942,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/BinaryReader.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.BinaryReader = void 0;
       var errors_1 = require_errors();
@@ -59171,7 +59171,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_global = __commonJS({
     "node_modules/es5-ext/global.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var naiveFallback = function() {
         if (typeof self === "object" && self) return self;
         if (typeof window === "object" && window) return window;
@@ -59268,7 +59268,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_version = __commonJS({
     "node_modules/websocket/lib/version.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = require_package2().version;
     }
   });
@@ -59277,7 +59277,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_browser13 = __commonJS({
     "node_modules/websocket/lib/browser.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var _globalThis;
       if (typeof globalThis === "object") {
         _globalThis = globalThis;
@@ -59853,7 +59853,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/errors.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.E_CANCELED = exports.E_ALREADY_LOCKED = exports.E_TIMEOUT = void 0;
       exports.E_TIMEOUT = new Error("timeout while waiting for mutex to become available");
@@ -59867,7 +59867,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/Semaphore.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
       var errors_1 = require_errors2();
@@ -59996,7 +59996,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/Mutex.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
       var Semaphore_1 = require_Semaphore();
@@ -60049,7 +60049,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/withTimeout.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.withTimeout = void 0;
       var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
@@ -60169,7 +60169,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/tryAcquire.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.tryAcquire = void 0;
       var errors_1 = require_errors2();
@@ -60189,7 +60189,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/async-mutex/lib/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.tryAcquire = exports.withTimeout = exports.Semaphore = exports.Mutex = void 0;
       var tslib_1 = (init_tslib_es6(), __toCommonJS(tslib_es6_exports));
@@ -60218,7 +60218,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/PromisedWebSockets.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.PromisedWebSockets = void 0;
       var websocket_1 = require_browser13();
@@ -60355,7 +60355,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_net = __commonJS({
     "src/shims/net.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var Socket = class {
         constructor() {
           this.destroyed = false;
@@ -60395,7 +60395,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/net.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -60421,7 +60421,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_socks = __commonJS({
     "src/shims/socks.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = { SocksClient: { createConnection: async () => {
         throw new Error("SOCKS not available in browser");
       } } };
@@ -60433,7 +60433,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/socks.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -60460,7 +60460,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/PromisedNetSockets.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -60649,7 +60649,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/MessagePacker.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.MessagePacker = void 0;
       var core_1 = require_core();
@@ -60801,7 +60801,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/AsyncQueue.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.AsyncQueue = void 0;
       var AsyncQueue = class {
@@ -60843,7 +60843,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.AsyncQueue = exports.MessagePacker = exports.PromisedNetSockets = exports.PromisedWebSockets = exports.BinaryReader = exports.BinaryWriter = exports.Logger = void 0;
       var Logger_1 = require_Logger();
@@ -60882,7 +60882,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/Connection.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ObfuscatedConnection = exports.PacketCodec = exports.Connection = void 0;
       var extensions_1 = require_extensions();
@@ -61029,7 +61029,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/TCPFull.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPFull = exports.FullPacketCodec = void 0;
       var Connection_1 = require_Connection();
@@ -61092,7 +61092,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/TCPAbridged.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -61152,7 +61152,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/@cryptography/aes/dist/cjs/aes.min.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       var t = new Uint8Array(256);
       var e = new Uint8Array(256);
@@ -61254,7 +61254,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/converters.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ab2i = exports.i2ab = exports.isBigEndian = void 0;
       exports.i2abLow = i2abLow;
@@ -61298,7 +61298,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/words.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.s2i = s2i;
       exports.getWords = getWords;
@@ -61340,7 +61340,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/crypto.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -61457,7 +61457,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/CTR.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -61508,7 +61508,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/TCPObfuscated.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPObfuscated = void 0;
       var Helpers_1 = require_Helpers();
@@ -61590,7 +61590,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPObfuscated = exports.ConnectionTCPAbridged = exports.ConnectionTCPFull = exports.Connection = void 0;
       var Connection_1 = require_Connection();
@@ -61617,7 +61617,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/Abstract.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Session = void 0;
       var Session = class {
@@ -61631,7 +61631,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/Memory.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -61882,7 +61882,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/AuthKey.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.AuthKey = void 0;
       var Helpers_1 = require_Helpers();
@@ -61962,7 +61962,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/StringSession.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.StringSession = void 0;
       var Memory_1 = require_Memory();
@@ -62062,7 +62062,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_store2 = __commonJS({
     "node_modules/store2/dist/store2.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function(window2, define2) {
         var _ = {
           version: "2.14.4",
@@ -62403,7 +62403,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_empty = __commonJS({
     "src/shims/empty.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = {};
     }
   });
@@ -62412,7 +62412,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_async_map = __commonJS({
     "node_modules/slide/lib/async-map.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = asyncMap;
       function asyncMap() {
         var steps = Array.prototype.slice.call(arguments), list = steps.shift() || [], cb_ = steps.pop();
@@ -62456,7 +62456,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_bind_actor = __commonJS({
     "node_modules/slide/lib/bind-actor.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = bindActor;
       function bindActor() {
         var args = Array.prototype.slice.call(arguments), obj = null, fn;
@@ -62477,7 +62477,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_chain = __commonJS({
     "node_modules/slide/lib/chain.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = chain;
       var bindActor = require_bind_actor();
       chain.first = {};
@@ -62508,7 +62508,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_slide = __commonJS({
     "node_modules/slide/lib/slide.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       exports.asyncMap = require_async_map();
       exports.bindActor = require_bind_actor();
       exports.chain = require_chain();
@@ -62519,7 +62519,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_imurmurhash = __commonJS({
     "node_modules/imurmurhash/imurmurhash.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function() {
         var cache3;
         function MurmurHash3(key, seed) {
@@ -62620,7 +62620,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/write-file-atomic/index.js"(exports, module) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = writeFile;
       module.exports.sync = writeFileSync;
       module.exports._getTmpname = getTmpname;
@@ -62738,7 +62738,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_LocalStorage = __commonJS({
     "node_modules/node-localstorage/LocalStorage.js"(exports) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function() {
         var JSONStorage, KEY_FOR_EMPTY_STRING, LocalStorage, MetaKey, QUOTA_EXCEEDED_ERR, StorageEvent, _emptyDirectory, _escapeKey, _rm, createMap, events, fs, path, writeSync, extend = function(child, parent) {
           for (var key in parent) {
@@ -63065,7 +63065,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/localStorage.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.LocalStorage = void 0;
       exports.LocalStorage = require_LocalStorage().LocalStorage;
@@ -63077,7 +63077,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/StoreSession.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63161,7 +63161,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/sessions/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Session = exports.StoreSession = exports.StringSession = exports.MemorySession = void 0;
       var Memory_1 = require_Memory();
@@ -63187,7 +63187,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   var require_os = __commonJS({
     "src/shims/os.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       module.exports = {
         type: () => "Browser",
         release: () => navigator.userAgent || "1.0",
@@ -63205,7 +63205,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/os.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -63244,7 +63244,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/entityCache.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63328,7 +63328,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/IGE.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.IGE = void 0;
       var Helpers = require_Helpers();
@@ -63370,7 +63370,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/MTProtoState.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63629,7 +63629,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/MTProtoPlainSender.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63694,7 +63694,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/Factorizator.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -63776,7 +63776,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/crypto/RSA.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __rest2 = exports && exports.__rest || function(s, e) {
         var t = {};
         for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
@@ -63832,7 +63832,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/Authenticator.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -64022,7 +64022,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/extensions/PendingState.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.PendingState = void 0;
       var PendingState = class {
@@ -64059,7 +64059,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/MTProtoSender.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -64813,7 +64813,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPObfuscated = exports.ConnectionTCPAbridged = exports.ConnectionTCPFull = exports.Connection = exports.UpdateConnectionState = exports.MTProtoSender = exports.doAuthentication = exports.MTProtoPlainSender = void 0;
       var MTProtoPlainSender_1 = require_MTProtoPlainSender();
@@ -64858,7 +64858,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/network/connection/TCPMTProxy.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ConnectionTCPMTProxyAbridged = exports.TCPMTProxy = void 0;
       var Connection_1 = require_Connection();
@@ -64980,7 +64980,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/telegramBaseClient.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -65337,7 +65337,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/auth.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -65680,7 +65680,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/inlineResult.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.InlineResult = void 0;
       var api_1 = require_api2();
@@ -65771,7 +65771,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/inlineResults.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.InlineResults = void 0;
       var inlineResult_1 = require_inlineResult();
@@ -65805,7 +65805,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/bots.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.inlineQuery = inlineQuery;
       var tl_1 = require_tl();
@@ -65834,7 +65834,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/buttons.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.buildReplyMarkup = buildReplyMarkup;
       var tl_1 = require_tl();
@@ -65919,7 +65919,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/requestIter.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __asyncValues2 = exports && exports.__asyncValues || function(o) {
         if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
         var m = o[Symbol.asyncIterator], i;
@@ -66046,7 +66046,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/fs.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -66073,7 +66073,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/path.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -66088,7 +66088,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/downloads.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -66590,7 +66590,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/uploads.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -67060,7 +67060,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/messages.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __asyncValues2 = exports && exports.__asyncValues || function(o) {
         if (!Symbol.asyncIterator) throw new TypeError("Symbol.asyncIterator is not defined.");
         var m = o[Symbol.asyncIterator], i;
@@ -67807,7 +67807,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.ChatGetter = void 0;
       var chatGetter_1 = require_chatGetter();
@@ -67822,7 +67822,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/events/common.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -67957,7 +67957,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/events/Raw.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Raw = void 0;
       var common_1 = require_common4();
@@ -67997,7 +67997,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/updates.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.StopPropagation = void 0;
       exports.on = on;
@@ -68216,7 +68216,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/chats.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -68548,7 +68548,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/draft.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Draft = void 0;
       var Utils_1 = require_Utils();
@@ -68602,7 +68602,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/tl/custom/dialog.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.Dialog = void 0;
       var api_1 = require_api2();
@@ -68648,7 +68648,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/dialogs.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __importDefault2 = exports && exports.__importDefault || function(mod) {
         return mod && mod.__esModule ? mod : { "default": mod };
       };
@@ -68801,7 +68801,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/2fa.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.updateTwoFaSettings = updateTwoFaSettings;
       var Helpers_1 = require_Helpers();
@@ -68872,7 +68872,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/events/NewMessage.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.NewMessageEvent = exports.NewMessage = void 0;
       var common_1 = require_common4();
@@ -69027,7 +69027,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/events/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.NewMessageEvent = exports.NewMessage = exports.Raw = void 0;
       var Raw_1 = require_Raw();
@@ -69049,7 +69049,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/TelegramClient.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -70253,7 +70253,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/Version.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       Object.defineProperty(exports, "__esModule", { value: true });
       exports.version = void 0;
       exports.version = "2.26.21";
@@ -70265,7 +70265,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/client/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -70331,7 +70331,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
     "node_modules/telegram/index.js"(exports) {
       "use strict";
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
         if (k2 === void 0) k2 = k;
         var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -73919,7 +73919,7 @@ ${JSON.stringify(state)}`;
   var require_aubio = __commonJS({
     "node_modules/aubiojs/build/aubio.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       var aubio2 = (function() {
         var _scriptDir = typeof document !== "undefined" && document.currentScript ? document.currentScript.src : void 0;
         if (typeof __filename !== "undefined") _scriptDir = _scriptDir || __filename;
@@ -76301,7 +76301,7 @@ ${JSON.stringify(state)}`;
   var require_butterchurn = __commonJS({
     "node_modules/butterchurn/lib/butterchurn.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       (function webpackUniversalModuleDefinition(root, factory) {
         if (typeof exports === "object" && typeof module === "object")
           module.exports = factory();
@@ -82737,7 +82737,7 @@ ${JSON.stringify(state)}`;
   var require_butterchurnPresetsMinimal_min = __commonJS({
     "node_modules/butterchurn-presets/lib/butterchurnPresetsMinimal.min.js"(exports, module) {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       !(function(a, e) {
         "object" == typeof exports && "object" == typeof module ? module.exports = e() : "function" == typeof define && define.amd ? define("butterchurnPresetsMinimal", [], e) : "object" == typeof exports ? exports.butterchurnPresetsMinimal = e() : a.butterchurnPresetsMinimal = e();
       })("undefined" != typeof self ? self : exports, function() {
@@ -83217,7 +83217,7 @@ ${JSON.stringify(state)}`;
   });
 
   // src/visualizers/piano-roll.js
-  function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock }) {
+  function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock, getMidiActiveNotes }) {
     const $ = (id) => document.getElementById(id);
     const pianoOverlay = $("piano-overlay");
     const pianoCanvas = $("piano-canvas");
@@ -83606,6 +83606,12 @@ ${JSON.stringify(state)}`;
           ctx.fillRect(x + 1, drawTop, ww - 2, 1);
         }
       }
+      if (getMidiActiveNotes) {
+        try {
+          for (const p of getMidiActiveNotes()) activeKeys.add(p);
+        } catch (_) {
+        }
+      }
       _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
       if (audio.duration > 0 && pianoSeekbarFill) {
         const pct = Math.max(0, Math.min(1, audio.currentTime / audio.duration));
@@ -83745,11 +83751,1656 @@ ${JSON.stringify(state)}`;
     }
   });
 
+  // node_modules/smplr/dist/index.mjs
+  function connectSerial(nodes) {
+    const _nodes = nodes.filter((x) => !!x);
+    _nodes.reduce((a, b) => {
+      const left = "output" in a ? a.output : a;
+      const right = "input" in b ? b.input : b;
+      left.connect(right);
+      return b;
+    });
+    return () => {
+      _nodes.reduce((a, b) => {
+        const left = "output" in a ? a.output : a;
+        const right = "input" in b ? b.input : b;
+        left.disconnect(right);
+        return b;
+      });
+    };
+  }
+  function createControl(initialValue) {
+    let current = initialValue;
+    const listeners = /* @__PURE__ */ new Set();
+    function subscribe(listener) {
+      listeners.add(listener);
+      listener(current);
+      return () => {
+        listeners.delete(listener);
+      };
+    }
+    function set(value) {
+      current = value;
+      listeners.forEach((listener) => listener(current));
+    }
+    function get() {
+      return current;
+    }
+    return { subscribe, set, get };
+  }
+  function midiVelToGain(vel) {
+    return vel * vel / 16129;
+  }
+  function dbToGain(decibels) {
+    return Math.pow(10, decibels / 20);
+  }
+  function noteNameToMidi(note) {
+    const REGEX = /^([a-gA-G]?)(#{1,}|b{1,}|)(-?\d+)$/;
+    const m = REGEX.exec(note);
+    if (!m) return;
+    const letter = m[1].toUpperCase();
+    if (!letter) return;
+    const acc = m[2];
+    const alt = acc[0] === "b" ? -acc.length : acc.length;
+    const oct = m[3] ? +m[3] : 4;
+    const step = (letter.charCodeAt(0) + 3) % 7;
+    return [0, 2, 4, 5, 7, 9, 11][step] + alt + 12 * (oct + 1);
+  }
+  function toMidi(note) {
+    return note === void 0 ? void 0 : typeof note === "number" ? note : noteNameToMidi(note);
+  }
+  function pickPlaybackParams(obj) {
+    const result = {};
+    for (const key of PLAYBACK_KEYS) {
+      const value = obj[key];
+      if (value !== void 0) result[key] = value;
+    }
+    return result;
+  }
+  function resolveParams(defaults, group, region, midi, velocity, overrides) {
+    var _a, _b, _c, _d, _e;
+    const merged = __spreadValues(__spreadValues(__spreadValues(__spreadValues({}, PARAM_DEFAULTS), defaults), pickPlaybackParams(group)), pickPlaybackParams(region));
+    const pitch = (_b = (_a = region.pitch) != null ? _a : region.key) != null ? _b : midi;
+    const semitones = midi - pitch;
+    let detune = (semitones + merged.tune) * 100 + merged.detune;
+    if ((overrides == null ? void 0 : overrides.detune) !== void 0) detune += overrides.detune;
+    return {
+      detune,
+      velocity,
+      volume: merged.volume,
+      ampRelease: (_c = overrides == null ? void 0 : overrides.ampRelease) != null ? _c : merged.ampRelease,
+      ampAttack: merged.ampAttack,
+      lpfCutoffHz: (_d = overrides == null ? void 0 : overrides.lpfCutoffHz) != null ? _d : merged.lpfCutoffHz,
+      offset: merged.offset,
+      loop: (_e = overrides == null ? void 0 : overrides.loop) != null ? _e : merged.loop,
+      loopStart: merged.loopStart,
+      loopEnd: merged.loopEnd,
+      ampVelCurve: region.ampVelCurve,
+      loopAuto: region.loopAuto,
+      reverse: overrides == null ? void 0 : overrides.reverse
+    };
+  }
+  function processRegion(region) {
+    var _a, _b, _c, _d, _e;
+    let keyLow;
+    let keyHigh;
+    let pitch;
+    if (region.key !== void 0) {
+      keyLow = keyHigh = region.key;
+      pitch = region.key;
+    } else if (region.keyRange) {
+      [keyLow, keyHigh] = region.keyRange;
+      pitch = region.pitch;
+    } else {
+      keyLow = 0;
+      keyHigh = 127;
+      pitch = region.pitch;
+    }
+    return {
+      keyLow,
+      keyHigh,
+      pitch,
+      velLow: (_b = (_a = region.velRange) == null ? void 0 : _a[0]) != null ? _b : 0,
+      velHigh: (_d = (_c = region.velRange) == null ? void 0 : _c[1]) != null ? _d : 127,
+      ccRange: region.ccRange,
+      seqPosition: (_e = region.seqPosition) != null ? _e : 1,
+      group: region.group,
+      offBy: region.offBy,
+      sample: region.sample,
+      ref: region
+    };
+  }
+  function processGroup(group) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    return {
+      keyLow: (_b = (_a = group.keyRange) == null ? void 0 : _a[0]) != null ? _b : 0,
+      keyHigh: (_d = (_c = group.keyRange) == null ? void 0 : _c[1]) != null ? _d : 127,
+      velLow: (_f = (_e = group.velRange) == null ? void 0 : _e[0]) != null ? _f : 0,
+      velHigh: (_h = (_g = group.velRange) == null ? void 0 : _g[1]) != null ? _h : 127,
+      ccRange: group.ccRange,
+      seqLength: group.seqLength,
+      group: group.group,
+      offBy: group.offBy,
+      regions: group.regions.map(processRegion),
+      ref: group
+    };
+  }
+  function matchesCc(ccState, ccRange) {
+    var _a;
+    if (!ccRange) return true;
+    for (const [ccStr, [low, high]] of Object.entries(ccRange)) {
+      const cc = parseInt(ccStr, 10);
+      const value = (_a = ccState.get(cc)) != null ? _a : 0;
+      if (value < low || value > high) return false;
+    }
+    return true;
+  }
+  function loadAudioBuffer(context, url, storage) {
+    return __async(this, null, function* () {
+      url = url.replace(/#/g, "%23").replace(/ /g, "%20").replace(/([^:]\/)\/+/g, "$1");
+      const response = yield storage.fetch(url);
+      if (response.status !== 200) {
+        console.warn(
+          "Error loading buffer. Invalid status: ",
+          response.status,
+          url
+        );
+        return;
+      }
+      try {
+        const audioData = yield response.arrayBuffer();
+        const buffer = yield context.decodeAudioData(audioData);
+        return buffer;
+      } catch (error) {
+        console.warn("Error loading buffer", error, url);
+      }
+    });
+  }
+  function isSafari() {
+    if (typeof navigator === "undefined") return false;
+    const ua = navigator.userAgent;
+    return ua.includes("Safari") && !ua.includes("Chrome") && !ua.includes("Chromium");
+  }
+  function findFirstSupportedFormat(formats) {
+    if (typeof document === "undefined") return null;
+    const skipOgg = isSafari();
+    const audio = document.createElement("audio");
+    for (let i = 0; i < formats.length; i++) {
+      const format = formats[i];
+      if (skipOgg && format === "ogg") {
+        continue;
+      }
+      const canPlay = audio.canPlayType(`audio/${format}`);
+      if (canPlay === "probably" || canPlay === "maybe") {
+        return format;
+      }
+      if (format === "m4a") {
+        const canPlay2 = audio.canPlayType(`audio/aac`);
+        if (canPlay2 === "probably" || canPlay2 === "maybe") {
+          return format;
+        }
+      }
+    }
+    return null;
+  }
+  function collectSampleNames(json) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const group of json.groups) {
+      for (const region of group.regions) {
+        seen.add(region.sample);
+      }
+    }
+    return [...seen];
+  }
+  function getEventTime(event) {
+    return typeof event === "object" ? event.time : void 0;
+  }
+  function getOrCreate(map, key) {
+    let set = map.get(key);
+    if (!set) {
+      set = /* @__PURE__ */ new Set();
+      map.set(key, set);
+    }
+    return set;
+  }
+  function compose(a, b) {
+    if (a && b) return (e) => {
+      a(e);
+      b(e);
+    };
+    return a != null ? a : b;
+  }
+  function isSmplrJson(x) {
+    return typeof x === "object" && x !== null && "groups" in x && Array.isArray(x.groups);
+  }
+  function spreadKeyRanges(samples) {
+    if (samples.length === 0) return [];
+    const sorted = [...samples].sort(([a], [b]) => a - b);
+    return sorted.map(([midi, name], i) => {
+      const low = i === 0 ? 0 : Math.floor((sorted[i - 1][0] + midi) / 2) + 1;
+      const high = i === sorted.length - 1 ? 127 : Math.floor((midi + sorted[i + 1][0]) / 2);
+      return { keyRange: [low, high], pitch: midi, sample: name };
+    });
+  }
+  function gsPath(name) {
+    return "samples/" + name.replace(/\.\w+$/, "");
+  }
+  function vcslPath(name) {
+    return name.replace(/\.\w+$/, "");
+  }
+  function pianoToSmplrJson(options) {
+    var _a;
+    const { notesToLoad } = options;
+    const layers = notesToLoad ? LAYERS.filter(
+      (layer) => layer.vel_range[0] <= notesToLoad.velocityRange[1] && layer.vel_range[1] >= notesToLoad.velocityRange[0]
+    ) : LAYERS;
+    const groups = layers.map((layer) => {
+      const samples = notesToLoad ? layer.samples.filter(
+        ([midi]) => notesToLoad.notes.includes(midi)
+      ) : layer.samples;
+      const regions = spreadKeyRanges(samples).map(({ keyRange, pitch, sample }) => ({
+        keyRange,
+        pitch,
+        sample
+      }));
+      const group = {
+        velRange: layer.vel_range,
+        regions
+      };
+      if ("cutoff" in layer && layer.cutoff !== void 0) {
+        group.lpfCutoffHz = layer.cutoff;
+      }
+      return group;
+    });
+    return {
+      samples: {
+        baseUrl: options.baseUrl,
+        formats: (_a = options.formats) != null ? _a : ["ogg", "m4a"]
+      },
+      defaults: {
+        ampRelease: options.decayTime,
+        detune: options.detune
+      },
+      groups
+    };
+  }
+  var import_process13, __defProp2, __defProps, __getOwnPropDescs, __getOwnPropSymbols, __hasOwnProp2, __propIsEnum, __typeError, __defNormalProp, __spreadValues, __spreadProps, __accessCheck, __privateGet, __privateAdd, __privateSet, __privateMethod, __async, HttpStorage, _cache, _CacheStorage_instances, tryFromCache_fn, saveResponse_fn, _volume, _panner, _sends, _inserts, _disconnect, _unsubscribe, _config, _disconnected, Channel, PARAM_DEFAULTS, PLAYBACK_KEYS, _groups, _seqCounters, RegionMatcher, _context, _storage, _cache2, SampleLoader, _items, SortedQueue, LOOKAHEAD_MS_DEFAULT, INTERVAL_MS_DEFAULT, _context2, _lookaheadSec, _intervalMs, _queue, _intervalId, _Scheduler_instances, ensureRunning_fn, Scheduler, noOp, _context3, _source, _envelope, _startAt, _ampRelease, _state, _endedCallbacks, Voice, _voices, _byStopId, _byGroup, _VoiceManager_instances, remove_fn, VoiceManager, EMPTY_JSON, _loadProgress, _buffers, _reversedBuffers, _defaults, _defaultVelocity, _aliases, _matcher, _voices2, _scheduler, _channel, _loader, _onLoadProgress, _onStart, _onEnded, _ccState, _Smplr_instances, getBuffer_fn, playNote_fn, normalizeNoteEvent_fn, Smplr, _smplr, _instrument, _wavCache, _wav16Cache, GS_BASE, INSTRUMENTS2, _smplr2, _smplr3, _smplr4, _effect, _ready, _output, _smplr5, _smplr6, SOUNDFONT_KITS, DEFAULT_SOUNDFONT_KIT, _smplr7, _hasLoops, _smplr8, _instrumentNames, BASE_URL, _smplr9, SplendidGrandPiano, LAYERS;
+  var init_dist = __esm({
+    "node_modules/smplr/dist/index.mjs"() {
+      init_define_process_env();
+      import_process13 = __toESM(require_process(), 1);
+      __defProp2 = Object.defineProperty;
+      __defProps = Object.defineProperties;
+      __getOwnPropDescs = Object.getOwnPropertyDescriptors;
+      __getOwnPropSymbols = Object.getOwnPropertySymbols;
+      __hasOwnProp2 = Object.prototype.hasOwnProperty;
+      __propIsEnum = Object.prototype.propertyIsEnumerable;
+      __typeError = (msg) => {
+        throw TypeError(msg);
+      };
+      __defNormalProp = (obj, key, value) => key in obj ? __defProp2(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+      __spreadValues = (a, b) => {
+        for (var prop in b || (b = {}))
+          if (__hasOwnProp2.call(b, prop))
+            __defNormalProp(a, prop, b[prop]);
+        if (__getOwnPropSymbols)
+          for (var prop of __getOwnPropSymbols(b)) {
+            if (__propIsEnum.call(b, prop))
+              __defNormalProp(a, prop, b[prop]);
+          }
+        return a;
+      };
+      __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+      __accessCheck = (obj, member, msg) => member.has(obj) || __typeError("Cannot " + msg);
+      __privateGet = (obj, member, getter) => (__accessCheck(obj, member, "read from private field"), getter ? getter.call(obj) : member.get(obj));
+      __privateAdd = (obj, member, value) => member.has(obj) ? __typeError("Cannot add the same private member more than once") : member instanceof WeakSet ? member.add(obj) : member.set(obj, value);
+      __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "write to private field"), setter ? setter.call(obj, value) : member.set(obj, value), value);
+      __privateMethod = (obj, member, method) => (__accessCheck(obj, member, "access private method"), method);
+      __async = (__this, __arguments, generator) => {
+        return new Promise((resolve, reject) => {
+          var fulfilled = (value) => {
+            try {
+              step(generator.next(value));
+            } catch (e) {
+              reject(e);
+            }
+          };
+          var rejected = (value) => {
+            try {
+              step(generator.throw(value));
+            } catch (e) {
+              reject(e);
+            }
+          };
+          var step = (x) => x.done ? resolve(x.value) : Promise.resolve(x.value).then(fulfilled, rejected);
+          step((generator = generator.apply(__this, __arguments)).next());
+        });
+      };
+      HttpStorage = {
+        fetch(url) {
+          return fetch(url);
+        }
+      };
+      _cache = /* @__PURE__ */ new WeakMap();
+      _CacheStorage_instances = /* @__PURE__ */ new WeakSet();
+      tryFromCache_fn = function(request) {
+        return __async(this, null, function* () {
+          const cache3 = yield __privateGet(this, _cache);
+          const response = yield cache3.match(request);
+          if (response) return response;
+          else throw Error("Not found");
+        });
+      };
+      saveResponse_fn = function(request, response) {
+        return __async(this, null, function* () {
+          try {
+            const cache3 = yield __privateGet(this, _cache);
+            yield cache3.put(request, response.clone());
+          } catch (err) {
+          }
+        });
+      };
+      Channel = class {
+        constructor(context, options) {
+          this.context = context;
+          __privateAdd(this, _volume);
+          __privateAdd(this, _panner);
+          __privateAdd(this, _sends);
+          __privateAdd(this, _inserts);
+          __privateAdd(this, _disconnect);
+          __privateAdd(this, _unsubscribe);
+          __privateAdd(this, _config);
+          __privateAdd(this, _disconnected, false);
+          var _a, _b, _c, _d;
+          __privateSet(this, _config, {
+            destination: (_a = options == null ? void 0 : options.destination) != null ? _a : context.destination,
+            volume: (_b = options == null ? void 0 : options.volume) != null ? _b : 100,
+            volumeToGain: (_c = options == null ? void 0 : options.volumeToGain) != null ? _c : midiVelToGain,
+            pan: (_d = options == null ? void 0 : options.pan) != null ? _d : 0
+          });
+          this.input = context.createGain();
+          __privateSet(this, _volume, context.createGain());
+          __privateSet(this, _panner, context.createStereoPanner());
+          __privateGet(this, _panner).pan.value = __privateGet(this, _config).pan;
+          __privateSet(this, _disconnect, connectSerial([
+            this.input,
+            __privateGet(this, _volume),
+            __privateGet(this, _panner),
+            __privateGet(this, _config).destination
+          ]));
+          const volume = createControl(__privateGet(this, _config).volume);
+          this.setVolume = volume.set;
+          __privateSet(this, _unsubscribe, volume.subscribe((volume2) => {
+            __privateGet(this, _volume).gain.value = __privateGet(this, _config).volumeToGain(volume2);
+          }));
+        }
+        get pan() {
+          return __privateGet(this, _panner).pan.value;
+        }
+        set pan(value) {
+          __privateGet(this, _panner).pan.value = value;
+        }
+        addInsert(effect) {
+          var _a;
+          if (__privateGet(this, _disconnected)) {
+            throw Error("Can't add insert to disconnected channel");
+          }
+          (_a = __privateGet(this, _inserts)) != null ? _a : __privateSet(this, _inserts, []);
+          __privateGet(this, _inserts).push(effect);
+          __privateGet(this, _disconnect).call(this);
+          __privateSet(this, _disconnect, connectSerial([
+            this.input,
+            ...__privateGet(this, _inserts),
+            __privateGet(this, _volume),
+            __privateGet(this, _panner),
+            __privateGet(this, _config).destination
+          ]));
+        }
+        addEffect(name, effect, mixValue) {
+          var _a;
+          if (__privateGet(this, _disconnected)) {
+            throw Error("Can't add effect to disconnected channel");
+          }
+          const mix = this.context.createGain();
+          mix.gain.value = mixValue;
+          const input = "input" in effect ? effect.input : effect;
+          const disconnect = connectSerial([__privateGet(this, _volume), mix, input]);
+          (_a = __privateGet(this, _sends)) != null ? _a : __privateSet(this, _sends, []);
+          __privateGet(this, _sends).push({ name, mix, disconnect });
+        }
+        sendEffect(name, mix) {
+          var _a;
+          if (__privateGet(this, _disconnected)) {
+            throw Error("Can't send effect to disconnected channel");
+          }
+          const send = (_a = __privateGet(this, _sends)) == null ? void 0 : _a.find((send2) => send2.name === name);
+          if (send) {
+            send.mix.gain.value = mix;
+          } else {
+            console.warn("Send bus not found: " + name);
+          }
+        }
+        disconnect() {
+          var _a;
+          if (__privateGet(this, _disconnected)) return;
+          __privateSet(this, _disconnected, true);
+          __privateGet(this, _disconnect).call(this);
+          __privateGet(this, _unsubscribe).call(this);
+          (_a = __privateGet(this, _sends)) == null ? void 0 : _a.forEach((send) => send.disconnect());
+          __privateSet(this, _sends, void 0);
+        }
+      };
+      _volume = /* @__PURE__ */ new WeakMap();
+      _panner = /* @__PURE__ */ new WeakMap();
+      _sends = /* @__PURE__ */ new WeakMap();
+      _inserts = /* @__PURE__ */ new WeakMap();
+      _disconnect = /* @__PURE__ */ new WeakMap();
+      _unsubscribe = /* @__PURE__ */ new WeakMap();
+      _config = /* @__PURE__ */ new WeakMap();
+      _disconnected = /* @__PURE__ */ new WeakMap();
+      PARAM_DEFAULTS = {
+        volume: 0,
+        tune: 0,
+        detune: 0,
+        ampRelease: 0.3,
+        ampAttack: 0,
+        lpfCutoffHz: 2e4,
+        offset: 0,
+        loop: false,
+        loopStart: 0,
+        loopEnd: 0,
+        reverse: false
+      };
+      PLAYBACK_KEYS = Object.keys(PARAM_DEFAULTS);
+      RegionMatcher = class {
+        // groupIndex → call count
+        constructor(json) {
+          __privateAdd(this, _groups);
+          __privateAdd(this, _seqCounters);
+          __privateSet(this, _groups, json.groups.map(processGroup));
+          __privateSet(this, _seqCounters, /* @__PURE__ */ new Map());
+        }
+        /**
+         * Match a note event against all groups and regions.
+         *
+         * For each group that passes key/vel/cc filters:
+         *   - Check each region's key/vel/cc filters
+         *   - Apply round-robin seqPosition filter if group.seqLength is set
+         *   - Advance the per-group round-robin counter (always, when group matched)
+         *
+         * Returns all matched regions with resolved pitch, group, offBy.
+         */
+        match(midi, velocity, ccState) {
+          var _a, _b, _c, _d;
+          const results = [];
+          for (let gi = 0; gi < __privateGet(this, _groups).length; gi++) {
+            const group = __privateGet(this, _groups)[gi];
+            if (midi < group.keyLow || midi > group.keyHigh) continue;
+            if (velocity < group.velLow || velocity > group.velHigh) continue;
+            if (!matchesCc(ccState, group.ccRange)) continue;
+            const counter = (_a = __privateGet(this, _seqCounters).get(gi)) != null ? _a : 0;
+            for (const region of group.regions) {
+              if (midi < region.keyLow || midi > region.keyHigh) continue;
+              if (velocity < region.velLow || velocity > region.velHigh) continue;
+              if (!matchesCc(ccState, region.ccRange)) continue;
+              if (group.seqLength !== void 0) {
+                const seqPos = region.seqPosition - 1;
+                if (counter % group.seqLength !== seqPos) continue;
+              }
+              results.push({
+                sample: region.sample,
+                // If no pitch is pre-resolved (no key or pitch on region), fall back to
+                // the played note so resolveParams computes 0 semitones of transpose
+                pitch: (_b = region.pitch) != null ? _b : midi,
+                group: (_c = region.group) != null ? _c : group.group,
+                offBy: (_d = region.offBy) != null ? _d : group.offBy,
+                groupRef: group.ref,
+                regionRef: region.ref
+              });
+            }
+            if (group.seqLength !== void 0) {
+              __privateGet(this, _seqCounters).set(gi, counter + 1);
+            }
+          }
+          return results;
+        }
+      };
+      _groups = /* @__PURE__ */ new WeakMap();
+      _seqCounters = /* @__PURE__ */ new WeakMap();
+      SampleLoader = class {
+        constructor(context, options) {
+          __privateAdd(this, _context);
+          __privateAdd(this, _storage);
+          __privateAdd(this, _cache2, /* @__PURE__ */ new Map());
+          var _a;
+          __privateSet(this, _context, context);
+          __privateSet(this, _storage, (_a = options == null ? void 0 : options.storage) != null ? _a : HttpStorage);
+        }
+        /**
+         * Load all samples referenced in `json`. Returns a Map of sample name →
+         * AudioBuffer. Progress is reported via `onProgress` callback or via
+         * options object.
+         *
+         * - `buffers` in options: pre-loaded buffers — skips fetch for these names.
+         * - All samples load in parallel. Failed samples are silently omitted.
+         */
+        load(json, onProgressOrOptions) {
+          return __async(this, null, function* () {
+            var _a, _b;
+            const preloaded = typeof onProgressOrOptions === "object" ? onProgressOrOptions.buffers : void 0;
+            const onProgress = typeof onProgressOrOptions === "function" ? onProgressOrOptions : onProgressOrOptions == null ? void 0 : onProgressOrOptions.onProgress;
+            const format = (_b = (_a = findFirstSupportedFormat(json.samples.formats)) != null ? _a : json.samples.formats[0]) != null ? _b : "ogg";
+            const base = json.samples.baseUrl.replace(/\/$/, "");
+            const names = collectSampleNames(json);
+            const total = names.length;
+            let loaded = 0;
+            const result = /* @__PURE__ */ new Map();
+            yield Promise.all(
+              names.map((name) => __async(this, null, function* () {
+                var _a2, _b2;
+                const pre = preloaded == null ? void 0 : preloaded.get(name);
+                if (pre) {
+                  result.set(name, pre);
+                  loaded++;
+                  onProgress == null ? void 0 : onProgress(loaded, total);
+                  return;
+                }
+                const path = (_b2 = (_a2 = json.samples.map) == null ? void 0 : _a2[name]) != null ? _b2 : name;
+                const url = `${base}/${path}.${format}`;
+                let buffer = __privateGet(this, _cache2).get(url);
+                if (!buffer) {
+                  const fetched = yield loadAudioBuffer(
+                    __privateGet(this, _context),
+                    url,
+                    __privateGet(this, _storage)
+                  );
+                  if (fetched) {
+                    buffer = fetched;
+                    __privateGet(this, _cache2).set(url, buffer);
+                  }
+                }
+                if (buffer) result.set(name, buffer);
+                loaded++;
+                onProgress == null ? void 0 : onProgress(loaded, total);
+              }))
+            );
+            return result;
+          });
+        }
+      };
+      _context = /* @__PURE__ */ new WeakMap();
+      _storage = /* @__PURE__ */ new WeakMap();
+      _cache2 = /* @__PURE__ */ new WeakMap();
+      SortedQueue = class {
+        constructor(compare) {
+          this.compare = compare;
+          __privateAdd(this, _items, []);
+        }
+        push(item) {
+          const len = __privateGet(this, _items).length;
+          let left = 0;
+          let right = len - 1;
+          let index = len;
+          while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            if (this.compare(item, __privateGet(this, _items)[mid]) < 0) {
+              index = mid;
+              right = mid - 1;
+            } else {
+              left = mid + 1;
+            }
+          }
+          __privateGet(this, _items).splice(index, 0, item);
+        }
+        pop() {
+          return __privateGet(this, _items).shift();
+        }
+        peek() {
+          return __privateGet(this, _items)[0];
+        }
+        removeAll(predicate) {
+          const len = __privateGet(this, _items).length;
+          __privateSet(this, _items, __privateGet(this, _items).filter((item) => !predicate(item)));
+          return __privateGet(this, _items).length !== len;
+        }
+        clear() {
+          __privateSet(this, _items, []);
+        }
+        size() {
+          return __privateGet(this, _items).length;
+        }
+      };
+      _items = /* @__PURE__ */ new WeakMap();
+      LOOKAHEAD_MS_DEFAULT = 200;
+      INTERVAL_MS_DEFAULT = 50;
+      Scheduler = class {
+        constructor(context, options) {
+          __privateAdd(this, _Scheduler_instances);
+          __privateAdd(this, _context2);
+          __privateAdd(this, _lookaheadSec);
+          __privateAdd(this, _intervalMs);
+          __privateAdd(this, _queue);
+          __privateAdd(this, _intervalId);
+          var _a, _b;
+          __privateSet(this, _context2, context);
+          __privateSet(this, _lookaheadSec, ((_a = options == null ? void 0 : options.lookaheadMs) != null ? _a : LOOKAHEAD_MS_DEFAULT) / 1e3);
+          __privateSet(this, _intervalMs, (_b = options == null ? void 0 : options.intervalMs) != null ? _b : INTERVAL_MS_DEFAULT);
+          __privateSet(this, _queue, new SortedQueue((a, b) => a.time - b.time));
+        }
+        /**
+         * Schedule a callback for a NoteEvent.
+         *
+         * - If the event's time falls within the lookahead window (or has no time), the
+         *   callback is called synchronously and a no-op StopFn is returned.
+         * - Otherwise the event is queued, the interval is started if needed, and a StopFn
+         *   is returned that removes the event from the queue before it is dispatched.
+         */
+        schedule(event, callback) {
+          var _a;
+          const now = __privateGet(this, _context2).currentTime;
+          const time = (_a = getEventTime(event)) != null ? _a : now;
+          if (time <= now + __privateGet(this, _lookaheadSec)) {
+            callback(event);
+            return noOp;
+          }
+          const item = { time, event, callback };
+          __privateGet(this, _queue).push(item);
+          __privateMethod(this, _Scheduler_instances, ensureRunning_fn).call(this);
+          return () => {
+            __privateGet(this, _queue).removeAll((q) => q === item);
+          };
+        }
+        /**
+         * Clear all queued (not-yet-dispatched) events and stop the interval.
+         * Does not affect voices that are already playing.
+         */
+        stop() {
+          __privateGet(this, _queue).clear();
+          if (__privateGet(this, _intervalId) !== void 0) {
+            clearInterval(__privateGet(this, _intervalId));
+            __privateSet(this, _intervalId, void 0);
+          }
+        }
+      };
+      _context2 = /* @__PURE__ */ new WeakMap();
+      _lookaheadSec = /* @__PURE__ */ new WeakMap();
+      _intervalMs = /* @__PURE__ */ new WeakMap();
+      _queue = /* @__PURE__ */ new WeakMap();
+      _intervalId = /* @__PURE__ */ new WeakMap();
+      _Scheduler_instances = /* @__PURE__ */ new WeakSet();
+      ensureRunning_fn = function() {
+        if (__privateGet(this, _intervalId) !== void 0) return;
+        __privateSet(this, _intervalId, setInterval(() => {
+          const dispatchBefore = __privateGet(this, _context2).currentTime + __privateGet(this, _lookaheadSec);
+          while (__privateGet(this, _queue).size() > 0 && __privateGet(this, _queue).peek().time <= dispatchBefore) {
+            const item = __privateGet(this, _queue).pop();
+            item.callback(item.event);
+          }
+          if (__privateGet(this, _queue).size() === 0) {
+            clearInterval(__privateGet(this, _intervalId));
+            __privateSet(this, _intervalId, void 0);
+          }
+        }, __privateGet(this, _intervalMs)));
+      };
+      noOp = () => {
+      };
+      Voice = class {
+        constructor(context, buffer, params, destination, stopId, group, startTime) {
+          __privateAdd(this, _context3);
+          __privateAdd(this, _source);
+          __privateAdd(this, _envelope);
+          __privateAdd(this, _startAt);
+          __privateAdd(this, _ampRelease);
+          __privateAdd(this, _state, "playing");
+          __privateAdd(this, _endedCallbacks, []);
+          __privateSet(this, _context3, context);
+          this.stopId = stopId;
+          this.group = group;
+          __privateSet(this, _ampRelease, params.ampRelease);
+          const source = context.createBufferSource();
+          source.buffer = buffer;
+          const cents = params.detune;
+          if (source.detune) {
+            source.detune.value = cents;
+          } else {
+            source.playbackRate.value = Math.pow(2, cents / 1200);
+          }
+          if (params.loopAuto) {
+            source.loop = true;
+            source.loopStart = buffer.duration * params.loopAuto.startRatio;
+            source.loopEnd = buffer.duration * params.loopAuto.endRatio;
+          } else if (params.loop) {
+            source.loop = true;
+            source.loopStart = params.loopStart;
+            source.loopEnd = params.loopEnd || buffer.duration;
+          }
+          let lpf;
+          if (params.lpfCutoffHz < 2e4) {
+            lpf = context.createBiquadFilter();
+            lpf.type = "lowpass";
+            lpf.frequency.value = params.lpfCutoffHz;
+          }
+          const gain = context.createGain();
+          gain.gain.value = midiVelToGain(params.velocity) * dbToGain(params.volume);
+          const envelope = context.createGain();
+          envelope.gain.value = 1;
+          if (lpf) {
+            source.connect(lpf);
+            lpf.connect(gain);
+          } else {
+            source.connect(gain);
+          }
+          gain.connect(envelope);
+          envelope.connect(destination);
+          const startAt = startTime != null ? startTime : context.currentTime;
+          __privateSet(this, _startAt, startAt);
+          let offsetSec = 0;
+          if (params.offset > 0) {
+            offsetSec = params.reverse ? (buffer.length - params.offset) / buffer.sampleRate : params.offset / buffer.sampleRate;
+          }
+          source.start(startAt, offsetSec);
+          __privateSet(this, _source, source);
+          __privateSet(this, _envelope, envelope);
+          source.onended = () => {
+            __privateSet(this, _state, "stopped");
+            envelope.disconnect();
+            gain.disconnect();
+            lpf == null ? void 0 : lpf.disconnect();
+            source.disconnect();
+            for (const cb of __privateGet(this, _endedCallbacks)) cb();
+            __privateSet(this, _endedCallbacks, []);
+          };
+        }
+        /**
+         * Stop the voice, applying a release envelope if time is after the start time.
+         * Idempotent — subsequent calls after the first are ignored.
+         */
+        stop(time) {
+          if (__privateGet(this, _state) !== "playing") return;
+          __privateSet(this, _state, "stopping");
+          const t = time != null ? time : __privateGet(this, _context3).currentTime;
+          if (t <= __privateGet(this, _startAt)) {
+            __privateGet(this, _source).stop(t);
+          } else {
+            const stopAt = t + __privateGet(this, _ampRelease);
+            __privateGet(this, _envelope).gain.cancelScheduledValues(t);
+            __privateGet(this, _envelope).gain.setValueAtTime(1, t);
+            __privateGet(this, _envelope).gain.linearRampToValueAtTime(0, stopAt);
+            __privateGet(this, _source).stop(stopAt);
+          }
+        }
+        /**
+         * Register a callback to be called when the source node fires its onended event.
+         * If the voice has already stopped, the callback is invoked immediately.
+         */
+        onEnded(cb) {
+          if (__privateGet(this, _state) === "stopped") {
+            cb();
+          } else {
+            __privateGet(this, _endedCallbacks).push(cb);
+          }
+        }
+        get isActive() {
+          return __privateGet(this, _state) !== "stopped";
+        }
+      };
+      _context3 = /* @__PURE__ */ new WeakMap();
+      _source = /* @__PURE__ */ new WeakMap();
+      _envelope = /* @__PURE__ */ new WeakMap();
+      _startAt = /* @__PURE__ */ new WeakMap();
+      _ampRelease = /* @__PURE__ */ new WeakMap();
+      _state = /* @__PURE__ */ new WeakMap();
+      _endedCallbacks = /* @__PURE__ */ new WeakMap();
+      VoiceManager = class {
+        constructor() {
+          __privateAdd(this, _VoiceManager_instances);
+          __privateAdd(this, _voices, /* @__PURE__ */ new Set());
+          __privateAdd(this, _byStopId, /* @__PURE__ */ new Map());
+          __privateAdd(this, _byGroup, /* @__PURE__ */ new Map());
+        }
+        /**
+         * Register a voice. Indexes it by stopId and group, then auto-removes it
+         * when the voice fires its onEnded callback.
+         */
+        add(voice) {
+          __privateGet(this, _voices).add(voice);
+          getOrCreate(__privateGet(this, _byStopId), voice.stopId).add(voice);
+          if (voice.group !== void 0) {
+            getOrCreate(__privateGet(this, _byGroup), voice.group).add(voice);
+          }
+          voice.onEnded(() => __privateMethod(this, _VoiceManager_instances, remove_fn).call(this, voice));
+        }
+        /** Stop all active voices. */
+        stopAll(time) {
+          for (const voice of [...__privateGet(this, _voices)]) {
+            voice.stop(time);
+          }
+        }
+        /** Stop all voices whose stopId matches. */
+        stopById(stopId, time) {
+          const voices = __privateGet(this, _byStopId).get(stopId);
+          if (!voices) return;
+          for (const voice of [...voices]) {
+            voice.stop(time);
+          }
+        }
+        /** Stop all voices that belong to an exclusive group number. */
+        stopGroup(group, time) {
+          const voices = __privateGet(this, _byGroup).get(group);
+          if (!voices) return;
+          for (const voice of [...voices]) {
+            voice.stop(time);
+          }
+        }
+        /** Number of voices currently tracked (includes stopping voices not yet ended). */
+        get activeCount() {
+          return __privateGet(this, _voices).size;
+        }
+      };
+      _voices = /* @__PURE__ */ new WeakMap();
+      _byStopId = /* @__PURE__ */ new WeakMap();
+      _byGroup = /* @__PURE__ */ new WeakMap();
+      _VoiceManager_instances = /* @__PURE__ */ new WeakSet();
+      remove_fn = function(voice) {
+        var _a, _b;
+        __privateGet(this, _voices).delete(voice);
+        (_a = __privateGet(this, _byStopId).get(voice.stopId)) == null ? void 0 : _a.delete(voice);
+        if (voice.group !== void 0) {
+          (_b = __privateGet(this, _byGroup).get(voice.group)) == null ? void 0 : _b.delete(voice);
+        }
+      };
+      EMPTY_JSON = {
+        samples: { baseUrl: "", formats: [] },
+        groups: []
+      };
+      Smplr = class {
+        constructor(context, jsonOrOptions, maybeOptions) {
+          __privateAdd(this, _Smplr_instances);
+          __privateAdd(this, _loadProgress, { loaded: 0, total: 0 });
+          __privateAdd(this, _buffers, /* @__PURE__ */ new Map());
+          __privateAdd(this, _reversedBuffers, /* @__PURE__ */ new Map());
+          __privateAdd(this, _defaults);
+          __privateAdd(this, _defaultVelocity);
+          __privateAdd(this, _aliases);
+          __privateAdd(this, _matcher);
+          __privateAdd(this, _voices2);
+          __privateAdd(this, _scheduler);
+          __privateAdd(this, _channel);
+          __privateAdd(this, _loader);
+          __privateAdd(this, _onLoadProgress);
+          __privateAdd(this, _onStart);
+          __privateAdd(this, _onEnded);
+          __privateAdd(this, _ccState, /* @__PURE__ */ new Map());
+          var _a, _b, _c;
+          const json = isSmplrJson(jsonOrOptions) ? jsonOrOptions : void 0;
+          const options = isSmplrJson(jsonOrOptions) ? maybeOptions : jsonOrOptions;
+          this.context = context;
+          __privateSet(this, _defaults, json == null ? void 0 : json.defaults);
+          __privateSet(this, _defaultVelocity, (_a = options == null ? void 0 : options.velocity) != null ? _a : 100);
+          __privateSet(this, _onLoadProgress, options == null ? void 0 : options.onLoadProgress);
+          __privateSet(this, _onStart, options == null ? void 0 : options.onStart);
+          __privateSet(this, _onEnded, options == null ? void 0 : options.onEnded);
+          if (json == null ? void 0 : json.aliases) {
+            __privateSet(this, _aliases, new Map(Object.entries(json.aliases)));
+          }
+          __privateSet(this, _channel, new Channel(context, {
+            destination: options == null ? void 0 : options.destination,
+            volume: options == null ? void 0 : options.volume,
+            volumeToGain: options == null ? void 0 : options.volumeToGain,
+            pan: options == null ? void 0 : options.pan
+          }));
+          __privateSet(this, _scheduler, (_b = options == null ? void 0 : options.scheduler) != null ? _b : new Scheduler(context));
+          __privateSet(this, _matcher, new RegionMatcher(json != null ? json : EMPTY_JSON));
+          __privateSet(this, _voices2, new VoiceManager());
+          __privateSet(this, _loader, (_c = options == null ? void 0 : options.loader) != null ? _c : new SampleLoader(context, { storage: options == null ? void 0 : options.storage }));
+          if (json) {
+            this.load = __privateGet(this, _loader).load(json, (loaded, total) => {
+              var _a2;
+              __privateSet(this, _loadProgress, { loaded, total });
+              (_a2 = __privateGet(this, _onLoadProgress)) == null ? void 0 : _a2.call(this, { loaded, total });
+            }).then((buffers) => {
+              __privateSet(this, _buffers, buffers);
+              return this;
+            });
+          } else {
+            this.load = Promise.resolve(this);
+          }
+        }
+        /**
+         * Load (or replace) the instrument descriptor. Creates a new RegionMatcher
+         * and fetches all sample buffers. Pre-loaded buffers (e.g. base64-decoded)
+         * can be passed via the `buffers` parameter — those skip the fetch step.
+         *
+         * Returns a Promise that resolves when all samples are ready.
+         */
+        loadInstrument(json, buffers) {
+          __privateSet(this, _defaults, json.defaults);
+          __privateSet(this, _aliases, json.aliases ? new Map(Object.entries(json.aliases)) : void 0);
+          __privateSet(this, _matcher, new RegionMatcher(json));
+          return __privateGet(this, _loader).load(json, {
+            buffers,
+            onProgress: (loaded, total) => {
+              var _a;
+              __privateSet(this, _loadProgress, { loaded, total });
+              (_a = __privateGet(this, _onLoadProgress)) == null ? void 0 : _a.call(this, { loaded, total });
+            }
+          }).then((newBuffers) => {
+            __privateSet(this, _buffers, newBuffers);
+          });
+        }
+        /** Current loading progress snapshot. `total` is known before loading starts. */
+        get loadProgress() {
+          return __privateGet(this, _loadProgress);
+        }
+        /** The output channel — use to add effects, adjust volume, or route audio. */
+        get output() {
+          return __privateGet(this, _channel);
+        }
+        /**
+         * Set a MIDI CC value. Affects region matching for groups/regions that have
+         * ccRange constraints (e.g. CC64 sustain pedal).
+         */
+        setCC(cc, value) {
+          __privateGet(this, _ccState).set(cc, value);
+        }
+        /**
+         * Start playing a note. Returns a StopFn that cancels the note if it hasn't
+         * played yet, or stops the resulting voices if it has.
+         */
+        start(event) {
+          const normalized = __privateMethod(this, _Smplr_instances, normalizeNoteEvent_fn).call(this, event);
+          const schedulerStop = __privateGet(this, _scheduler).schedule(
+            normalized,
+            (e) => __privateMethod(this, _Smplr_instances, playNote_fn).call(this, e)
+          );
+          return (time) => {
+            schedulerStop();
+            __privateGet(this, _voices2).stopById(normalized.stopId, time);
+          };
+        }
+        /**
+         * Stop voices.
+         *
+         * - No argument → stop all active voices
+         * - String or number → stop all voices with that stopId
+         * - `{ stopId }` → stop voices with that stopId, optionally at a future time
+         * - `{ time }` (no stopId) → stop all voices at a future time
+         */
+        stop(target) {
+          if (target === void 0) {
+            __privateGet(this, _voices2).stopAll();
+          } else if (typeof target === "string" || typeof target === "number") {
+            __privateGet(this, _voices2).stopById(target);
+          } else {
+            if (target.stopId !== void 0) {
+              __privateGet(this, _voices2).stopById(target.stopId, target.time);
+            } else {
+              __privateGet(this, _voices2).stopAll(target.time);
+            }
+          }
+        }
+        /**
+         * Stop all voices, disconnect the output channel, and stop the scheduler.
+         * The instance should not be used after this call.
+         */
+        disconnect() {
+          __privateGet(this, _voices2).stopAll();
+          __privateGet(this, _channel).disconnect();
+          __privateGet(this, _scheduler).stop();
+        }
+      };
+      _loadProgress = /* @__PURE__ */ new WeakMap();
+      _buffers = /* @__PURE__ */ new WeakMap();
+      _reversedBuffers = /* @__PURE__ */ new WeakMap();
+      _defaults = /* @__PURE__ */ new WeakMap();
+      _defaultVelocity = /* @__PURE__ */ new WeakMap();
+      _aliases = /* @__PURE__ */ new WeakMap();
+      _matcher = /* @__PURE__ */ new WeakMap();
+      _voices2 = /* @__PURE__ */ new WeakMap();
+      _scheduler = /* @__PURE__ */ new WeakMap();
+      _channel = /* @__PURE__ */ new WeakMap();
+      _loader = /* @__PURE__ */ new WeakMap();
+      _onLoadProgress = /* @__PURE__ */ new WeakMap();
+      _onStart = /* @__PURE__ */ new WeakMap();
+      _onEnded = /* @__PURE__ */ new WeakMap();
+      _ccState = /* @__PURE__ */ new WeakMap();
+      _Smplr_instances = /* @__PURE__ */ new WeakSet();
+      getBuffer_fn = function(sample, reverse) {
+        if (!reverse) return __privateGet(this, _buffers).get(sample);
+        const cached = __privateGet(this, _reversedBuffers).get(sample);
+        if (cached) return cached;
+        const original = __privateGet(this, _buffers).get(sample);
+        if (!original) return void 0;
+        const reversed = this.context.createBuffer(
+          original.numberOfChannels,
+          original.length,
+          original.sampleRate
+        );
+        for (let ch = 0; ch < original.numberOfChannels; ch++) {
+          const data = original.getChannelData(ch).slice().reverse();
+          reversed.copyToChannel(data, ch);
+        }
+        __privateGet(this, _reversedBuffers).set(sample, reversed);
+        return reversed;
+      };
+      playNote_fn = function(event) {
+        const { midi, velocity, time, stopId, duration, detune, lpfCutoffHz, loop, ampRelease, reverse, onStart, onEnded } = event;
+        const matches = __privateGet(this, _matcher).match(midi, velocity, __privateGet(this, _ccState));
+        for (const match of matches) {
+          if (match.offBy !== void 0) {
+            __privateGet(this, _voices2).stopGroup(match.offBy, time);
+          }
+        }
+        let voiceStarted = false;
+        for (const match of matches) {
+          const buffer = __privateMethod(this, _Smplr_instances, getBuffer_fn).call(this, match.sample, reverse != null ? reverse : false);
+          if (!buffer) continue;
+          const params = resolveParams(
+            __privateGet(this, _defaults),
+            match.groupRef,
+            match.regionRef,
+            midi,
+            velocity,
+            { detune, lpfCutoffHz, loop, ampRelease, reverse }
+          );
+          const voice = new Voice(
+            this.context,
+            buffer,
+            params,
+            __privateGet(this, _channel).input,
+            stopId,
+            match.group,
+            time
+          );
+          __privateGet(this, _voices2).add(voice);
+          if (!voiceStarted) {
+            onStart == null ? void 0 : onStart(event);
+            voiceStarted = true;
+          }
+          if (onEnded) {
+            voice.onEnded(() => onEnded(event));
+          }
+          if (duration != null) {
+            const startT = time != null ? time : this.context.currentTime;
+            const releaseAt = startT + duration;
+            voice.stop(releaseAt);
+          }
+        }
+      };
+      normalizeNoteEvent_fn = function(event) {
+        var _a, _b, _c, _d, _e, _f, _g, _h;
+        if (typeof event === "string" || typeof event === "number") {
+          const midi2 = (_c = (_b = toMidi(event)) != null ? _b : (_a = __privateGet(this, _aliases)) == null ? void 0 : _a.get(String(event))) != null ? _c : 0;
+          return {
+            note: event,
+            midi: midi2,
+            velocity: __privateGet(this, _defaultVelocity),
+            stopId: event,
+            onStart: __privateGet(this, _onStart),
+            onEnded: __privateGet(this, _onEnded)
+          };
+        }
+        const midi = (_f = (_e = toMidi(event.note)) != null ? _e : (_d = __privateGet(this, _aliases)) == null ? void 0 : _d.get(String(event.note))) != null ? _f : 0;
+        return __spreadProps(__spreadValues({}, event), {
+          midi,
+          velocity: (_g = event.velocity) != null ? _g : __privateGet(this, _defaultVelocity),
+          stopId: (_h = event.stopId) != null ? _h : event.note,
+          onStart: compose(__privateGet(this, _onStart), event.onStart),
+          onEnded: compose(__privateGet(this, _onEnded), event.onEnded)
+        });
+      };
+      _smplr = /* @__PURE__ */ new WeakMap();
+      _instrument = /* @__PURE__ */ new WeakMap();
+      _wavCache = /* @__PURE__ */ new WeakMap();
+      _wav16Cache = /* @__PURE__ */ new WeakMap();
+      GS_BASE = "https://smpldsnds.github.io/sfzinstruments-greg-sullivan-e-pianos";
+      INSTRUMENTS2 = {
+        CP80: {
+          sfzUrl: `${GS_BASE}/cp80/CP80.sfz`,
+          baseUrl: `${GS_BASE}/cp80`,
+          pathFromSampleName: gsPath
+        },
+        PianetT: {
+          sfzUrl: `${GS_BASE}/planet-t/Pianet T.sfz`,
+          baseUrl: `${GS_BASE}/planet-t`,
+          pathFromSampleName: gsPath
+        },
+        WurlitzerEP200: {
+          sfzUrl: `${GS_BASE}/wurlitzer-ep200/Wurlitzer EP200.sfz`,
+          baseUrl: `${GS_BASE}/wurlitzer-ep200`,
+          pathFromSampleName: gsPath
+        },
+        TX81Z: {
+          sfzUrl: "https://smpldsnds.github.io/sgossner-vcsl/Electrophones/TX81Z - FM Piano.sfz",
+          baseUrl: "https://smpldsnds.github.io/sgossner-vcsl/Electrophones",
+          pathFromSampleName: vcslPath
+        }
+      };
+      _smplr2 = /* @__PURE__ */ new WeakMap();
+      _smplr3 = /* @__PURE__ */ new WeakMap();
+      _smplr4 = /* @__PURE__ */ new WeakMap();
+      _effect = /* @__PURE__ */ new WeakMap();
+      _ready = /* @__PURE__ */ new WeakMap();
+      _output = /* @__PURE__ */ new WeakMap();
+      _smplr5 = /* @__PURE__ */ new WeakMap();
+      _smplr6 = /* @__PURE__ */ new WeakMap();
+      SOUNDFONT_KITS = ["MusyngKite", "FluidR3_GM"];
+      DEFAULT_SOUNDFONT_KIT = SOUNDFONT_KITS[0];
+      _smplr7 = /* @__PURE__ */ new WeakMap();
+      _hasLoops = /* @__PURE__ */ new WeakMap();
+      _smplr8 = /* @__PURE__ */ new WeakMap();
+      _instrumentNames = /* @__PURE__ */ new WeakMap();
+      BASE_URL = "https://smpldsnds.github.io/sfzinstruments-splendid-grand-piano/samples";
+      SplendidGrandPiano = class {
+        constructor(context, options) {
+          this.context = context;
+          __privateAdd(this, _smplr9);
+          const opts = __spreadValues({
+            baseUrl: BASE_URL,
+            storage: HttpStorage,
+            detune: 0,
+            volume: 100,
+            velocity: 100,
+            decayTime: 0.5
+          }, options);
+          const json = pianoToSmplrJson(opts);
+          __privateSet(this, _smplr9, new Smplr(context, json, {
+            storage: opts.storage,
+            destination: opts.destination,
+            volume: opts.volume,
+            velocity: opts.velocity,
+            onLoadProgress: opts.onLoadProgress
+          }));
+          this.load = __privateGet(this, _smplr9).load.then(() => this);
+        }
+        get output() {
+          return __privateGet(this, _smplr9).output;
+        }
+        get loadProgress() {
+          return __privateGet(this, _smplr9).loadProgress;
+        }
+        /** @deprecated Use `load` instead. */
+        loaded() {
+          return __async(this, null, function* () {
+            console.warn("deprecated: use load instead");
+            return this.load;
+          });
+        }
+        start(event) {
+          return __privateGet(this, _smplr9).start(event);
+        }
+        stop(target) {
+          return __privateGet(this, _smplr9).stop(target);
+        }
+        disconnect() {
+          return __privateGet(this, _smplr9).disconnect();
+        }
+      };
+      _smplr9 = /* @__PURE__ */ new WeakMap();
+      LAYERS = [
+        {
+          name: "PPP",
+          vel_range: [1, 40],
+          cutoff: 1e3,
+          samples: [
+            [23, "PP B-1"],
+            [27, "PP D#0"],
+            [29, "PP F0"],
+            [31, "PP G0"],
+            [33, "PP A0"],
+            [35, "PP B0"],
+            [37, "PP C#1"],
+            [38, "PP D1"],
+            [40, "PP E1"],
+            [41, "PP F1"],
+            [43, "PP G1"],
+            [45, "PP A1"],
+            [47, "PP B1"],
+            [48, "PP C2"],
+            [50, "PP D2"],
+            [52, "PP E2"],
+            [53, "PP F2"],
+            [55, "PP G2"],
+            [56, "PP G#2"],
+            [57, "PP A2"],
+            [58, "PP A#2"],
+            [59, "PP B2"],
+            [60, "PP C3"],
+            [62, "PP D3"],
+            [64, "PP E3"],
+            [65, "PP F3"],
+            [67, "PP G3"],
+            [69, "PP A3"],
+            [71, "PP B3"],
+            [72, "PP C4"],
+            [74, "PP D4"],
+            [76, "PP E4"],
+            [77, "PP F4"],
+            [79, "PP G4"],
+            [80, "PP G#4"],
+            [81, "PP A4"],
+            [82, "PP A#4"],
+            [83, "PP B4"],
+            [85, "PP C#5"],
+            [86, "PP D5"],
+            [87, "PP D#5"],
+            [89, "PP F5"],
+            [90, "PP F#5"],
+            [91, "PP G5"],
+            [92, "PP G#5"],
+            [93, "PP A5"],
+            [94, "PP A#5"],
+            [95, "PP B5"],
+            [96, "PP C6"],
+            [97, "PP C#6"],
+            [98, "PP D6"],
+            [99, "PP D#6"],
+            [100, "PP E6"],
+            [101, "PP F6"],
+            [102, "PP F#6"],
+            [103, "PP G6"],
+            [104, "PP G#6"],
+            [105, "PP A6"],
+            [106, "PP A#6"],
+            [107, "PP B6"],
+            [108, "PP C7"]
+          ]
+        },
+        {
+          name: "PP",
+          vel_range: [41, 67],
+          samples: [
+            [23, "PP B-1"],
+            [27, "PP D#0"],
+            [29, "PP F0"],
+            [31, "PP G0"],
+            [33, "PP A0"],
+            [35, "PP B0"],
+            [37, "PP C#1"],
+            [38, "PP D1"],
+            [40, "PP E1"],
+            [41, "PP F1"],
+            [43, "PP G1"],
+            [45, "PP A1"],
+            [47, "PP B1"],
+            [48, "PP C2"],
+            [50, "PP D2"],
+            [52, "PP E2"],
+            [53, "PP F2"],
+            [55, "PP G2"],
+            [56, "PP G#2"],
+            [57, "PP A2"],
+            [58, "PP A#2"],
+            [59, "PP B2"],
+            [60, "PP C3"],
+            [62, "PP D3"],
+            [64, "PP E3"],
+            [65, "PP F3"],
+            [67, "PP G3"],
+            [69, "PP A3"],
+            [71, "PP B3"],
+            [72, "PP C4"],
+            [74, "PP D4"],
+            [76, "PP E4"],
+            [77, "PP F4"],
+            [79, "PP G4"],
+            [80, "PP G#4"],
+            [81, "PP A4"],
+            [82, "PP A#4"],
+            [83, "PP B4"],
+            [85, "PP C#5"],
+            [86, "PP D5"],
+            [87, "PP D#5"],
+            [89, "PP F5"],
+            [90, "PP F#5"],
+            [91, "PP G5"],
+            [92, "PP G#5"],
+            [93, "PP A5"],
+            [94, "PP A#5"],
+            [95, "PP B5"],
+            [96, "PP C6"],
+            [97, "PP C#6"],
+            [98, "PP D6"],
+            [99, "PP D#6"],
+            [100, "PP E6"],
+            [101, "PP F6"],
+            [102, "PP F#6"],
+            [103, "PP G6"],
+            [104, "PP G#6"],
+            [105, "PP A6"],
+            [106, "PP A#6"],
+            [107, "PP B6"],
+            [108, "PP C7"]
+          ]
+        },
+        {
+          name: "MP",
+          vel_range: [68, 84],
+          samples: [
+            [23, "Mp B-1"],
+            [27, "Mp D#0"],
+            [29, "Mp F0"],
+            [31, "Mp G0"],
+            [33, "Mp A0"],
+            [35, "Mp B0"],
+            [37, "Mp C#1"],
+            [38, "Mp D1"],
+            [40, "Mp E1"],
+            [41, "Mp F1"],
+            [43, "Mp G1"],
+            [45, "Mp A1"],
+            [47, "Mp B1"],
+            [48, "Mp C2"],
+            [50, "Mp D2"],
+            [52, "Mp E2"],
+            [53, "Mp F2"],
+            [55, "Mp G2"],
+            [56, "Mp G#2"],
+            [57, "Mp A2"],
+            [58, "Mp A#2"],
+            [59, "Mp B2"],
+            [60, "Mp C3"],
+            [62, "Mp D3"],
+            [64, "Mp E3"],
+            [65, "Mp F3"],
+            [67, "Mp G3"],
+            [69, "Mp A3"],
+            [71, "Mp B3"],
+            [72, "Mp C4"],
+            [74, "Mp D4"],
+            [76, "Mp E4"],
+            [77, "Mp F4"],
+            [79, "Mp G4"],
+            [80, "Mp G#4"],
+            [81, "Mp A4"],
+            [82, "Mp A#4"],
+            [83, "Mp B4"],
+            [85, "Mp C#5"],
+            [86, "Mp D5"],
+            [87, "Mp D#5"],
+            [88, "Mp E5"],
+            [89, "Mp F5"],
+            [90, "Mp F#5"],
+            [91, "Mp G5"],
+            [92, "Mp G#5"],
+            [93, "Mp A5"],
+            [94, "Mp A#5"],
+            [95, "Mp B5"],
+            [96, "Mp C6"],
+            [97, "Mp C#6"],
+            [98, "Mp D6"],
+            [99, "Mp D#6"],
+            [100, "PP E6"],
+            [101, "Mp F6"],
+            [102, "Mp F#6"],
+            [103, "Mp G6"],
+            [104, "Mp G#6"],
+            [105, "Mp A6"],
+            [106, "Mp A#6"],
+            [107, "PP B6"],
+            [108, "PP C7"]
+          ]
+        },
+        {
+          name: "MF",
+          vel_range: [85, 100],
+          samples: [
+            [23, "Mf B-1"],
+            [27, "Mf D#0"],
+            [29, "Mf F0"],
+            [31, "Mf G0"],
+            [33, "Mf A0"],
+            [35, "Mf B0"],
+            [37, "MF C#1"],
+            [38, "MF D1"],
+            [40, "MF E1"],
+            [41, "MF F1"],
+            [43, "MF G1"],
+            [45, "MF A1"],
+            [47, "MF B1"],
+            [48, "MF C2"],
+            [50, "MF D2"],
+            [52, "MF E2"],
+            [53, "MF F2"],
+            [55, "MF G2"],
+            [56, "MF G#2"],
+            [57, "MF A2"],
+            [58, "MF A#2"],
+            [59, "MF B2"],
+            [60, "MF C3"],
+            [62, "MF D3"],
+            [64, "MF E3"],
+            [65, "MF F3"],
+            [67, "MF G3"],
+            [69, "MF A3"],
+            [71, "MF B3"],
+            [72, "MF C4"],
+            [74, "Mf D4"],
+            [76, "Mf E4"],
+            [77, "Mf F4"],
+            [79, "Mf G4"],
+            [80, "Mf G#4"],
+            [81, "Mf A4"],
+            [82, "Mf A#4"],
+            [83, "Mf B4"],
+            [85, "Mf C#5"],
+            [86, "Mf D5"],
+            [87, "Mf D#5"],
+            [88, "Mf E5"],
+            [89, "Mf F5"],
+            [90, "Mf F#5"],
+            [91, "Mf G5"],
+            [92, "Mf G#5"],
+            [93, "Mf A5"],
+            [94, "Mf A#5"],
+            [95, "Mf B5"],
+            [96, "Mf C6"],
+            [97, "Mf C#6"],
+            [98, "Mf D6"],
+            [99, "Mf D#6"],
+            [100, "Mf E6"],
+            [101, "Mf F6"],
+            [102, "Mf F#6"],
+            [103, "Mf G6"],
+            [104, "Mf G#6"],
+            [105, "Mf A6"],
+            [106, "Mf A#6"],
+            [107, "Mf B6"],
+            [108, "PP C7"]
+          ]
+        },
+        {
+          name: "FF",
+          vel_range: [101, 127],
+          samples: [
+            [23, "FF B-1"],
+            [27, "FF D#0"],
+            [29, "FF F0"],
+            [31, "FF G0"],
+            [33, "FF A0"],
+            [35, "FF B0"],
+            [37, "FF C#1"],
+            [38, "FF D1"],
+            [40, "FF E1"],
+            [41, "FF F1"],
+            [43, "FF G1"],
+            [45, "FF A1"],
+            [47, "FF B1"],
+            [48, "FF C2"],
+            [50, "FF D2"],
+            [52, "FF E2"],
+            [53, "FF F2"],
+            [55, "FF G2"],
+            [56, "FF G#2"],
+            [57, "FF A2"],
+            [58, "FF A#2"],
+            [59, "FF B2"],
+            [60, "FF C3"],
+            [62, "FF D3"],
+            [64, "FF E3"],
+            [65, "FF F3"],
+            [67, "FF G3"],
+            [69, "FF A3"],
+            [71, "FF B3"],
+            [72, "FF C4"],
+            [74, "FF D4"],
+            [76, "FF E4"],
+            [77, "FF F4"],
+            [79, "FF G4"],
+            [80, "FF G#4"],
+            [81, "FF A4"],
+            [82, "FF A#4"],
+            [83, "FF B4"],
+            [85, "FF C#5"],
+            [86, "FF D5"],
+            [88, "FF E5"],
+            [89, "FF F5"],
+            [91, "FF G5"],
+            [93, "FF A5"],
+            [95, "Mf B5"],
+            [96, "Mf C6"],
+            [97, "Mf C#6"],
+            [98, "Mf D6"],
+            [99, "Mf D#6"],
+            [100, "Mf E6"],
+            [102, "Mf F#6"],
+            [103, "Mf G6"],
+            [104, "Mf G#6"],
+            [105, "Mf A6"],
+            [106, "Mf A#6"],
+            [107, "Mf B6"],
+            [108, "Mf C7"]
+          ]
+        }
+      ];
+    }
+  });
+
+  // src/midi-keyboard.js
+  function installMidiKeyboard({ onActiveNotesChange } = {}) {
+    let audioCtx = null;
+    let piano = null;
+    let pianoLoaded = false;
+    let midiAccess = null;
+    let enabled = false;
+    const activeStops = /* @__PURE__ */ new Map();
+    function isAvailable() {
+      return typeof navigator !== "undefined" && typeof navigator.requestMIDIAccess === "function";
+    }
+    function isEnabled() {
+      return enabled;
+    }
+    async function enable() {
+      if (enabled) return { ok: true };
+      if (!isAvailable()) return { ok: false, reason: "not-supported" };
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === "suspended") {
+          try {
+            await audioCtx.resume();
+          } catch (_) {
+          }
+        }
+        if (!piano) {
+          piano = new SplendidGrandPiano(audioCtx);
+          piano.load.then(() => {
+            pianoLoaded = true;
+          }).catch((e) => console.warn("[midi] piano load failed", e));
+        }
+        midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+        for (const input of midiAccess.inputs.values()) {
+          input.onmidimessage = _handleMessage;
+        }
+        midiAccess.onstatechange = (ev) => {
+          if (ev.port?.type === "input" && ev.port.state === "connected") {
+            ev.port.onmidimessage = _handleMessage;
+          }
+        };
+        enabled = true;
+        return { ok: true };
+      } catch (e) {
+        console.warn("[midi] enable failed:", e);
+        return { ok: false, reason: e?.name || "error", error: e };
+      }
+    }
+    function disable() {
+      if (!enabled) return;
+      if (midiAccess) {
+        for (const input of midiAccess.inputs.values()) {
+          input.onmidimessage = null;
+        }
+        midiAccess.onstatechange = null;
+      }
+      for (const stop of activeStops.values()) {
+        try {
+          stop();
+        } catch (_) {
+        }
+      }
+      activeStops.clear();
+      if (onActiveNotesChange) onActiveNotesChange();
+      enabled = false;
+    }
+    function _handleMessage(ev) {
+      const data = ev.data;
+      if (!data || data.length < 2) return;
+      const cmd = data[0] & 240;
+      const note = data[1];
+      const velocity = data[2] || 0;
+      if (cmd === 144 && velocity > 0) {
+        _noteOn(note, velocity);
+      } else if (cmd === 128 || cmd === 144 && velocity === 0) {
+        _noteOff(note);
+      }
+    }
+    function _noteOn(note, velocity) {
+      if (!piano) return;
+      if (activeStops.has(note)) {
+        try {
+          activeStops.get(note)();
+        } catch (_) {
+        }
+      }
+      try {
+        const stop = piano.start({ note, velocity });
+        activeStops.set(note, stop);
+      } catch (e) {
+        console.warn("[midi] start failed", e);
+      }
+      if (onActiveNotesChange) onActiveNotesChange();
+    }
+    function _noteOff(note) {
+      const stop = activeStops.get(note);
+      if (stop) {
+        try {
+          stop();
+        } catch (_) {
+        }
+        activeStops.delete(note);
+      }
+      if (onActiveNotesChange) onActiveNotesChange();
+    }
+    function getActiveNotes() {
+      return new Set(activeStops.keys());
+    }
+    return { enable, disable, isAvailable, isEnabled, getActiveNotes };
+  }
+  var import_process14;
+  var init_midi_keyboard = __esm({
+    "src/midi-keyboard.js"() {
+      init_define_process_env();
+      import_process14 = __toESM(require_process());
+      init_dist();
+    }
+  });
+
   // src/main.js
   var require_main = __commonJS({
     "src/main.js"() {
       init_define_process_env();
-      var import_process13 = __toESM(require_process());
+      var import_process15 = __toESM(require_process());
       init_telegram();
       init_lyrics();
       init_artwork();
@@ -83759,6 +85410,7 @@ ${JSON.stringify(state)}`;
       init_hypnotise();
       init_butterchurn();
       init_piano_roll();
+      init_midi_keyboard();
       var browseGroupId = null;
       var browseGroupTitle = "";
       var browseTracks = [];
@@ -87515,13 +89167,48 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         audio,
         requestWakeLock: _requestWakeLock
       });
+      var midiKeyboard = installMidiKeyboard();
       installPiano({
         audio,
         getCurrentTrackId: () => currentTrackId,
         getPlayerTracks: () => playerTracks,
         getPlayerGroupId: () => playerGroupId,
-        requestWakeLock: _requestWakeLock
+        requestWakeLock: _requestWakeLock,
+        getMidiActiveNotes: () => midiKeyboard.getActiveNotes()
       });
+      (function wireMidiToggle() {
+        const btn = document.getElementById("piano-midi-toggle");
+        if (!btn) return;
+        if (!midiKeyboard.isAvailable()) {
+          btn.style.display = "none";
+          return;
+        }
+        btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+        btn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (midiKeyboard.isEnabled()) {
+            midiKeyboard.disable();
+            btn.classList.remove("on");
+            btn.setAttribute("aria-pressed", "false");
+            return;
+          }
+          btn.classList.add("loading");
+          const res = await midiKeyboard.enable();
+          btn.classList.remove("loading");
+          if (res.ok) {
+            btn.classList.add("on");
+            btn.setAttribute("aria-pressed", "true");
+            showToast("MIDI on \u2014 play your keyboard");
+          } else if (res.reason === "not-supported") {
+            showToast("MIDI not supported in this browser");
+            btn.style.display = "none";
+          } else if (res.reason === "SecurityError" || res.reason === "NotAllowedError") {
+            showToast("MIDI access blocked \u2014 allow in browser settings");
+          } else {
+            showToast("Could not enable MIDI");
+          }
+        });
+      })();
       var _profilePhotoRetryScheduled = false;
       function setUserProfile(user) {
         const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "User";

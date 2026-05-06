@@ -17,7 +17,7 @@
 
 import * as tg from '../telegram.js';
 
-export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock }) {
+export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock, getMidiActiveNotes }) {
     const $ = id => document.getElementById(id);
 
     const pianoOverlay = $('piano-overlay');
@@ -491,6 +491,14 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.30)';
                 ctx.fillRect(x + 1, drawTop, ww - 2, 1);
             }
+        }
+
+        // Merge in any keys currently held on a connected MIDI keyboard so
+        // the on-screen layout lights up while the user plays along.
+        if (getMidiActiveNotes) {
+            try {
+                for (const p of getMidiActiveNotes()) activeKeys.add(p);
+            } catch (_) {}
         }
 
         _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
