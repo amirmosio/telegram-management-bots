@@ -72441,6 +72441,7 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
   }
   async function evictTrackCaches(groupId, trackId) {
     const key = `${groupId}:${trackId}`;
+    const thumbKey = `thumb:${key}`;
     if (_msgCache[key]) delete _msgCache[key];
     if (_blobCache[key]) {
       try {
@@ -72449,12 +72450,12 @@ destroy_session#e7512126 session_id:long = DestroySessionRes;
       }
       delete _blobCache[key];
     }
-    if (_thumbBlobCache[key]) {
+    if (_thumbBlobCache[thumbKey]) {
       try {
-        URL.revokeObjectURL(_thumbBlobCache[key]);
+        URL.revokeObjectURL(_thumbBlobCache[thumbKey]);
       } catch {
       }
-      delete _thumbBlobCache[key];
+      delete _thumbBlobCache[thumbKey];
     }
     _downloadedRecords.delete(key);
     try {
@@ -84990,6 +84991,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           pos: Math.max(0, audio.currentTime || 0),
           anchor: Date.now() / 1e3,
           track: t ? {
+            tid: `${playerGroupId}:${t.id}`,
             t: t.title || "",
             a: t.artist || "",
             d: t.duration || 0
@@ -85131,7 +85133,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             playing: !audio.paused,
             pos: Math.max(0, audio.currentTime || 0),
             anchor: Date.now() / 1e3,
-            track: { t: t.title || "", a: t.artist || "", d: t.duration || 0 }
+            track: {
+              tid: `${playerGroupId}:${t.id}`,
+              t: t.title || "",
+              a: t.artist || "",
+              d: t.duration || 0
+            }
           };
           const { syncMsgId } = await coplaySendInvite(initialState, invitees, playerGroupId, t.id);
           _coplaySession = {
@@ -85280,7 +85287,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           broadcastInflight: false,
           broadcastQueued: false,
           invitees: null,
-          lastDocId: null,
+          lastTid: null,
           renderedRosterKey: null
         };
         _coplayRenderFollowerBanner(_coplaySession);
@@ -85358,25 +85365,24 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (rosterDirty) _coplayRenderFollowerBanner(s);
         const state = res.state;
         if (!state || !state.track) return;
-        const docRaw = res.raw?.media?.document?.id;
-        const docId = docRaw == null ? null : String(typeof docRaw === "bigint" ? docRaw : docRaw.value ?? docRaw);
-        if (docId && s.lastDocId !== docId) {
-          s.lastDocId = docId;
+        const tid = state.track?.tid;
+        if (tid && s.lastTid !== tid) {
+          const prevTid = s.lastTid;
+          s.lastTid = tid;
           try {
-            const doc = res.raw.media.document;
-            let title = "";
-            let artist = "";
-            let duration = 0;
-            for (const a of doc.attributes || []) {
-              if (a.className === "DocumentAttributeAudio") {
-                title = a.title || title;
-                artist = a.performer || artist;
-                duration = a.duration || duration;
+            const doc = res.raw?.media?.document;
+            let title = state.track?.t || "";
+            let artist = state.track?.a || "";
+            let duration = state.track?.d || 0;
+            if (doc?.attributes) {
+              for (const a of doc.attributes) {
+                if (a.className === "DocumentAttributeAudio") {
+                  title = a.title || title;
+                  artist = a.performer || artist;
+                  duration = a.duration || duration;
+                }
               }
             }
-            if (!title && state.track?.t) title = state.track.t;
-            if (!artist && state.track?.a) artist = state.track.a;
-            if (!duration && state.track?.d) duration = state.track.d;
             const track = {
               id: s.syncMsgId,
               title: title || "Co-play",
@@ -85384,12 +85390,13 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               duration: duration || 0,
               file_name: "audio.mp3",
               msg_id: s.syncMsgId,
-              has_thumb: !!(doc.thumbs && doc.thumbs.length > 0),
-              mime_type: doc.mimeType || "audio/mpeg",
-              file_size: Number(doc.size?.value ?? doc.size ?? 0) || 0
+              has_thumb: !!(doc?.thumbs && doc.thumbs.length > 0),
+              mime_type: doc?.mimeType || "audio/mpeg",
+              file_size: Number(doc?.size?.value ?? doc?.size ?? 0) || 0
             };
+            console.log("[coplay] track change \u2192", tid, "(was", prevTid, ")");
             await evictTrackCaches(s.channelId, s.syncMsgId);
-            primeMsgCache(s.channelId, s.syncMsgId, res.raw);
+            if (res.raw) primeMsgCache(s.channelId, s.syncMsgId, res.raw);
             const anchor2 = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
             const elapsed2 = Math.max(0, Date.now() / 1e3 - anchor2);
             _pendingSeekTime = Math.max(0, (state.pos || 0) + (state.playing ? elapsed2 : 0));

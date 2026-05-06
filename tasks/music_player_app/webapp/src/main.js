@@ -3028,7 +3028,7 @@ const coplayFabAvatarImg = $('coplay-fab-avatar-img');
 const coplayFabAvatarFallback = $('coplay-fab-avatar-fallback');
 const coplayFabBadge = $('coplay-fab-badge');
 
-let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastDocId }
+let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastTid }
 let _coplayInviteList = [];        // multi-select buffer, [{ id, title, _entity }]
 const _coplay = _pickerState();    // shared search state for the picker
 const _COPLAY_KINDS = ['user'];    // co-play targets are people only
@@ -3044,13 +3044,17 @@ function _coplayCurrentTrack() {
     return playerTracks[currentTrackIndex];
 }
 
-// Build the JSON state payload broadcast to followers. `anchor` is the
-// host's local wall-clock (unix seconds) at the moment of broadcast, so
-// followers can extrapolate the host's *current* playback position as
-//   expected = pos + (now - anchor)   [when playing]
-// without depending on continuous re-broadcasts. The audio itself lives
-// as media on this very message — followers download it from there, so
-// there's no separate track-msgId to embed.
+// Build the JSON state payload broadcast to followers.
+//   anchor: host's local wall-clock (unix seconds) at the moment of
+//           broadcast so followers can extrapolate the host's *current*
+//           playback position as `pos + (now - anchor)` while playing
+//           without depending on continuous re-broadcasts.
+//   track.tid: stable per-track identifier the host owns. Followers use
+//              it as the authoritative "track changed" signal — more
+//              robust than diffing the message media's document.id,
+//              because the caption (and thus tid) is always written
+//              fresh on every edit while server-side media swaps can
+//              propagate later.
 function _coplayBuildState() {
     const t = _coplayCurrentTrack();
     return {
@@ -3059,6 +3063,7 @@ function _coplayBuildState() {
         pos: Math.max(0, audio.currentTime || 0),
         anchor: Date.now() / 1000,
         track: t ? {
+            tid: `${playerGroupId}:${t.id}`,
             t: t.title || '',
             a: t.artist || '',
             d: t.duration || 0,
@@ -3230,7 +3235,12 @@ async function _coplayStartHost() {
             playing: !audio.paused,
             pos: Math.max(0, audio.currentTime || 0),
             anchor: Date.now() / 1000,
-            track: { t: t.title || '', a: t.artist || '', d: t.duration || 0 },
+            track: {
+                tid: `${playerGroupId}:${t.id}`,
+                t: t.title || '',
+                a: t.artist || '',
+                d: t.duration || 0,
+            },
         };
         const { syncMsgId } = await tg.coplaySendInvite(initialState, invitees, playerGroupId, t.id);
 
@@ -3393,7 +3403,7 @@ async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
         broadcastInflight: false,
         broadcastQueued: false,
         invitees: null,
-        lastDocId: null,
+        lastTid: null,
         renderedRosterKey: null,
     };
     // Render a placeholder host chip while we wait for the first poll
@@ -3479,32 +3489,29 @@ async function _coplayPollTick(initial) {
     const state = res.state;
     if (!state || !state.track) return;
 
-    // The audio is attached to the sync message itself, so we identify
-    // the current track by the document.id on res.raw.media.document.
-    // When the host edits the message's media, msg.id stays the same but
-    // document.id changes — we evict the in-memory blob/msg caches for
-    // that key and re-load.
-    const docRaw = res.raw?.media?.document?.id;
-    const docId = docRaw == null ? null
-        : String(typeof docRaw === 'bigint' ? docRaw : (docRaw.value ?? docRaw));
-    if (docId && s.lastDocId !== docId) {
-        s.lastDocId = docId;
+    // The host owns the track-change signal: state.track.tid is unique
+    // per (sourceGroup, sourceTrack) and rewritten on every edit. That
+    // beats diffing the message media's document.id, since the caption
+    // is always fresh on the server while a media swap can lag a poll.
+    const tid = state.track?.tid;
+    if (tid && s.lastTid !== tid) {
+        const prevTid = s.lastTid;
+        s.lastTid = tid;
         try {
             // Build a track meta object straight from the sync msg's media.
-            const doc = res.raw.media.document;
-            let title = '';
-            let artist = '';
-            let duration = 0;
-            for (const a of (doc.attributes || [])) {
-                if (a.className === 'DocumentAttributeAudio') {
-                    title = a.title || title;
-                    artist = a.performer || artist;
-                    duration = a.duration || duration;
+            const doc = res.raw?.media?.document;
+            let title = state.track?.t || '';
+            let artist = state.track?.a || '';
+            let duration = state.track?.d || 0;
+            if (doc?.attributes) {
+                for (const a of doc.attributes) {
+                    if (a.className === 'DocumentAttributeAudio') {
+                        title = a.title || title;
+                        artist = a.performer || artist;
+                        duration = a.duration || duration;
+                    }
                 }
             }
-            if (!title && state.track?.t) title = state.track.t;
-            if (!artist && state.track?.a) artist = state.track.a;
-            if (!duration && state.track?.d) duration = state.track.d;
             const track = {
                 id: s.syncMsgId,
                 title: title || 'Co-play',
@@ -3512,16 +3519,17 @@ async function _coplayPollTick(initial) {
                 duration: duration || 0,
                 file_name: 'audio.mp3',
                 msg_id: s.syncMsgId,
-                has_thumb: !!(doc.thumbs && doc.thumbs.length > 0),
-                mime_type: doc.mimeType || 'audio/mpeg',
-                file_size: Number(doc.size?.value ?? doc.size ?? 0) || 0,
+                has_thumb: !!(doc?.thumbs && doc.thumbs.length > 0),
+                mime_type: doc?.mimeType || 'audio/mpeg',
+                file_size: Number(doc?.size?.value ?? doc?.size ?? 0) || 0,
             };
             // The (channelId, syncMsgId) key is the SAME for every track
             // this host plays during the session; old audio + artwork
             // bytes are still sitting in IDB under that key from the
             // previous track. Wipe everything before priming + replaying.
+            console.log('[coplay] track change →', tid, '(was', prevTid, ')');
             await tg.evictTrackCaches(s.channelId, s.syncMsgId);
-            tg.primeMsgCache(s.channelId, s.syncMsgId, res.raw);
+            if (res.raw) tg.primeMsgCache(s.channelId, s.syncMsgId, res.raw);
             // Land at host's CURRENT position, not the stale pos baked into
             // the message. Same anchor-extrapolation as the steady-state
             // drift correction below.

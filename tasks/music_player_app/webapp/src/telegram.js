@@ -2353,14 +2353,15 @@ export function primeMsgCache(groupId, trackId, msg) {
 // (groupId, trackId) keyed caches would otherwise serve stale bytes.
 export async function evictTrackCaches(groupId, trackId) {
     const key = `${groupId}:${trackId}`;
+    const thumbKey = `thumb:${key}`;
     if (_msgCache[key]) delete _msgCache[key];
     if (_blobCache[key]) {
         try { URL.revokeObjectURL(_blobCache[key]); } catch {}
         delete _blobCache[key];
     }
-    if (_thumbBlobCache[key]) {
-        try { URL.revokeObjectURL(_thumbBlobCache[key]); } catch {}
-        delete _thumbBlobCache[key];
+    if (_thumbBlobCache[thumbKey]) {
+        try { URL.revokeObjectURL(_thumbBlobCache[thumbKey]); } catch {}
+        delete _thumbBlobCache[thumbKey];
     }
     _downloadedRecords.delete(key);
     try { await idbDelete(TRACKS_STORE, key); } catch {}
