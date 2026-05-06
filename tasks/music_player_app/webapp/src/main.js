@@ -2987,7 +2987,7 @@ async function _coplayOpenPicker() {
         // Co-play targets are people only — group/channel mention semantics
         // don't fit our "tagged person opens app" model.
         _coplayChatsCache = all.filter(c => c.kind === 'user');
-        _coplayRenderChats('');
+        _coplayRenderChats();
     } catch (e) {
         console.error('[coplay] list chats failed:', e);
         coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Failed to load contacts</div>';
@@ -3004,30 +3004,27 @@ function _coplayCloseModal() {
     _coplaySearchToken = 0;
 }
 
-let _coplayRemoteHits = [];     // most recent server-side contact search results
+let _coplayRemoteHits = [];      // server-side contact search results for the current query
+let _coplayRemoteQuery = '';     // the query those results came from (so we don't show stale ones)
+let _coplaySearching = false;    // true while a debounced API call is in flight
 let _coplaySearchDebounce = null;
 let _coplaySearchToken = 0;
 
-// Local filter matches title OR @username (case-insensitive).
-function _coplayLocalMatch(c, q) {
-    if (!q) return true;
-    const t = (c.title || '').toLowerCase();
-    const u = (c.username || '').toLowerCase();
-    return t.includes(q) || u.includes(q);
-}
+function _coplayRenderChats() {
+    const rawQ = (coplaySearchInput?.value || '').trim();
+    const q = rawQ.toLowerCase();
 
-function _coplayRenderChats(filter) {
-    const q = (filter || '').trim().toLowerCase();
-
-    // Build the displayed list: local matches first, then remote hits not
-    // already in local. This way someone you've chatted with recently
-    // ranks above someone Telegram only knows by directory search.
-    const local = _coplayChatsCache.filter(c => _coplayLocalMatch(c, q));
-    const localIds = new Set(local.map(c => c.id));
-    const remote = q
-        ? _coplayRemoteHits.filter(c => !localIds.has(c.id))
-        : [];
-    const list = [...local, ...remote];
+    // Empty query → show recent dialogs. Non-empty query → show ONLY the
+    // server-side search results (the local list is paginated and would
+    // give false negatives for anyone past the first page).
+    let list;
+    if (!q) {
+        list = _coplayChatsCache;
+    } else if (_coplayRemoteQuery === q) {
+        list = _coplayRemoteHits;
+    } else {
+        list = []; // search is in flight or hasn't started yet
+    }
 
     // Always render the currently-selected invitees too — even if a query
     // would have hidden them — so picks aren't lost when the user types.
@@ -3038,7 +3035,7 @@ function _coplayRenderChats(filter) {
 
     if (list.length === 0 && stickySelected.length === 0) {
         const text = q
-            ? (_coplaySearchToken > 0 ? 'Searching…' : 'No contacts found')
+            ? (_coplaySearching ? 'Searching…' : 'No contacts found')
             : 'No contacts found';
         coplayChatsEl.innerHTML = `<div class="coplay-chats-placeholder">${text}</div>`;
         return;
@@ -3074,22 +3071,35 @@ function _coplayRenderChats(filter) {
 }
 
 function _coplayOnSearchInput(value) {
-    _coplayRenderChats(value);
     if (_coplaySearchDebounce) clearTimeout(_coplaySearchDebounce);
     const q = (value || '').trim();
-    if (q.length < 2) {
+    if (!q) {
         _coplayRemoteHits = [];
+        _coplayRemoteQuery = '';
+        _coplaySearching = false;
         _coplaySearchToken = 0;
+        _coplayRenderChats();
         return;
     }
+    _coplaySearching = true;
+    _coplayRenderChats();
     const token = ++_coplaySearchToken;
     _coplaySearchDebounce = setTimeout(async () => {
         try {
-            const hits = await tg.searchContactsForCoplay(q, 20);
-            if (token !== _coplaySearchToken) return; // stale
+            const hits = await tg.searchContactsForCoplay(q, 30);
+            if (token !== _coplaySearchToken) return; // a newer keystroke superseded us
             _coplayRemoteHits = hits;
-            _coplayRenderChats(coplaySearchInput.value);
-        } catch (e) { /* swallow — local results still shown */ }
+            _coplayRemoteQuery = q.toLowerCase();
+        } catch (e) {
+            if (token !== _coplaySearchToken) return;
+            _coplayRemoteHits = [];
+            _coplayRemoteQuery = q.toLowerCase();
+        } finally {
+            if (token === _coplaySearchToken) {
+                _coplaySearching = false;
+                _coplayRenderChats();
+            }
+        }
     }, 220);
 }
 

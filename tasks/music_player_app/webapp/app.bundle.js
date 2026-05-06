@@ -84797,7 +84797,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         try {
           const all = await listChatsForShare(200);
           _coplayChatsCache = all.filter((c) => c.kind === "user");
-          _coplayRenderChats("");
+          _coplayRenderChats();
         } catch (e) {
           console.error("[coplay] list chats failed:", e);
           coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Failed to load contacts</div>';
@@ -84816,25 +84816,26 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _coplaySearchToken = 0;
       }
       var _coplayRemoteHits = [];
+      var _coplayRemoteQuery = "";
+      var _coplaySearching = false;
       var _coplaySearchDebounce = null;
       var _coplaySearchToken = 0;
-      function _coplayLocalMatch(c, q) {
-        if (!q) return true;
-        const t = (c.title || "").toLowerCase();
-        const u = (c.username || "").toLowerCase();
-        return t.includes(q) || u.includes(q);
-      }
-      function _coplayRenderChats(filter) {
-        const q = (filter || "").trim().toLowerCase();
-        const local = _coplayChatsCache.filter((c) => _coplayLocalMatch(c, q));
-        const localIds = new Set(local.map((c) => c.id));
-        const remote = q ? _coplayRemoteHits.filter((c) => !localIds.has(c.id)) : [];
-        const list = [...local, ...remote];
+      function _coplayRenderChats() {
+        const rawQ = (coplaySearchInput?.value || "").trim();
+        const q = rawQ.toLowerCase();
+        let list;
+        if (!q) {
+          list = _coplayChatsCache;
+        } else if (_coplayRemoteQuery === q) {
+          list = _coplayRemoteHits;
+        } else {
+          list = [];
+        }
         const visibleIds = new Set(list.map((c) => c.id));
         const stickySelected = _coplayInviteList.filter((c) => !visibleIds.has(c.id));
         coplayChatsEl.innerHTML = "";
         if (list.length === 0 && stickySelected.length === 0) {
-          const text = q ? _coplaySearchToken > 0 ? "Searching\u2026" : "No contacts found" : "No contacts found";
+          const text = q ? _coplaySearching ? "Searching\u2026" : "No contacts found" : "No contacts found";
           coplayChatsEl.innerHTML = `<div class="coplay-chats-placeholder">${text}</div>`;
           return;
         }
@@ -84866,22 +84867,34 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         for (const chat of list) renderRow(chat);
       }
       function _coplayOnSearchInput(value) {
-        _coplayRenderChats(value);
         if (_coplaySearchDebounce) clearTimeout(_coplaySearchDebounce);
         const q = (value || "").trim();
-        if (q.length < 2) {
+        if (!q) {
           _coplayRemoteHits = [];
+          _coplayRemoteQuery = "";
+          _coplaySearching = false;
           _coplaySearchToken = 0;
+          _coplayRenderChats();
           return;
         }
+        _coplaySearching = true;
+        _coplayRenderChats();
         const token = ++_coplaySearchToken;
         _coplaySearchDebounce = setTimeout(async () => {
           try {
-            const hits = await searchContactsForCoplay(q, 20);
+            const hits = await searchContactsForCoplay(q, 30);
             if (token !== _coplaySearchToken) return;
             _coplayRemoteHits = hits;
-            _coplayRenderChats(coplaySearchInput.value);
+            _coplayRemoteQuery = q.toLowerCase();
           } catch (e) {
+            if (token !== _coplaySearchToken) return;
+            _coplayRemoteHits = [];
+            _coplayRemoteQuery = q.toLowerCase();
+          } finally {
+            if (token === _coplaySearchToken) {
+              _coplaySearching = false;
+              _coplayRenderChats();
+            }
           }
         }, 220);
       }
