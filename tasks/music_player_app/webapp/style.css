@@ -782,7 +782,12 @@ html, body {
 
 .share-chat-item:hover { background: var(--bg-hover); }
 
-.share-chat-avatar {
+.share-chat-item.sending { opacity: 0.5; pointer-events: none; }
+
+/* Shared picker row internals: avatar, name, @username sub-line, type tag.
+   Used by both the share modal and the co-play picker (with the multi-
+   select checkbox added on top for the co-play wrapper). */
+.picker-row-avatar {
     width: 32px; height: 32px;
     border-radius: 50%;
     background: var(--border);
@@ -792,23 +797,30 @@ html, body {
     flex-shrink: 0;
     text-transform: uppercase;
 }
-
-.share-chat-title {
+.picker-row-title {
     flex: 1;
+    min-width: 0;
+}
+.picker-row-name {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-
-.share-chat-type {
+.picker-row-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.picker-row-type {
     font-size: 11px;
     color: var(--text-secondary);
     padding: 2px 6px;
     border: 1px solid var(--border);
     border-radius: 10px;
+    flex-shrink: 0;
 }
-
-.share-chat-item.sending { opacity: 0.5; pointer-events: none; }
 
 .share-chats-placeholder {
     padding: 20px;
@@ -1903,6 +1915,98 @@ html, body {
     100% { opacity: 0; }
 }
 
+/* ── Piano mode (falling-notes) ── */
+#piano-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #050608;
+    display: none;
+    overflow: hidden;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+#piano-overlay.open { display: block; }
+#piano-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+#piano-hint {
+    position: absolute;
+    left: 50%;
+    top: 8%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.4px;
+    pointer-events: none;
+    opacity: 0;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+#piano-overlay.open #piano-hint {
+    animation: pianoHintFade 4s ease-out forwards;
+}
+@keyframes pianoHintFade {
+    0%   { opacity: 0; }
+    10%  { opacity: 1; }
+    75%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+#piano-loading {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 200ms ease;
+    z-index: 2;
+}
+#piano-overlay.piano-loading #piano-loading { opacity: 1; }
+.piano-spinner {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.18);
+    border-top-color: rgba(255, 255, 255, 0.85);
+    animation: pianoSpin 0.9s linear infinite;
+}
+.piano-loading-label {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 13px;
+    letter-spacing: 0.4px;
+    text-align: center;
+    max-width: 80vw;
+}
+@keyframes pianoSpin {
+    to { transform: rotate(360deg); }
+}
+#piano-warning {
+    position: absolute;
+    left: 50%;
+    bottom: 24%;
+    transform: translateX(-50%);
+    color: rgba(255, 200, 130, 0.85);
+    font-size: 12px;
+    pointer-events: none;
+    opacity: 0;
+    text-align: center;
+    max-width: 80vw;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+    transition: opacity 300ms ease;
+}
+#piano-overlay.piano-warn #piano-warning { opacity: 1; }
+
 /* ── Search-result source tag ── */
 .search-src-tag {
     display: inline-block;
@@ -2009,32 +2113,6 @@ html, body {
     background: var(--accent);
     border-color: var(--accent);
     color: #fff;
-}
-.coplay-chat-avatar {
-    width: 32px; height: 32px;
-    border-radius: 50%;
-    background: var(--border);
-    color: var(--text-primary);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 600;
-    flex-shrink: 0;
-    text-transform: uppercase;
-}
-.coplay-chat-title {
-    flex: 1;
-    min-width: 0;
-}
-.coplay-chat-title > div:first-child {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.coplay-chat-sub {
-    font-size: 11px;
-    color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 .coplay-chats-sep {
     height: 1px;

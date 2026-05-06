@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=153">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=153">
-    <link rel="stylesheet" href="style.css?v=153">
+    <link rel="manifest" href="/manifest.json?v=154">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=154">
+    <link rel="stylesheet" href="style.css?v=154">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -163,6 +163,15 @@
                     <button id="btn-visualize" class="icon-btn" title="Visualizer (MilkDrop)" aria-label="Visualizer">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M3 12h2l2-7 4 14 3-10 2 6h5"/>
+                        </svg>
+                    </button>
+                    <button id="btn-piano" class="icon-btn" title="Piano mode (falling-notes tutorial)" aria-label="Piano mode">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="6" width="18" height="12" rx="1.5"/>
+                            <path d="M9 6v8M15 6v8"/>
+                            <rect x="6.5" y="6" width="2" height="6" fill="currentColor" stroke="none"/>
+                            <rect x="12" y="6" width="2" height="6" fill="currentColor" stroke="none"/>
+                            <rect x="17.5" y="6" width="2" height="6" fill="currentColor" stroke="none"/>
                         </svg>
                     </button>
                     <button id="btn-search" class="icon-btn" title="Search music">
@@ -446,6 +455,15 @@
         <div id="visualizer-hint">Tap to change preset · Hold to exit</div>
         <div id="visualizer-preset-name"></div>
     </div>
+    <div id="piano-overlay" aria-hidden="true">
+        <canvas id="piano-canvas"></canvas>
+        <div id="piano-loading" aria-hidden="true">
+            <div class="piano-spinner"></div>
+            <div id="piano-loading-label" class="piano-loading-label">Loading piano model…</div>
+        </div>
+        <div id="piano-hint">Hold anywhere to exit</div>
+        <div id="piano-warning" aria-hidden="true">Transcription is unreliable on this track — best results on solo piano.</div>
+    </div>
     <audio id="audio-element" preload="auto"></audio>
     <script>
     // Register service worker for PWA + background audio
@@ -453,6 +471,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=153"></script>
+    <script src="app.bundle.js?v=154"></script>
 </body>
 </html>

@@ -2733,6 +2733,42 @@ function _pickerReset(state) {
     state.token = 0;
 }
 
+// Build one chat row. Shared between the share modal (single-select,
+// shows the destination kind tag) and the co-play picker (multi-select,
+// shows a checkbox circle). Markup for avatar + name + @username is
+// identical so both pickers stay visually consistent.
+function _pickerRenderRow(chat, opts) {
+    const { multiSelect, isSelected, showTypeTag, onClick } = opts;
+    const el = document.createElement('div');
+    el.className = (multiSelect ? 'coplay-chat-item' : 'share-chat-item')
+        + (isSelected ? ' selected' : '');
+    const initial = (chat.title.trim()[0] || '?').toUpperCase();
+    const sub = chat.username ? `@${chat.username}` : '';
+    const checkbox = multiSelect ? `
+        <div class="coplay-chat-check">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>` : '';
+    let typeTag = '';
+    if (showTypeTag) {
+        const label = chat.kind === 'user' ? 'DM'
+            : chat.kind === 'bot' ? 'Bot'
+            : chat.kind === 'channel' ? 'Channel'
+            : 'Group';
+        typeTag = `<div class="picker-row-type">${escapeHtml(label)}</div>`;
+    }
+    el.innerHTML = `
+        ${checkbox}
+        <div class="picker-row-avatar">${escapeHtml(initial)}</div>
+        <div class="picker-row-title">
+            <div class="picker-row-name">${escapeHtml(chat.title)}</div>
+            ${sub ? `<div class="picker-row-sub">${escapeHtml(sub)}</div>` : ''}
+        </div>
+        ${typeTag}
+    `;
+    el.addEventListener('click', () => onClick(chat, el));
+    return el;
+}
+
 // Debounced search-input handler. `kinds` filters server-side results
 // (e.g. ['user'] for co-play, all kinds for share). `render` redraws
 // the UI off the picker state.
@@ -2802,19 +2838,12 @@ function _renderShareChats() {
         return;
     }
     for (const chat of list) {
-        const el = document.createElement('div');
-        el.className = 'share-chat-item';
-        const initial = (chat.title.trim()[0] || '?').toUpperCase();
-        const typeLabel = chat.kind === 'user' ? 'DM'
-            : chat.kind === 'bot' ? 'Bot'
-            : chat.kind === 'channel' ? 'Channel'
-            : 'Group';
-        el.innerHTML = `
-            <div class="share-chat-avatar">${escapeHtml(initial)}</div>
-            <div class="share-chat-title">${escapeHtml(chat.title)}</div>
-            <div class="share-chat-type">${escapeHtml(typeLabel)}</div>
-        `;
-        el.addEventListener('click', () => _sendShareToChat(chat, el));
+        const el = _pickerRenderRow(chat, {
+            multiSelect: false,
+            isSelected: false,
+            showTypeTag: true,
+            onClick: (c, rowEl) => _sendShareToChat(c, rowEl),
+        });
         shareChatsEl.appendChild(el);
     }
 }
@@ -3138,22 +3167,13 @@ function _coplayRenderChats() {
     }
 
     const renderRow = (chat) => {
-        const selected = _coplayInviteList.find(c => c.id === chat.id);
-        const el = document.createElement('div');
-        el.className = 'coplay-chat-item' + (selected ? ' selected' : '');
-        const initial = (chat.title.trim()[0] || '?').toUpperCase();
-        const sub = chat.username ? `@${chat.username}` : '';
-        el.innerHTML = `
-            <div class="coplay-chat-check">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-            <div class="coplay-chat-avatar">${escapeHtml(initial)}</div>
-            <div class="coplay-chat-title">
-                <div>${escapeHtml(chat.title)}</div>
-                ${sub ? `<div class="coplay-chat-sub">${escapeHtml(sub)}</div>` : ''}
-            </div>
-        `;
-        el.addEventListener('click', () => _coplayToggleSelect(chat, el));
+        const selected = !!_coplayInviteList.find(c => c.id === chat.id);
+        const el = _pickerRenderRow(chat, {
+            multiSelect: true,
+            isSelected: selected,
+            showTypeTag: false,
+            onClick: (c, rowEl) => _coplayToggleSelect(c, rowEl),
+        });
         coplayChatsEl.appendChild(el);
     };
 

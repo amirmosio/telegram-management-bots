@@ -241,6 +241,18 @@ export async function updateTrackArtwork(groupId, trackId, artworkBlob, context 
     try { await _upsertTrackRow(groupId, trackId, patch); } catch {}
 }
 
+// Piano-mode transcription upsert. `notes` is an array of {t0, t1, pitch}
+// produced by basic-pitch's audio→MIDI inference; cached on the track row
+// so re-entering Piano mode for a track skips the 30-60s analysis.
+export async function updateTrackPianoNotes(groupId, trackId, notes, context = {}) {
+    const ctx = _deriveTopicContext(groupId, trackId, context);
+    const patch = { pianoNotes: notes };
+    if (context.track) patch.track = context.track;
+    if (ctx.topicId != null) patch.topicId = ctx.topicId;
+    if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;
+    try { await _upsertTrackRow(groupId, trackId, patch); } catch {}
+}
+
 // Translation upsert. Stored as { translations: { [lang]: [string, ...] } },
 // parallel-indexed to the source lyric lines.
 export async function updateTrackTranslation(groupId, trackId, lang, lines) {
