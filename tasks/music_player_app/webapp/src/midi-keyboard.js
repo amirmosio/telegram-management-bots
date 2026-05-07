@@ -6,27 +6,37 @@
 // the page's main <audio> element is untouched, preserving the existing
 // iOS-lock-screen invariant in piano-roll.js.
 //
-// Instrument families:
-//   • splendid → SplendidGrandPiano (Steinway samples, best grand)
-//   • soundfont:<name> → MusyngKite GM bank (acoustic + bright + organs etc.)
-//   • epiano:<name> → ElectricPiano (Rhodes / Wurlitzer / CP80 / TX81Z)
+// Instrument config shapes:
+//   { type: 'splendid' }                             → SplendidGrandPiano
+//   { type: 'soundfont', kit, name }                 → Soundfont (GM bank)
 
-import { SplendidGrandPiano, Soundfont, ElectricPiano } from 'smplr';
+import { SplendidGrandPiano, Soundfont } from 'smplr';
 
-// Curated picker. Keep the list short — too many options paralyzes choice.
-// First entry is the default loaded on first MIDI enable.
+// Curated picker — acoustic / classical piano sounds only. First entry is
+// the default loaded on first MIDI enable.
 export const INSTRUMENTS = [
-    { id: 'splendid',                       label: 'Grand Piano (Steinway)' },
-    { id: 'soundfont:bright_acoustic_piano', label: 'Bright Acoustic' },
-    { id: 'soundfont:electric_grand_piano',  label: 'Electric Grand' },
-    { id: 'soundfont:honkytonk_piano',       label: 'Honky-tonk' },
-    { id: 'epiano:PianetT',                  label: 'Rhodes EP' },
-    { id: 'epiano:WurlitzerEP200',           label: 'Wurlitzer EP' },
-    { id: 'epiano:CP80',                     label: 'CP80 EP' },
-    { id: 'soundfont:drawbar_organ',         label: 'Hammond Organ' },
+    { id: 'splendid',                  label: 'Grand Piano (Steinway)',
+        config: { type: 'splendid' } },
+    { id: 'musyng-acoustic',           label: 'Acoustic Grand',
+        config: { type: 'soundfont', kit: 'MusyngKite', name: 'acoustic_grand_piano' } },
+    { id: 'musyng-bright',             label: 'Bright Acoustic',
+        config: { type: 'soundfont', kit: 'MusyngKite', name: 'bright_acoustic_piano' } },
+    { id: 'musyng-honkytonk',          label: 'Honky-tonk',
+        config: { type: 'soundfont', kit: 'MusyngKite', name: 'honkytonk_piano' } },
+    { id: 'musyng-harpsichord',        label: 'Harpsichord',
+        config: { type: 'soundfont', kit: 'MusyngKite', name: 'harpsichord' } },
+    { id: 'fluid-acoustic',            label: 'Grand Piano (FluidR3)',
+        config: { type: 'soundfont', kit: 'FluidR3_GM', name: 'acoustic_grand_piano' } },
 ];
 
+// Sustain slider runs 0 → SUSTAIN_MAX_MS. Above SUSTAIN_HOLD_THRESHOLD we
+// stop scheduling a programmatic release at all and let the sample's own
+// natural decay play out (effectively "infinite sustain" for piano notes).
+export const SUSTAIN_MAX_MS = 10000;
+const SUSTAIN_HOLD_THRESHOLD_MS = 9500;
+
 const DEFAULT_INSTRUMENT_ID = INSTRUMENTS[0].id;
+const _instrumentById = new Map(INSTRUMENTS.map(i => [i.id, i]));
 
 export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading } = {}) {
     let audioCtx = null;
@@ -38,46 +48,45 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     let enabled = false;
 
     // Sustain state.
-    //  pedalDown  : raw CC 64 state from the physical pedal (≥64 = down).
-    //  forceHold  : user-toggled "always sustain" — useful if the keyboard
-    //               has no pedal. When true we behave as if the pedal is
-    //               always pressed.
+    //  pedalDown    : raw CC 64 from the physical pedal (≥64 = down).
+    //  sustainHoldMs: slider-controlled release tail in ms. 0 = stop on
+    //                 key release; ≥SUSTAIN_HOLD_THRESHOLD_MS = let the
+    //                 sample's own decay play out fully (no programmatic
+    //                 stop). Pedal still always overrides regardless.
     let pedalDown = false;
-    let forceHold = false;
+    let sustainHoldMs = 0;
 
     // midi pitch → StopFn returned by instrument.start. We hold the ref so
     // the matching note-off (or sustain release) can release the *exact*
     // voice we triggered, instead of cutting all sounding voices.
     const activeStops = new Map();
-    // Pitches whose key was released while sustain was active. They keep
-    // ringing until sustain releases.
+    // Pitches whose key was released while the pedal was active. They keep
+    // ringing until the pedal releases.
     const sustainPending = new Set();
+    // Pending setTimeout handles for slider-driven delayed releases. Keyed
+    // by pitch so a re-strike of the same key cancels its pending stop.
+    const pendingReleaseTimers = new Map();
 
     function isAvailable() {
         return typeof navigator !== 'undefined'
             && typeof navigator.requestMIDIAccess === 'function';
     }
     function isEnabled() { return enabled; }
-    function isSustaining() { return pedalDown || forceHold; }
     function getInstrumentId() { return instrumentId; }
     function getActiveNotes() { return new Set(activeStops.keys()); }
+    function getSustainHoldMs() { return sustainHoldMs; }
 
-    // Build the smplr instrument for an id like 'splendid' or
-    // 'soundfont:bright_acoustic_piano'. Returns the constructed object so
-    // the caller can await its `load` promise.
     function _buildInstrument(id) {
-        if (id === 'splendid') {
+        const entry = _instrumentById.get(id);
+        if (!entry) throw new Error('Unknown instrument id: ' + id);
+        const c = entry.config;
+        if (c.type === 'splendid') {
             return new SplendidGrandPiano(audioCtx);
         }
-        if (id.startsWith('soundfont:')) {
-            const name = id.slice('soundfont:'.length);
-            return new Soundfont(audioCtx, { instrument: name, kit: 'MusyngKite' });
+        if (c.type === 'soundfont') {
+            return new Soundfont(audioCtx, { instrument: c.name, kit: c.kit });
         }
-        if (id.startsWith('epiano:')) {
-            const name = id.slice('epiano:'.length);
-            return new ElectricPiano(audioCtx, { instrument: name });
-        }
-        throw new Error('Unknown instrument id: ' + id);
+        throw new Error('Unsupported instrument config type: ' + c.type);
     }
 
     async function _loadInstrument(id) {
@@ -137,12 +146,11 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         }
     }
 
-    function setForceHold(on) {
-        const wasSustaining = isSustaining();
-        forceHold = !!on;
-        const nowSustaining = isSustaining();
-        // Falling edge of sustain: release everything queued.
-        if (wasSustaining && !nowSustaining) _flushSustainPending();
+    // Slider value, in ms. Setting it doesn't retroactively change notes
+    // already pending release — only future note-offs honour the new value.
+    function setSustainHoldMs(ms) {
+        const v = Math.max(0, Math.min(SUSTAIN_MAX_MS, Number(ms) || 0));
+        sustainHoldMs = v;
     }
 
     async function enable() {
@@ -198,20 +206,30 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
             _noteOff(d1);
         } else if (cmd === 0xb0 && d1 === 64) {
             // Sustain pedal. Convention: ≥64 = down, <64 = up.
-            const wasSustaining = isSustaining();
+            const wasDown = pedalDown;
             pedalDown = d2 >= 64;
-            const nowSustaining = isSustaining();
-            if (wasSustaining && !nowSustaining) _flushSustainPending();
+            if (wasDown && !pedalDown) _flushSustainPending();
         }
         // Pitch bend, modulation, aftertouch — left alone for now.
     }
 
+    function _clearPendingTimer(note) {
+        const t = pendingReleaseTimers.get(note);
+        if (t != null) {
+            clearTimeout(t);
+            pendingReleaseTimers.delete(note);
+        }
+    }
+
     function _noteOn(note, velocity) {
         if (!instrument) return;
-        // If this exact pitch is held in sustain, the user is restriking it
-        // — cancel its pending release so the next note-off stops the new
-        // voice (not the lingering one).
+        // If this exact pitch is held in pedal-sustain, the user is
+        // restriking — cancel its pending release so the next note-off
+        // stops the new voice, not the lingering one.
         sustainPending.delete(note);
+        // Cancel any slider-driven delayed release for this pitch — the
+        // user pressed it again before the timer fired.
+        _clearPendingTimer(note);
         // Same key restruck while still held: release the previous voice
         // first so we don't stack overlapping samples.
         if (activeStops.has(note)) {
@@ -227,12 +245,36 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     }
 
     function _noteOff(note) {
-        if (isSustaining()) {
-            // Defer the release until sustain lifts. Note remains lit on
-            // the keyboard *and* keeps ringing in the synth.
+        if (pedalDown) {
+            // Pedal held: defer release until pedal lifts. The note keeps
+            // ringing AND stays lit on the on-screen keyboard.
             sustainPending.add(note);
             return;
         }
+        if (sustainHoldMs >= SUSTAIN_HOLD_THRESHOLD_MS) {
+            // Slider at max: don't programmatically stop. Sample plays
+            // out its natural decay; if the same key is restruck _noteOn
+            // will release the lingering voice first.
+            return;
+        }
+        if (sustainHoldMs > 0) {
+            // Schedule a delayed stop. If the same pitch is restruck or
+            // the pedal taps mid-window, _clearPendingTimer / _noteOn
+            // / pedalDown handling cancel this.
+            const localMs = sustainHoldMs;
+            const t = setTimeout(() => {
+                pendingReleaseTimers.delete(note);
+                _stopVoiceNow(note);
+            }, localMs);
+            pendingReleaseTimers.set(note, t);
+            // Don't notify yet — the on-screen key stays lit while the
+            // tail rings out, matching how a piano sustain feels.
+            return;
+        }
+        _stopVoiceNow(note);
+    }
+
+    function _stopVoiceNow(note) {
         const stop = activeStops.get(note);
         if (stop) {
             try { stop(); } catch (_) {}
@@ -243,17 +285,27 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
 
     function _flushSustainPending() {
         for (const note of sustainPending) {
-            const stop = activeStops.get(note);
-            if (stop) {
-                try { stop(); } catch (_) {}
-                activeStops.delete(note);
+            // Re-route through the slider-driven release logic so notes
+            // released *while* the pedal was down still respect the
+            // current slider tail when the pedal lifts.
+            if (sustainHoldMs >= SUSTAIN_HOLD_THRESHOLD_MS) continue;
+            if (sustainHoldMs > 0) {
+                const local = note;
+                const t = setTimeout(() => {
+                    pendingReleaseTimers.delete(local);
+                    _stopVoiceNow(local);
+                }, sustainHoldMs);
+                pendingReleaseTimers.set(local, t);
+                continue;
             }
+            _stopVoiceNow(note);
         }
         sustainPending.clear();
-        if (onActiveNotesChange) onActiveNotesChange();
     }
 
     function _allNotesOff(notify) {
+        for (const t of pendingReleaseTimers.values()) clearTimeout(t);
+        pendingReleaseTimers.clear();
         for (const stop of activeStops.values()) {
             try { stop(); } catch (_) {}
         }
@@ -263,8 +315,8 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     }
 
     return {
-        enable, disable, setInstrument, setForceHold,
-        isAvailable, isEnabled, isSustaining,
-        getActiveNotes, getInstrumentId,
+        enable, disable, setInstrument, setSustainHoldMs,
+        isAvailable, isEnabled,
+        getActiveNotes, getInstrumentId, getSustainHoldMs,
     };
 }

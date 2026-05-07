@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=194">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=194">
-    <link rel="stylesheet" href="style.css?v=194">
+    <link rel="manifest" href="/manifest.json?v=195">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=195">
+    <link rel="stylesheet" href="style.css?v=195">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -477,12 +477,12 @@
                 <div id="piano-midi-instruments" role="radiogroup"></div>
             </div>
             <div class="piano-midi-panel-section">
-                <label class="piano-midi-toggle-row">
-                    <span>Always sustain</span>
-                    <input type="checkbox" id="piano-midi-sustain">
-                    <span class="piano-midi-switch" aria-hidden="true"></span>
-                </label>
-                <div class="piano-midi-hint">Pedal (CC 64) is honored automatically — flip this on if your keyboard has no pedal.</div>
+                <div class="piano-midi-slider-row">
+                    <span>Sustain</span>
+                    <span class="piano-midi-slider-value" id="piano-midi-sustain-value">0.0s</span>
+                </div>
+                <input type="range" id="piano-midi-sustain" class="piano-midi-slider" min="0" max="10" step="0.1" value="0" aria-label="Sustain hold time in seconds">
+                <div class="piano-midi-hint">How long notes ring out after key release. Pedal (CC 64) always holds notes regardless.</div>
             </div>
         </div>
         <div id="piano-loading" aria-hidden="true">
@@ -499,6 +499,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=194"></script>
+    <script src="app.bundle.js?v=195"></script>
 </body>
 </html>
