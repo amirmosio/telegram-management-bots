@@ -12,20 +12,16 @@
 
 import { SplendidGrandPiano, Soundfont } from 'smplr';
 
-// Curated picker — acoustic / classical piano sounds only. First entry is
-// the default loaded on first MIDI enable.
+// Curated picker — grand piano sounds only. First entry is the default
+// loaded on first MIDI enable.
 export const INSTRUMENTS = [
     { id: 'splendid',                  label: 'Grand Piano (Steinway)',
         config: { type: 'splendid' } },
-    { id: 'musyng-acoustic',           label: 'Acoustic Grand',
+    { id: 'splendid-mellow',           label: 'Steinway — Mellow',
+        config: { type: 'splendid', decayTime: 0.5 } },
+    { id: 'musyng-acoustic',           label: 'Acoustic Grand (Musyng)',
         config: { type: 'soundfont', kit: 'MusyngKite', name: 'acoustic_grand_piano' } },
-    { id: 'musyng-bright',             label: 'Bright Acoustic',
-        config: { type: 'soundfont', kit: 'MusyngKite', name: 'bright_acoustic_piano' } },
-    { id: 'musyng-honkytonk',          label: 'Honky-tonk',
-        config: { type: 'soundfont', kit: 'MusyngKite', name: 'honkytonk_piano' } },
-    { id: 'musyng-harpsichord',        label: 'Harpsichord',
-        config: { type: 'soundfont', kit: 'MusyngKite', name: 'harpsichord' } },
-    { id: 'fluid-acoustic',            label: 'Grand Piano (FluidR3)',
+    { id: 'fluid-acoustic',            label: 'Acoustic Grand (FluidR3)',
         config: { type: 'soundfont', kit: 'FluidR3_GM', name: 'acoustic_grand_piano' } },
 ];
 
@@ -88,11 +84,26 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         velocitySensitivity = Math.max(0.5, Math.min(2.0, n));
     }
 
-    function _curveVelocity(raw) {
-        if (velocitySensitivity === 1.0) return raw;
-        const norm = Math.max(0, Math.min(127, raw)) / 127;
-        const shaped = Math.pow(norm, 1 / velocitySensitivity);
-        return Math.max(1, Math.min(127, Math.round(shaped * 127)));
+    // Sampled grand pianos sound disproportionately bright in the upper
+    // register because high notes have shorter strings and richer
+    // harmonics — true on a real piano too, but exaggerated by sample
+    // recording. Gently attenuate velocity above middle C so right-hand
+    // strikes don't punch through left-hand strikes at equal effort.
+    // Below middle C (60) the response is unchanged. At C8 (108) the
+    // velocity is reduced by ~24%.
+    function _pitchVelocityScale(midi) {
+        const middleC = 60;
+        if (midi <= middleC) return 1.0;
+        return Math.max(0.72, 1.0 - (midi - middleC) * 0.005);
+    }
+
+    function _shapeVelocity(rawVel, midi) {
+        const inNorm = Math.max(0, Math.min(127, rawVel)) / 127;
+        const sensShaped = velocitySensitivity === 1.0
+            ? inNorm
+            : Math.pow(inNorm, 1 / velocitySensitivity);
+        const final = sensShaped * _pitchVelocityScale(midi);
+        return Math.max(1, Math.min(127, Math.round(final * 127)));
     }
 
     function _buildInstrument(id) {
@@ -100,7 +111,12 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         if (!entry) throw new Error('Unknown instrument id: ' + id);
         const c = entry.config;
         if (c.type === 'splendid') {
-            return new SplendidGrandPiano(audioCtx);
+            // decayTime tweaks the release envelope: 0.3 (default) is the
+            // bright stock voicing; ~0.5+ rounds the sound and gives a
+            // longer ring-out, useful for a "mellow" alternate.
+            const opts = {};
+            if (typeof c.decayTime === 'number') opts.decayTime = c.decayTime;
+            return new SplendidGrandPiano(audioCtx, opts);
         }
         if (c.type === 'soundfont') {
             return new Soundfont(audioCtx, { instrument: c.name, kit: c.kit });
@@ -255,7 +271,7 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
             try { activeStops.get(note)(); } catch (_) {}
         }
         try {
-            const shaped = _curveVelocity(velocity);
+            const shaped = _shapeVelocity(velocity, note);
             const stop = instrument.start({ note, velocity: shaped });
             activeStops.set(note, stop);
         } catch (e) {

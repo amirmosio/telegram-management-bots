@@ -85525,18 +85525,25 @@ ${JSON.stringify(state)}`;
       if (!isFinite(n)) return;
       velocitySensitivity = Math.max(0.5, Math.min(2, n));
     }
-    function _curveVelocity(raw) {
-      if (velocitySensitivity === 1) return raw;
-      const norm = Math.max(0, Math.min(127, raw)) / 127;
-      const shaped = Math.pow(norm, 1 / velocitySensitivity);
-      return Math.max(1, Math.min(127, Math.round(shaped * 127)));
+    function _pitchVelocityScale(midi) {
+      const middleC = 60;
+      if (midi <= middleC) return 1;
+      return Math.max(0.72, 1 - (midi - middleC) * 5e-3);
+    }
+    function _shapeVelocity(rawVel, midi) {
+      const inNorm = Math.max(0, Math.min(127, rawVel)) / 127;
+      const sensShaped = velocitySensitivity === 1 ? inNorm : Math.pow(inNorm, 1 / velocitySensitivity);
+      const final = sensShaped * _pitchVelocityScale(midi);
+      return Math.max(1, Math.min(127, Math.round(final * 127)));
     }
     function _buildInstrument(id) {
       const entry = _instrumentById.get(id);
       if (!entry) throw new Error("Unknown instrument id: " + id);
       const c = entry.config;
       if (c.type === "splendid") {
-        return new SplendidGrandPiano(audioCtx);
+        const opts = {};
+        if (typeof c.decayTime === "number") opts.decayTime = c.decayTime;
+        return new SplendidGrandPiano(audioCtx, opts);
       }
       if (c.type === "soundfont") {
         return new Soundfont(audioCtx, { instrument: c.name, kit: c.kit });
@@ -85670,7 +85677,7 @@ ${JSON.stringify(state)}`;
         }
       }
       try {
-        const shaped = _curveVelocity(velocity);
+        const shaped = _shapeVelocity(velocity, note);
         const stop = instrument.start({ note, velocity: shaped });
         activeStops.set(note, stop);
       } catch (e) {
@@ -85764,28 +85771,18 @@ ${JSON.stringify(state)}`;
           config: { type: "splendid" }
         },
         {
+          id: "splendid-mellow",
+          label: "Steinway \u2014 Mellow",
+          config: { type: "splendid", decayTime: 0.5 }
+        },
+        {
           id: "musyng-acoustic",
-          label: "Acoustic Grand",
+          label: "Acoustic Grand (Musyng)",
           config: { type: "soundfont", kit: "MusyngKite", name: "acoustic_grand_piano" }
         },
         {
-          id: "musyng-bright",
-          label: "Bright Acoustic",
-          config: { type: "soundfont", kit: "MusyngKite", name: "bright_acoustic_piano" }
-        },
-        {
-          id: "musyng-honkytonk",
-          label: "Honky-tonk",
-          config: { type: "soundfont", kit: "MusyngKite", name: "honkytonk_piano" }
-        },
-        {
-          id: "musyng-harpsichord",
-          label: "Harpsichord",
-          config: { type: "soundfont", kit: "MusyngKite", name: "harpsichord" }
-        },
-        {
           id: "fluid-acoustic",
-          label: "Grand Piano (FluidR3)",
+          label: "Acoustic Grand (FluidR3)",
           config: { type: "soundfont", kit: "FluidR3_GM", name: "acoustic_grand_piano" }
         }
       ];
