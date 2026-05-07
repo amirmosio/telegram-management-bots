@@ -83217,7 +83217,7 @@ ${JSON.stringify(state)}`;
   });
 
   // src/visualizers/piano-roll.js
-  function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock, getMidiActiveNotes }) {
+  function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock, getMidiActiveNotes, subscribeMidiNoteOn }) {
     const $ = (id) => document.getElementById(id);
     const pianoOverlay = $("piano-overlay");
     const pianoCanvas = $("piano-canvas");
@@ -83227,6 +83227,14 @@ ${JSON.stringify(state)}`;
     const pianoSeekbarHandle = $("piano-seekbar-handle");
     const btnPiano = $("btn-piano");
     let _pianoSeeking = false;
+    let _practiceMode = false;
+    let _practiceWaiting = false;
+    let _practicePausedByUs = false;
+    let _practicePending = /* @__PURE__ */ new Set();
+    let _practiceCursor = 0;
+    let _practiceChords = [];
+    let _correctNotes = /* @__PURE__ */ new Set();
+    const _PRACTICE_CHORD_WINDOW_S = 0.05;
     let _pianoCtx = null;
     let _pianoNotes = null;
     let _pianoCache = /* @__PURE__ */ new Map();
@@ -83509,7 +83517,85 @@ ${JSON.stringify(state)}`;
       if (getCurrentTrackId() !== trackId) return;
       _pianoNotes = notes;
       _pianoNextIdx = 0;
+      _practiceChords = _buildPracticeChords(notes);
+      _practiceRefreshFromCurrentTime();
+      _practiceWaiting = false;
+      _practicePausedByUs = false;
+      _practicePending.clear();
+      _correctNotes.clear();
     }
+    function _buildPracticeChords(notes) {
+      if (!Array.isArray(notes) || notes.length === 0) return [];
+      const sorted = [...notes].sort((a, b) => a.t0 - b.t0);
+      const groups = [];
+      let current = { t0: sorted[0].t0, pitches: /* @__PURE__ */ new Set([sorted[0].pitch]) };
+      for (let i = 1; i < sorted.length; i++) {
+        const n = sorted[i];
+        if (n.t0 - current.t0 < _PRACTICE_CHORD_WINDOW_S) {
+          current.pitches.add(n.pitch);
+        } else {
+          groups.push(current);
+          current = { t0: n.t0, pitches: /* @__PURE__ */ new Set([n.pitch]) };
+        }
+      }
+      groups.push(current);
+      return groups;
+    }
+    function _practiceRefreshFromCurrentTime() {
+      if (!_practiceChords.length) {
+        _practiceCursor = 0;
+        return;
+      }
+      const t = audio.currentTime;
+      let i = 0;
+      while (i < _practiceChords.length && _practiceChords[i].t0 < t - 0.01) i++;
+      _practiceCursor = i;
+    }
+    function setPracticeMode(on) {
+      _practiceMode = !!on;
+      if (!_practiceMode) {
+        if (_practicePausedByUs && audio.paused) {
+          audio.play().catch(() => {
+          });
+        }
+        _practiceWaiting = false;
+        _practicePausedByUs = false;
+        _practicePending.clear();
+        _correctNotes.clear();
+      } else {
+        _practiceRefreshFromCurrentTime();
+        _practiceWaiting = false;
+        _practicePending.clear();
+        _correctNotes.clear();
+      }
+    }
+    if (typeof subscribeMidiNoteOn === "function") {
+      subscribeMidiNoteOn((pitch) => {
+        if (!_practiceMode) return;
+        if (_practiceWaiting && _practicePending.has(pitch)) {
+          _correctNotes.add(pitch);
+          _practicePending.delete(pitch);
+          if (_practicePending.size === 0) {
+            _practiceWaiting = false;
+            _practiceCursor++;
+            if (_practicePausedByUs) {
+              _practicePausedByUs = false;
+              audio.play().catch(() => {
+              });
+            }
+          }
+        } else {
+          _correctNotes.delete(pitch);
+        }
+      });
+    }
+    audio.addEventListener("seeked", () => {
+      if (!_practiceMode) return;
+      _practiceRefreshFromCurrentTime();
+      _practiceWaiting = false;
+      _practicePausedByUs = false;
+      _practicePending.clear();
+    });
     function _pianoRoundRect(ctx, x, y, w, h, r) {
       r = Math.max(0, Math.min(r, w / 2, h / 2));
       ctx.beginPath();
@@ -83520,13 +83606,15 @@ ${JSON.stringify(state)}`;
       ctx.arcTo(x, y, x + w, y, r);
       ctx.closePath();
     }
-    function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys) {
+    function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys) {
       const layout = _pianoKeyboardLayout.layout;
+      const hasCorrect = correctKeys && correctKeys.size > 0;
       for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
         const k = layout.get(m);
         if (!k || !k.isWhite) continue;
-        const isActive = activeKeys.has(m);
-        ctx.fillStyle = isActive ? "#7eb6f0" : "#f0eee5";
+        const isCorrect = hasCorrect && correctKeys.has(m);
+        const isActive = isCorrect || activeKeys.has(m);
+        ctx.fillStyle = isCorrect ? "#7ef0a8" : isActive ? "#7eb6f0" : "#f0eee5";
         ctx.fillRect(k.x, kbTop, k.w, kbH);
         ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
         ctx.fillRect(k.x + k.w - 0.5, kbTop, 0.5, kbH);
@@ -83537,9 +83625,13 @@ ${JSON.stringify(state)}`;
       for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
         const k = layout.get(m);
         if (!k || k.isWhite) continue;
-        const isActive = activeKeys.has(m);
+        const isCorrect = hasCorrect && correctKeys.has(m);
+        const isActive = isCorrect || activeKeys.has(m);
         const grad = ctx.createLinearGradient(0, kbTop, 0, kbTop + blackH);
-        if (isActive) {
+        if (isCorrect) {
+          grad.addColorStop(0, "#7ef0a8");
+          grad.addColorStop(1, "#2d8a52");
+        } else if (isActive) {
           grad.addColorStop(0, "#7eb6f0");
           grad.addColorStop(1, "#3d6c9c");
         } else {
@@ -83606,13 +83698,35 @@ ${JSON.stringify(state)}`;
           ctx.fillRect(x + 1, drawTop, ww - 2, 1);
         }
       }
+      if (_practiceMode && !_practiceWaiting && !audio.paused && _practiceChords.length > 0 && _practiceCursor < _practiceChords.length) {
+        const next = _practiceChords[_practiceCursor];
+        if (audio.currentTime >= next.t0) {
+          audio.pause();
+          _practicePausedByUs = true;
+          _practiceWaiting = true;
+          _practicePending = new Set(next.pitches);
+        }
+      }
+      let correctKeys = null;
       if (getMidiActiveNotes) {
         try {
-          for (const p of getMidiActiveNotes()) activeKeys.add(p);
+          const liveMidi = getMidiActiveNotes();
+          if (_practiceMode) {
+            correctKeys = /* @__PURE__ */ new Set();
+            for (const p of [..._correctNotes]) {
+              if (!liveMidi.has(p)) _correctNotes.delete(p);
+            }
+            for (const p of liveMidi) {
+              if (_correctNotes.has(p)) correctKeys.add(p);
+              else activeKeys.add(p);
+            }
+          } else {
+            for (const p of liveMidi) activeKeys.add(p);
+          }
         } catch (_) {
         }
       }
-      _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
+      _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys);
       if (audio.duration > 0 && pianoSeekbarFill) {
         const pct = Math.max(0, Math.min(1, audio.currentTime / audio.duration));
         const pctStr = (pct * 100).toFixed(2) + "%";
@@ -83703,6 +83817,12 @@ ${JSON.stringify(state)}`;
       _pianoNotes = null;
       _pianoNextIdx = 0;
       _pianoAnalysisToken++;
+      _practiceChords = [];
+      _practiceCursor = 0;
+      _practiceWaiting = false;
+      _practicePausedByUs = false;
+      _practicePending.clear();
+      _correctNotes.clear();
       if (pianoOverlay?.classList.contains("open")) _pianoAnalyzeCurrentTrack();
     });
     function _pianoSeekFromEvent(e) {
@@ -83740,7 +83860,7 @@ ${JSON.stringify(state)}`;
     pianoSeekbar?.addEventListener("pointermove", _pianoOnSeekMove);
     pianoSeekbar?.addEventListener("pointerup", _pianoOnSeekUp);
     pianoSeekbar?.addEventListener("pointercancel", _pianoOnSeekUp);
-    return { enter, exit };
+    return { enter, exit, setPracticeMode };
   }
   var import_process12;
   var init_piano_roll = __esm({
@@ -85498,6 +85618,7 @@ ${JSON.stringify(state)}`;
     let enabled = false;
     let pedalDown = false;
     let sustainHoldMs = 0;
+    const _noteOnSubscribers = /* @__PURE__ */ new Set();
     let velocitySensitivity = 1;
     let velocityMode = "sensitive";
     const VELOCITY_LOCKED_LOW = 45;
@@ -85536,6 +85657,12 @@ ${JSON.stringify(state)}`;
       if (mode === "sensitive" || mode === "soft" || mode === "hard") {
         velocityMode = mode;
       }
+    }
+    function subscribeNoteOn(handler) {
+      if (typeof handler !== "function") return () => {
+      };
+      _noteOnSubscribers.add(handler);
+      return () => _noteOnSubscribers.delete(handler);
     }
     function setReverbMix(v) {
       const n = Number(v);
@@ -85750,6 +85877,13 @@ ${JSON.stringify(state)}`;
       } catch (e) {
         console.warn("[midi] start failed", e);
       }
+      for (const h of _noteOnSubscribers) {
+        try {
+          h(note, velocity);
+        } catch (e) {
+          console.warn("[midi] note-on handler threw", e);
+        }
+      }
       if (onActiveNotesChange) onActiveNotesChange();
     }
     function _noteOff(note) {
@@ -85819,6 +85953,7 @@ ${JSON.stringify(state)}`;
       setVelocitySensitivity,
       setReverbMix,
       setVelocityMode,
+      subscribeNoteOn,
       isAvailable,
       isEnabled,
       getActiveNotes,
@@ -89636,13 +89771,14 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         requestWakeLock: _requestWakeLock
       });
       var midiKeyboard = installMidiKeyboard();
-      installPiano({
+      var pianoMode = installPiano({
         audio,
         getCurrentTrackId: () => currentTrackId,
         getPlayerTracks: () => playerTracks,
         getPlayerGroupId: () => playerGroupId,
         requestWakeLock: _requestWakeLock,
-        getMidiActiveNotes: () => midiKeyboard.getActiveNotes()
+        getMidiActiveNotes: () => midiKeyboard.getActiveNotes(),
+        subscribeMidiNoteOn: midiKeyboard.subscribeNoteOn
       });
       (function wireMidiControls() {
         const toggleBtn = document.getElementById("piano-midi-toggle");
@@ -89657,6 +89793,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const reverbValue = document.getElementById("piano-midi-reverb-value");
         const velSoftBtn = document.getElementById("piano-midi-vel-soft");
         const velHardBtn = document.getElementById("piano-midi-vel-hard");
+        const practiceBtn = document.getElementById("piano-midi-practice");
         if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue || !sensSlider || !sensValue || !reverbSlider || !reverbValue || !velSoftBtn || !velHardBtn) return;
         if (!midiKeyboard.isAvailable()) {
           document.getElementById("piano-midi-controls")?.style?.setProperty("display", "none");
@@ -89774,6 +89911,16 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           _toggleVelPill(velHardBtn);
         });
         _applyVelocityMode();
+        if (practiceBtn) {
+          practiceBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+          practiceBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const next = !practiceBtn.classList.contains("active");
+            practiceBtn.classList.toggle("active", next);
+            practiceBtn.setAttribute("aria-pressed", String(next));
+            pianoMode?.setPracticeMode?.(next);
+          });
+        }
         toggleBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
           if (midiKeyboard.isEnabled()) {

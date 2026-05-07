@@ -51,6 +51,10 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     //                 stop). Pedal still always overrides regardless.
     let pedalDown = false;
     let sustainHoldMs = 0;
+    // Per-note-on subscribers (e.g. piano-roll's practice mode) get
+    // (pitch, velocity) on every accepted note-on. Subscribers are stored
+    // in a Set so add/remove is O(1) and dispatch is order-independent.
+    const _noteOnSubscribers = new Set();
     // Velocity curve. 1.0 = linear (raw MIDI velocity). >1 = soft touches
     // get amplified (more sensitive). <1 = soft touches get reduced (less
     // sensitive, need to play harder). Mapping: out = 127*(in/127)^(1/sens).
@@ -95,6 +99,14 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         if (mode === 'sensitive' || mode === 'soft' || mode === 'hard') {
             velocityMode = mode;
         }
+    }
+
+    // Subscribe to incoming note-on events. Returns an unsubscribe fn.
+    // Used by piano-roll's practice mode to detect "correct" presses.
+    function subscribeNoteOn(handler) {
+        if (typeof handler !== 'function') return () => {};
+        _noteOnSubscribers.add(handler);
+        return () => _noteOnSubscribers.delete(handler);
     }
 
     // Slider in [0, 1]. 0 = dry, 1 = full wet. Applied to the global wetGain
@@ -362,6 +374,11 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         } catch (e) {
             console.warn('[midi] start failed', e);
         }
+        // Notify subscribers (e.g. piano-roll's practice mode) AFTER the
+        // synth fires so they don't see a press before the audio comes out.
+        for (const h of _noteOnSubscribers) {
+            try { h(note, velocity); } catch (e) { console.warn('[midi] note-on handler threw', e); }
+        }
         if (onActiveNotesChange) onActiveNotesChange();
     }
 
@@ -438,6 +455,7 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     return {
         enable, disable, setInstrument,
         setSustainHoldMs, setVelocitySensitivity, setReverbMix, setVelocityMode,
+        subscribeNoteOn,
         isAvailable, isEnabled,
         getActiveNotes, getInstrumentId,
         getSustainHoldMs, getVelocitySensitivity, getReverbMix, getVelocityMode,

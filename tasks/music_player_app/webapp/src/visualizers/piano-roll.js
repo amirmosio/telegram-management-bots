@@ -17,7 +17,7 @@
 
 import * as tg from '../telegram.js';
 
-export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock, getMidiActiveNotes }) {
+export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock, getMidiActiveNotes, subscribeMidiNoteOn }) {
     const $ = id => document.getElementById(id);
 
     const pianoOverlay = $('piano-overlay');
@@ -28,6 +28,21 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     const pianoSeekbarHandle = $('piano-seekbar-handle');
     const btnPiano = $('btn-piano');
     let _pianoSeeking = false;
+
+    // Practice mode (Synthesia-style "wait for me"). When on, the song
+    // pauses each time the playback cursor reaches a transcribed chord
+    // and resumes once the user has pressed the right pitches. The set
+    // of expected pitches is `_practicePending`; correctly-played pitches
+    // accumulate in `_correctNotes` so the on-screen keyboard can paint
+    // them green for as long as they're still held.
+    let _practiceMode = false;
+    let _practiceWaiting = false;
+    let _practicePausedByUs = false;
+    let _practicePending = new Set();
+    let _practiceCursor = 0;
+    let _practiceChords = [];
+    let _correctNotes = new Set();
+    const _PRACTICE_CHORD_WINDOW_S = 0.05;
 
     let _pianoCtx = null;
     let _pianoNotes = null;                  // active schedule
@@ -368,7 +383,96 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         if (getCurrentTrackId() !== trackId) return;
         _pianoNotes = notes;
         _pianoNextIdx = 0;
+        _practiceChords = _buildPracticeChords(notes);
+        _practiceRefreshFromCurrentTime();
+        _practiceWaiting = false;
+        _practicePausedByUs = false;
+        _practicePending.clear();
+        _correctNotes.clear();
     }
+
+    // Group transcribed notes by t0 within a 50 ms window — anything that
+    // close is treated as a chord and the user has to press all pitches
+    // before the song resumes. Sorted ascending by t0.
+    function _buildPracticeChords(notes) {
+        if (!Array.isArray(notes) || notes.length === 0) return [];
+        const sorted = [...notes].sort((a, b) => a.t0 - b.t0);
+        const groups = [];
+        let current = { t0: sorted[0].t0, pitches: new Set([sorted[0].pitch]) };
+        for (let i = 1; i < sorted.length; i++) {
+            const n = sorted[i];
+            if (n.t0 - current.t0 < _PRACTICE_CHORD_WINDOW_S) {
+                current.pitches.add(n.pitch);
+            } else {
+                groups.push(current);
+                current = { t0: n.t0, pitches: new Set([n.pitch]) };
+            }
+        }
+        groups.push(current);
+        return groups;
+    }
+
+    // Bring the practice cursor into agreement with audio.currentTime.
+    // Used after a track change, after a seek, and after toggling
+    // practice mode on.
+    function _practiceRefreshFromCurrentTime() {
+        if (!_practiceChords.length) { _practiceCursor = 0; return; }
+        const t = audio.currentTime;
+        let i = 0;
+        while (i < _practiceChords.length && _practiceChords[i].t0 < t - 0.01) i++;
+        _practiceCursor = i;
+    }
+
+    function setPracticeMode(on) {
+        _practiceMode = !!on;
+        if (!_practiceMode) {
+            // If we paused the audio because of a wait, lift it now so
+            // toggling off doesn't leave the user stuck on a silent song.
+            if (_practicePausedByUs && audio.paused) {
+                audio.play().catch(() => {});
+            }
+            _practiceWaiting = false;
+            _practicePausedByUs = false;
+            _practicePending.clear();
+            _correctNotes.clear();
+        } else {
+            _practiceRefreshFromCurrentTime();
+            _practiceWaiting = false;
+            _practicePending.clear();
+            _correctNotes.clear();
+        }
+    }
+
+    if (typeof subscribeMidiNoteOn === 'function') {
+        subscribeMidiNoteOn((pitch /*, velocity */) => {
+            if (!_practiceMode) return;
+            if (_practiceWaiting && _practicePending.has(pitch)) {
+                _correctNotes.add(pitch);
+                _practicePending.delete(pitch);
+                if (_practicePending.size === 0) {
+                    _practiceWaiting = false;
+                    _practiceCursor++;
+                    if (_practicePausedByUs) {
+                        _practicePausedByUs = false;
+                        audio.play().catch(() => {});
+                    }
+                }
+            } else {
+                // A press that wasn't (or no longer is) part of an
+                // active match — drop any stale "correct" mark on this
+                // pitch so the green glow doesn't carry across mistakes.
+                _correctNotes.delete(pitch);
+            }
+        });
+    }
+
+    audio.addEventListener('seeked', () => {
+        if (!_practiceMode) return;
+        _practiceRefreshFromCurrentTime();
+        _practiceWaiting = false;
+        _practicePausedByUs = false;
+        _practicePending.clear();
+    });
 
     function _pianoRoundRect(ctx, x, y, w, h, r) {
         r = Math.max(0, Math.min(r, w / 2, h / 2));
@@ -381,14 +485,16 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         ctx.closePath();
     }
 
-    function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys) {
+    function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys) {
         const layout = _pianoKeyboardLayout.layout;
+        const hasCorrect = correctKeys && correctKeys.size > 0;
         // White keys first
         for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
             const k = layout.get(m);
             if (!k || !k.isWhite) continue;
-            const isActive = activeKeys.has(m);
-            ctx.fillStyle = isActive ? '#7eb6f0' : '#f0eee5';
+            const isCorrect = hasCorrect && correctKeys.has(m);
+            const isActive = isCorrect || activeKeys.has(m);
+            ctx.fillStyle = isCorrect ? '#7ef0a8' : (isActive ? '#7eb6f0' : '#f0eee5');
             ctx.fillRect(k.x, kbTop, k.w, kbH);
             // Right edge separator
             ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
@@ -402,9 +508,13 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
             const k = layout.get(m);
             if (!k || k.isWhite) continue;
-            const isActive = activeKeys.has(m);
+            const isCorrect = hasCorrect && correctKeys.has(m);
+            const isActive = isCorrect || activeKeys.has(m);
             const grad = ctx.createLinearGradient(0, kbTop, 0, kbTop + blackH);
-            if (isActive) {
+            if (isCorrect) {
+                grad.addColorStop(0, '#7ef0a8');
+                grad.addColorStop(1, '#2d8a52');
+            } else if (isActive) {
                 grad.addColorStop(0, '#7eb6f0');
                 grad.addColorStop(1, '#3d6c9c');
             } else {
@@ -493,15 +603,50 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             }
         }
 
-        // Merge in any keys currently held on a connected MIDI keyboard so
-        // the on-screen layout lights up while the user plays along.
+        // Practice mode — pause the song the moment the playback cursor
+        // reaches the next un-played chord and remember which pitches the
+        // user has to press to resume. Done before merging MIDI keys so
+        // any pitches in the chord that the user *just now* held still
+        // get the correct/incorrect colouring.
+        if (_practiceMode && !_practiceWaiting && !audio.paused
+            && _practiceChords.length > 0
+            && _practiceCursor < _practiceChords.length) {
+            const next = _practiceChords[_practiceCursor];
+            if (audio.currentTime >= next.t0) {
+                audio.pause();
+                _practicePausedByUs = true;
+                _practiceWaiting = true;
+                _practicePending = new Set(next.pitches);
+            }
+        }
+
+        // Merge in any keys currently held on a connected MIDI keyboard
+        // so the on-screen layout lights up while the user plays along.
+        // In practice mode we additionally split user-held pitches into
+        // "correct" (green) and everything else (blue, default colour).
+        let correctKeys = null;
         if (getMidiActiveNotes) {
             try {
-                for (const p of getMidiActiveNotes()) activeKeys.add(p);
+                const liveMidi = getMidiActiveNotes();
+                if (_practiceMode) {
+                    correctKeys = new Set();
+                    // Drop stale "correct" marks for pitches the user has
+                    // already released — keeps the green glow tied to the
+                    // physical key being held.
+                    for (const p of [..._correctNotes]) {
+                        if (!liveMidi.has(p)) _correctNotes.delete(p);
+                    }
+                    for (const p of liveMidi) {
+                        if (_correctNotes.has(p)) correctKeys.add(p);
+                        else activeKeys.add(p);
+                    }
+                } else {
+                    for (const p of liveMidi) activeKeys.add(p);
+                }
             } catch (_) {}
         }
 
-        _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys);
+        _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys);
 
         // Update HTML seek-bar fill + handle position from current playback.
         if (audio.duration > 0 && pianoSeekbarFill) {
@@ -599,6 +744,14 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         _pianoNotes = null;
         _pianoNextIdx = 0;
         _pianoAnalysisToken++;
+        // New track — wipe practice state so we don't try to wait on
+        // chords that belong to the previous song.
+        _practiceChords = [];
+        _practiceCursor = 0;
+        _practiceWaiting = false;
+        _practicePausedByUs = false;
+        _practicePending.clear();
+        _correctNotes.clear();
         if (pianoOverlay?.classList.contains('open')) _pianoAnalyzeCurrentTrack();
     });
 
@@ -634,5 +787,5 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     pianoSeekbar?.addEventListener('pointerup', _pianoOnSeekUp);
     pianoSeekbar?.addEventListener('pointercancel', _pianoOnSeekUp);
 
-    return { enter, exit };
+    return { enter, exit, setPracticeMode };
 }

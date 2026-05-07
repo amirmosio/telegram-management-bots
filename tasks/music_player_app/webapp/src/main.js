@@ -4400,13 +4400,14 @@ installButterchurn({
 // can capture its `getActiveNotes` getter for live-key highlighting. Also
 // wires the toggle button + settings panel in the piano overlay.
 const midiKeyboard = installMidiKeyboard();
-installPiano({
+const pianoMode = installPiano({
     audio,
     getCurrentTrackId: () => currentTrackId,
     getPlayerTracks: () => playerTracks,
     getPlayerGroupId: () => playerGroupId,
     requestWakeLock: _requestWakeLock,
     getMidiActiveNotes: () => midiKeyboard.getActiveNotes(),
+    subscribeMidiNoteOn: midiKeyboard.subscribeNoteOn,
 });
 
 // Piano-overlay MIDI controls. Hidden when Web MIDI isn't available
@@ -4425,6 +4426,7 @@ installPiano({
     const reverbValue   = document.getElementById('piano-midi-reverb-value');
     const velSoftBtn    = document.getElementById('piano-midi-vel-soft');
     const velHardBtn    = document.getElementById('piano-midi-vel-hard');
+    const practiceBtn   = document.getElementById('piano-midi-practice');
     if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue
         || !sensSlider || !sensValue || !reverbSlider || !reverbValue
         || !velSoftBtn || !velHardBtn) return;
@@ -4557,6 +4559,17 @@ installPiano({
     velSoftBtn.addEventListener('click', e => { e.stopPropagation(); _toggleVelPill(velSoftBtn); });
     velHardBtn.addEventListener('click', e => { e.stopPropagation(); _toggleVelPill(velHardBtn); });
     _applyVelocityMode();
+
+    if (practiceBtn) {
+        practiceBtn.addEventListener('pointerdown', e => e.stopPropagation());
+        practiceBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const next = !practiceBtn.classList.contains('active');
+            practiceBtn.classList.toggle('active', next);
+            practiceBtn.setAttribute('aria-pressed', String(next));
+            pianoMode?.setPracticeMode?.(next);
+        });
+    }
 
     toggleBtn.addEventListener('click', async (e) => {
         e.stopPropagation();

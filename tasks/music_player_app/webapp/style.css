@@ -2211,6 +2211,17 @@ html, body {
     border-color: rgba(126, 182, 240, 0.7);
     color: #ffffff;
 }
+.piano-midi-pill-wide {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.piano-midi-pill-wide.active {
+    background: rgba(45, 145, 95, 0.55);
+    border-color: rgba(126, 240, 168, 0.7);
+}
 .piano-midi-sub {
     font-weight: 600;
     color: rgba(220, 228, 240, 0.7);
