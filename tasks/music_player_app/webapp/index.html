@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=193">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=193">
-    <link rel="stylesheet" href="style.css?v=193">
+    <link rel="manifest" href="/manifest.json?v=194">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=194">
+    <link rel="stylesheet" href="style.css?v=194">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -462,10 +462,29 @@
             <div id="piano-seekbar-fill"></div>
             <div id="piano-seekbar-handle"></div>
         </div>
-        <button id="piano-midi-toggle" type="button" aria-pressed="false" aria-label="Toggle MIDI keyboard input" title="Play along with a connected MIDI keyboard">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="1.5"/><line x1="6" y1="6" x2="6" y2="14"/><line x1="10" y1="6" x2="10" y2="14"/><line x1="14" y1="6" x2="14" y2="14"/><line x1="18" y1="6" x2="18" y2="14"/></svg>
-            <span class="piano-midi-label">MIDI</span>
-        </button>
+        <div id="piano-midi-controls">
+            <button id="piano-midi-toggle" type="button" aria-pressed="false" aria-label="Toggle MIDI keyboard input" title="Play along with a connected MIDI keyboard">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="1.5"/><line x1="6" y1="6" x2="6" y2="14"/><line x1="10" y1="6" x2="10" y2="14"/><line x1="14" y1="6" x2="14" y2="14"/><line x1="18" y1="6" x2="18" y2="14"/></svg>
+                <span class="piano-midi-label">MIDI</span>
+            </button>
+            <button id="piano-midi-settings" type="button" aria-label="MIDI sound settings" aria-haspopup="true" aria-expanded="false" title="Pick instrument and sustain mode">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
+        </div>
+        <div id="piano-midi-panel" role="dialog" aria-label="MIDI sound settings" aria-hidden="true">
+            <div class="piano-midi-panel-section">
+                <div class="piano-midi-panel-title">Sound</div>
+                <div id="piano-midi-instruments" role="radiogroup"></div>
+            </div>
+            <div class="piano-midi-panel-section">
+                <label class="piano-midi-toggle-row">
+                    <span>Always sustain</span>
+                    <input type="checkbox" id="piano-midi-sustain">
+                    <span class="piano-midi-switch" aria-hidden="true"></span>
+                </label>
+                <div class="piano-midi-hint">Pedal (CC 64) is honored automatically — flip this on if your keyboard has no pedal.</div>
+            </div>
+        </div>
         <div id="piano-loading" aria-hidden="true">
             <div class="piano-spinner"></div>
             <div id="piano-loading-label" class="piano-loading-label">Loading piano model…</div>
@@ -480,6 +499,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=193"></script>
+    <script src="app.bundle.js?v=194"></script>
 </body>
 </html>

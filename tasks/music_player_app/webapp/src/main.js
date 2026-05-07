@@ -4398,7 +4398,7 @@ installButterchurn({
 });
 // MIDI keyboard install lives BEFORE installPiano so the piano renderer
 // can capture its `getActiveNotes` getter for live-key highlighting. Also
-// wires the toggle button in the piano overlay.
+// wires the toggle button + settings panel in the piano overlay.
 const midiKeyboard = installMidiKeyboard();
 installPiano({
     audio,
@@ -4409,36 +4409,107 @@ installPiano({
     getMidiActiveNotes: () => midiKeyboard.getActiveNotes(),
 });
 
-// Piano-overlay MIDI toggle. Hidden when Web MIDI isn't available
-// (Safari, currently). Click toggles enable/disable; while enabled the
-// button shows an "on" state and notes pressed on the connected
-// keyboard play through the browser's audio output.
-(function wireMidiToggle() {
-    const btn = document.getElementById('piano-midi-toggle');
-    if (!btn) return;
+// Piano-overlay MIDI controls. Hidden when Web MIDI isn't available
+// (Safari, currently). The MIDI button toggles input on/off; the gear
+// opens a popover with instrument selection + sustain toggle.
+(function wireMidiControls() {
+    const toggleBtn  = document.getElementById('piano-midi-toggle');
+    const settingsBtn = document.getElementById('piano-midi-settings');
+    const panel      = document.getElementById('piano-midi-panel');
+    const list       = document.getElementById('piano-midi-instruments');
+    const sustainCb  = document.getElementById('piano-midi-sustain');
+    if (!toggleBtn || !settingsBtn || !panel || !list || !sustainCb) return;
+
     if (!midiKeyboard.isAvailable()) {
-        btn.style.display = 'none';
+        document.getElementById('piano-midi-controls')?.style?.setProperty('display', 'none');
         return;
     }
-    btn.addEventListener('pointerdown', e => e.stopPropagation()); // don't trigger hold-to-exit
-    btn.addEventListener('click', async (e) => {
+
+    // Build the instrument list from the curated INSTRUMENTS export.
+    // Imported lazily here to avoid a top-level dependency cycle.
+    import('./midi-keyboard.js').then(({ INSTRUMENTS }) => {
+        for (const inst of INSTRUMENTS) {
+            const row = document.createElement('div');
+            row.className = 'piano-midi-instrument';
+            row.setAttribute('role', 'radio');
+            row.dataset.id = inst.id;
+            row.innerHTML = `<span class="dot"></span><span>${escapeHtml(inst.label)}</span>`;
+            row.addEventListener('pointerdown', e => e.stopPropagation());
+            row.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (row.classList.contains('active')) return;
+                // Mark loading on the row, clear active on others.
+                list.querySelectorAll('.piano-midi-instrument').forEach(r => r.classList.remove('loading'));
+                row.classList.add('loading');
+                const res = await midiKeyboard.setInstrument(inst.id);
+                row.classList.remove('loading');
+                if (res.ok) {
+                    list.querySelectorAll('.piano-midi-instrument').forEach(r => r.classList.remove('active'));
+                    row.classList.add('active');
+                    if (!res.deferred) showToast(`Sound: ${inst.label}`);
+                } else {
+                    showToast('Failed to load ' + inst.label);
+                }
+            });
+            list.appendChild(row);
+        }
+        // Mark the current instrument active.
+        const currentId = midiKeyboard.getInstrumentId();
+        list.querySelector(`.piano-midi-instrument[data-id="${currentId}"]`)?.classList.add('active');
+    });
+
+    // Stop overlay's hold-to-exit timer firing while the user interacts
+    // with the MIDI controls.
+    [toggleBtn, settingsBtn, panel].forEach(el => {
+        el.addEventListener('pointerdown', e => e.stopPropagation());
+    });
+
+    function closePanel() {
+        panel.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+        settingsBtn.classList.remove('open');
+        settingsBtn.setAttribute('aria-expanded', 'false');
+    }
+    function openPanel() {
+        panel.classList.add('open');
+        panel.setAttribute('aria-hidden', 'false');
+        settingsBtn.classList.add('open');
+        settingsBtn.setAttribute('aria-expanded', 'true');
+    }
+
+    settingsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (panel.classList.contains('open')) closePanel(); else openPanel();
+    });
+    // Click outside the panel + buttons closes it.
+    document.addEventListener('click', (e) => {
+        if (!panel.classList.contains('open')) return;
+        if (panel.contains(e.target) || settingsBtn.contains(e.target)) return;
+        closePanel();
+    });
+
+    sustainCb.addEventListener('change', () => {
+        midiKeyboard.setForceHold(sustainCb.checked);
+    });
+
+    toggleBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if (midiKeyboard.isEnabled()) {
             midiKeyboard.disable();
-            btn.classList.remove('on');
-            btn.setAttribute('aria-pressed', 'false');
+            toggleBtn.classList.remove('on');
+            toggleBtn.setAttribute('aria-pressed', 'false');
             return;
         }
-        btn.classList.add('loading');
+        toggleBtn.classList.add('loading');
         const res = await midiKeyboard.enable();
-        btn.classList.remove('loading');
+        toggleBtn.classList.remove('loading');
         if (res.ok) {
-            btn.classList.add('on');
-            btn.setAttribute('aria-pressed', 'true');
+            toggleBtn.classList.add('on');
+            toggleBtn.setAttribute('aria-pressed', 'true');
             showToast('MIDI on — play your keyboard');
         } else if (res.reason === 'not-supported') {
             showToast('MIDI not supported in this browser');
-            btn.style.display = 'none';
+            document.getElementById('piano-midi-controls')?.style?.setProperty('display', 'none');
         } else if (res.reason === 'SecurityError' || res.reason === 'NotAllowedError') {
             showToast('MIDI access blocked — allow in browser settings');
         } else {
