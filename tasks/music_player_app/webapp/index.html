@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=198">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=198">
-    <link rel="stylesheet" href="style.css?v=198">
+    <link rel="manifest" href="/manifest.json?v=199">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=199">
+    <link rel="stylesheet" href="style.css?v=199">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -478,11 +478,18 @@
             </div>
             <div class="piano-midi-panel-section">
                 <div class="piano-midi-slider-row">
-                    <span>Sensitivity</span>
+                    <span>Velocity</span>
+                </div>
+                <div class="piano-midi-vel-pills" role="group" aria-label="Velocity locking">
+                    <button id="piano-midi-vel-soft" class="piano-midi-pill active" type="button" aria-pressed="true" title="Allow soft hits">Soft</button>
+                    <button id="piano-midi-vel-hard" class="piano-midi-pill active" type="button" aria-pressed="true" title="Allow hard hits">Hard</button>
+                </div>
+                <div class="piano-midi-slider-row" style="margin-top:6px">
+                    <span class="piano-midi-sub">Sensitivity</span>
                     <span class="piano-midi-slider-value" id="piano-midi-sens-value">100%</span>
                 </div>
                 <input type="range" id="piano-midi-sens" class="piano-midi-slider" min="0.5" max="2" step="0.05" value="1" aria-label="Keyboard velocity sensitivity">
-                <div class="piano-midi-hint">Above 100% — soft touches get louder. Below — you have to hit harder.</div>
+                <div class="piano-midi-hint">Both pills on = sensitive (default). Only one on locks every key to that pressure. Sensitivity slider applies in sensitive mode.</div>
             </div>
             <div class="piano-midi-panel-section">
                 <div class="piano-midi-slider-row">
@@ -515,6 +522,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=198"></script>
+    <script src="app.bundle.js?v=199"></script>
 </body>
 </html>

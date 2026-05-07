@@ -2184,6 +2184,42 @@ html, body {
     opacity: 0.55;
     pointer-events: none;
 }
+.piano-midi-vel-pills {
+    display: flex;
+    gap: 6px;
+    padding: 4px 0 2px;
+}
+.piano-midi-pill {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(220, 228, 240, 0.65);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.piano-midi-pill:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(220, 228, 240, 0.9);
+}
+.piano-midi-pill.active {
+    background: rgba(45, 95, 145, 0.55);
+    border-color: rgba(126, 182, 240, 0.7);
+    color: #ffffff;
+}
+.piano-midi-sub {
+    font-weight: 600;
+    color: rgba(220, 228, 240, 0.7);
+    font-size: 12px;
+}
+.piano-midi-slider.disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
 .piano-midi-slider-row {
     display: flex;
     align-items: center;

@@ -4423,8 +4423,11 @@ installPiano({
     const sensValue     = document.getElementById('piano-midi-sens-value');
     const reverbSlider  = document.getElementById('piano-midi-reverb');
     const reverbValue   = document.getElementById('piano-midi-reverb-value');
+    const velSoftBtn    = document.getElementById('piano-midi-vel-soft');
+    const velHardBtn    = document.getElementById('piano-midi-vel-hard');
     if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue
-        || !sensSlider || !sensValue || !reverbSlider || !reverbValue) return;
+        || !sensSlider || !sensValue || !reverbSlider || !reverbValue
+        || !velSoftBtn || !velHardBtn) return;
 
     if (!midiKeyboard.isAvailable()) {
         document.getElementById('piano-midi-controls')?.style?.setProperty('display', 'none');
@@ -4528,6 +4531,32 @@ installPiano({
         _renderReverbValue(v);
     });
     reverbSlider.addEventListener('pointerdown', e => e.stopPropagation());
+
+    // Velocity-mode pills. Combined state of the two toggles maps to one
+    // of three modes: both/none → sensitive (raw velocity); only soft →
+    // every note locked to LOW; only hard → every note locked to HIGH.
+    function _applyVelocityMode() {
+        const softOn = velSoftBtn.classList.contains('active');
+        const hardOn = velHardBtn.classList.contains('active');
+        let mode;
+        if (softOn === hardOn) mode = 'sensitive';      // both on or both off
+        else if (softOn) mode = 'soft';
+        else mode = 'hard';
+        midiKeyboard.setVelocityMode(mode);
+        // Sensitivity slider only meaningful in sensitive mode.
+        sensSlider.classList.toggle('disabled', mode !== 'sensitive');
+    }
+    function _toggleVelPill(btn) {
+        const next = !btn.classList.contains('active');
+        btn.classList.toggle('active', next);
+        btn.setAttribute('aria-pressed', String(next));
+        _applyVelocityMode();
+    }
+    velSoftBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    velHardBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    velSoftBtn.addEventListener('click', e => { e.stopPropagation(); _toggleVelPill(velSoftBtn); });
+    velHardBtn.addEventListener('click', e => { e.stopPropagation(); _toggleVelPill(velHardBtn); });
+    _applyVelocityMode();
 
     toggleBtn.addEventListener('click', async (e) => {
         e.stopPropagation();

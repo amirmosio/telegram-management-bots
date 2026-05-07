@@ -85499,6 +85499,9 @@ ${JSON.stringify(state)}`;
     let pedalDown = false;
     let sustainHoldMs = 0;
     let velocitySensitivity = 1;
+    let velocityMode = "sensitive";
+    const VELOCITY_LOCKED_LOW = 45;
+    const VELOCITY_LOCKED_HIGH = 110;
     let reverbConvolver = null;
     let reverbWetGain = null;
     let reverbMix = 0;
@@ -85523,8 +85526,16 @@ ${JSON.stringify(state)}`;
     function getVelocitySensitivity() {
       return velocitySensitivity;
     }
+    function getVelocityMode() {
+      return velocityMode;
+    }
     function getReverbMix() {
       return reverbMix;
+    }
+    function setVelocityMode(mode) {
+      if (mode === "sensitive" || mode === "soft" || mode === "hard") {
+        velocityMode = mode;
+      }
     }
     function setReverbMix(v) {
       const n = Number(v);
@@ -85578,9 +85589,16 @@ ${JSON.stringify(state)}`;
       return Math.max(0.72, 1 - (midi - middleC) * 5e-3);
     }
     function _shapeVelocity(rawVel, midi) {
-      const inNorm = Math.max(0, Math.min(127, rawVel)) / 127;
-      const sensShaped = velocitySensitivity === 1 ? inNorm : Math.pow(inNorm, 1 / velocitySensitivity);
-      const final = sensShaped * _pitchVelocityScale(midi);
+      let baseNorm;
+      if (velocityMode === "soft") {
+        baseNorm = VELOCITY_LOCKED_LOW / 127;
+      } else if (velocityMode === "hard") {
+        baseNorm = VELOCITY_LOCKED_HIGH / 127;
+      } else {
+        const inNorm = Math.max(0, Math.min(127, rawVel)) / 127;
+        baseNorm = velocitySensitivity === 1 ? inNorm : Math.pow(inNorm, 1 / velocitySensitivity);
+      }
+      const final = baseNorm * _pitchVelocityScale(midi);
       return Math.max(1, Math.min(127, Math.round(final * 127)));
     }
     function _buildInstrument(id) {
@@ -85800,13 +85818,15 @@ ${JSON.stringify(state)}`;
       setSustainHoldMs,
       setVelocitySensitivity,
       setReverbMix,
+      setVelocityMode,
       isAvailable,
       isEnabled,
       getActiveNotes,
       getInstrumentId,
       getSustainHoldMs,
       getVelocitySensitivity,
-      getReverbMix
+      getReverbMix,
+      getVelocityMode
     };
   }
   var import_process14, INSTRUMENTS, SUSTAIN_MAX_MS, SUSTAIN_HOLD_THRESHOLD_MS, DEFAULT_INSTRUMENT_ID, _instrumentById;
@@ -89635,7 +89655,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const sensValue = document.getElementById("piano-midi-sens-value");
         const reverbSlider = document.getElementById("piano-midi-reverb");
         const reverbValue = document.getElementById("piano-midi-reverb-value");
-        if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue || !sensSlider || !sensValue || !reverbSlider || !reverbValue) return;
+        const velSoftBtn = document.getElementById("piano-midi-vel-soft");
+        const velHardBtn = document.getElementById("piano-midi-vel-hard");
+        if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue || !sensSlider || !sensValue || !reverbSlider || !reverbValue || !velSoftBtn || !velHardBtn) return;
         if (!midiKeyboard.isAvailable()) {
           document.getElementById("piano-midi-controls")?.style?.setProperty("display", "none");
           return;
@@ -89725,6 +89747,33 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           _renderReverbValue(v);
         });
         reverbSlider.addEventListener("pointerdown", (e) => e.stopPropagation());
+        function _applyVelocityMode() {
+          const softOn = velSoftBtn.classList.contains("active");
+          const hardOn = velHardBtn.classList.contains("active");
+          let mode;
+          if (softOn === hardOn) mode = "sensitive";
+          else if (softOn) mode = "soft";
+          else mode = "hard";
+          midiKeyboard.setVelocityMode(mode);
+          sensSlider.classList.toggle("disabled", mode !== "sensitive");
+        }
+        function _toggleVelPill(btn) {
+          const next = !btn.classList.contains("active");
+          btn.classList.toggle("active", next);
+          btn.setAttribute("aria-pressed", String(next));
+          _applyVelocityMode();
+        }
+        velSoftBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+        velHardBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+        velSoftBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          _toggleVelPill(velSoftBtn);
+        });
+        velHardBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          _toggleVelPill(velHardBtn);
+        });
+        _applyVelocityMode();
         toggleBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
           if (midiKeyboard.isEnabled()) {

@@ -55,6 +55,12 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     // get amplified (more sensitive). <1 = soft touches get reduced (less
     // sensitive, need to play harder). Mapping: out = 127*(in/127)^(1/sens).
     let velocitySensitivity = 1.0;
+    // Two-toggle "keyboard sensitivity" mode like cheap controllers expose
+    // in hardware. Both on / both off = sensitive (use real velocity).
+    // Only soft on = lock every note to LOW. Only hard on = lock to HIGH.
+    let velocityMode = 'sensitive';   // 'sensitive' | 'soft' | 'hard'
+    const VELOCITY_LOCKED_LOW  = 45;
+    const VELOCITY_LOCKED_HIGH = 110;
     // Reverb chain. Built lazily on the first AudioContext creation; reused
     // across instrument switches via Channel.addEffect on each new
     // instrument's output. Wet level controlled by the slider in the UI.
@@ -82,7 +88,14 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     function getActiveNotes() { return new Set(activeStops.keys()); }
     function getSustainHoldMs() { return sustainHoldMs; }
     function getVelocitySensitivity() { return velocitySensitivity; }
+    function getVelocityMode() { return velocityMode; }
     function getReverbMix() { return reverbMix; }
+
+    function setVelocityMode(mode) {
+        if (mode === 'sensitive' || mode === 'soft' || mode === 'hard') {
+            velocityMode = mode;
+        }
+    }
 
     // Slider in [0, 1]. 0 = dry, 1 = full wet. Applied to the global wetGain
     // so it ramps smoothly without retriggering the IR.
@@ -159,11 +172,20 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     }
 
     function _shapeVelocity(rawVel, midi) {
-        const inNorm = Math.max(0, Math.min(127, rawVel)) / 127;
-        const sensShaped = velocitySensitivity === 1.0
-            ? inNorm
-            : Math.pow(inNorm, 1 / velocitySensitivity);
-        const final = sensShaped * _pitchVelocityScale(midi);
+        let baseNorm;
+        if (velocityMode === 'soft') {
+            baseNorm = VELOCITY_LOCKED_LOW / 127;
+        } else if (velocityMode === 'hard') {
+            baseNorm = VELOCITY_LOCKED_HIGH / 127;
+        } else {
+            const inNorm = Math.max(0, Math.min(127, rawVel)) / 127;
+            baseNorm = velocitySensitivity === 1.0
+                ? inNorm
+                : Math.pow(inNorm, 1 / velocitySensitivity);
+        }
+        // Per-pitch tilt still applies in fixed modes too — keeps right-
+        // hand strikes from sounding disproportionately bright when locked.
+        const final = baseNorm * _pitchVelocityScale(midi);
         return Math.max(1, Math.min(127, Math.round(final * 127)));
     }
 
@@ -415,9 +437,9 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
 
     return {
         enable, disable, setInstrument,
-        setSustainHoldMs, setVelocitySensitivity, setReverbMix,
+        setSustainHoldMs, setVelocitySensitivity, setReverbMix, setVelocityMode,
         isAvailable, isEnabled,
         getActiveNotes, getInstrumentId,
-        getSustainHoldMs, getVelocitySensitivity, getReverbMix,
+        getSustainHoldMs, getVelocitySensitivity, getReverbMix, getVelocityMode,
     };
 }
