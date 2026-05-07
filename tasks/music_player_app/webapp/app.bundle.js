@@ -85498,6 +85498,7 @@ ${JSON.stringify(state)}`;
     let enabled = false;
     let pedalDown = false;
     let sustainHoldMs = 0;
+    let velocitySensitivity = 1;
     const activeStops = /* @__PURE__ */ new Map();
     const sustainPending = /* @__PURE__ */ new Set();
     const pendingReleaseTimers = /* @__PURE__ */ new Map();
@@ -85515,6 +85516,20 @@ ${JSON.stringify(state)}`;
     }
     function getSustainHoldMs() {
       return sustainHoldMs;
+    }
+    function getVelocitySensitivity() {
+      return velocitySensitivity;
+    }
+    function setVelocitySensitivity(v) {
+      const n = Number(v);
+      if (!isFinite(n)) return;
+      velocitySensitivity = Math.max(0.5, Math.min(2, n));
+    }
+    function _curveVelocity(raw) {
+      if (velocitySensitivity === 1) return raw;
+      const norm = Math.max(0, Math.min(127, raw)) / 127;
+      const shaped = Math.pow(norm, 1 / velocitySensitivity);
+      return Math.max(1, Math.min(127, Math.round(shaped * 127)));
     }
     function _buildInstrument(id) {
       const entry = _instrumentById.get(id);
@@ -85655,7 +85670,8 @@ ${JSON.stringify(state)}`;
         }
       }
       try {
-        const stop = instrument.start({ note, velocity });
+        const shaped = _curveVelocity(velocity);
+        const stop = instrument.start({ note, velocity: shaped });
         activeStops.set(note, stop);
       } catch (e) {
         console.warn("[midi] start failed", e);
@@ -85726,11 +85742,13 @@ ${JSON.stringify(state)}`;
       disable,
       setInstrument,
       setSustainHoldMs,
+      setVelocitySensitivity,
       isAvailable,
       isEnabled,
       getActiveNotes,
       getInstrumentId,
-      getSustainHoldMs
+      getSustainHoldMs,
+      getVelocitySensitivity
     };
   }
   var import_process14, INSTRUMENTS, SUSTAIN_MAX_MS, SUSTAIN_HOLD_THRESHOLD_MS, DEFAULT_INSTRUMENT_ID, _instrumentById;
@@ -89565,7 +89583,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const list = document.getElementById("piano-midi-instruments");
         const sustainSlider = document.getElementById("piano-midi-sustain");
         const sustainValue = document.getElementById("piano-midi-sustain-value");
-        if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue) return;
+        const sensSlider = document.getElementById("piano-midi-sens");
+        const sensValue = document.getElementById("piano-midi-sens-value");
+        if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue || !sensSlider || !sensValue) return;
         if (!midiKeyboard.isAvailable()) {
           document.getElementById("piano-midi-controls")?.style?.setProperty("display", "none");
           return;
@@ -89635,6 +89655,16 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           _renderSustainValue(sec);
         });
         sustainSlider.addEventListener("pointerdown", (e) => e.stopPropagation());
+        function _renderSensValue(s) {
+          sensValue.textContent = Math.round(Number(s) * 100) + "%";
+        }
+        _renderSensValue(sensSlider.value);
+        sensSlider.addEventListener("input", () => {
+          const s = Number(sensSlider.value);
+          midiKeyboard.setVelocitySensitivity(s);
+          _renderSensValue(s);
+        });
+        sensSlider.addEventListener("pointerdown", (e) => e.stopPropagation());
         toggleBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
           if (midiKeyboard.isEnabled()) {

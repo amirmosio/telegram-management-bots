@@ -4419,7 +4419,10 @@ installPiano({
     const list       = document.getElementById('piano-midi-instruments');
     const sustainSlider = document.getElementById('piano-midi-sustain');
     const sustainValue  = document.getElementById('piano-midi-sustain-value');
-    if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue) return;
+    const sensSlider    = document.getElementById('piano-midi-sens');
+    const sensValue     = document.getElementById('piano-midi-sens-value');
+    if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue
+        || !sensSlider || !sensValue) return;
 
     if (!midiKeyboard.isAvailable()) {
         document.getElementById('piano-midi-controls')?.style?.setProperty('display', 'none');
@@ -4500,8 +4503,18 @@ installPiano({
         midiKeyboard.setSustainHoldMs(sec * 1000);
         _renderSustainValue(sec);
     });
-    // Don't let slider drags trigger the overlay's hold-to-exit gesture.
     sustainSlider.addEventListener('pointerdown', e => e.stopPropagation());
+
+    function _renderSensValue(s) {
+        sensValue.textContent = Math.round(Number(s) * 100) + '%';
+    }
+    _renderSensValue(sensSlider.value);
+    sensSlider.addEventListener('input', () => {
+        const s = Number(sensSlider.value);
+        midiKeyboard.setVelocitySensitivity(s);
+        _renderSensValue(s);
+    });
+    sensSlider.addEventListener('pointerdown', e => e.stopPropagation());
 
     toggleBtn.addEventListener('click', async (e) => {
         e.stopPropagation();

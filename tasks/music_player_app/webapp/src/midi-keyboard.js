@@ -55,6 +55,10 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     //                 stop). Pedal still always overrides regardless.
     let pedalDown = false;
     let sustainHoldMs = 0;
+    // Velocity curve. 1.0 = linear (raw MIDI velocity). >1 = soft touches
+    // get amplified (more sensitive). <1 = soft touches get reduced (less
+    // sensitive, need to play harder). Mapping: out = 127*(in/127)^(1/sens).
+    let velocitySensitivity = 1.0;
 
     // midi pitch → StopFn returned by instrument.start. We hold the ref so
     // the matching note-off (or sustain release) can release the *exact*
@@ -75,6 +79,21 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     function getInstrumentId() { return instrumentId; }
     function getActiveNotes() { return new Set(activeStops.keys()); }
     function getSustainHoldMs() { return sustainHoldMs; }
+    function getVelocitySensitivity() { return velocitySensitivity; }
+
+    // Slider in [0.5, 2.0]. 1.0 is linear. Out-of-range values get clamped.
+    function setVelocitySensitivity(v) {
+        const n = Number(v);
+        if (!isFinite(n)) return;
+        velocitySensitivity = Math.max(0.5, Math.min(2.0, n));
+    }
+
+    function _curveVelocity(raw) {
+        if (velocitySensitivity === 1.0) return raw;
+        const norm = Math.max(0, Math.min(127, raw)) / 127;
+        const shaped = Math.pow(norm, 1 / velocitySensitivity);
+        return Math.max(1, Math.min(127, Math.round(shaped * 127)));
+    }
 
     function _buildInstrument(id) {
         const entry = _instrumentById.get(id);
@@ -236,7 +255,8 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
             try { activeStops.get(note)(); } catch (_) {}
         }
         try {
-            const stop = instrument.start({ note, velocity });
+            const shaped = _curveVelocity(velocity);
+            const stop = instrument.start({ note, velocity: shaped });
             activeStops.set(note, stop);
         } catch (e) {
             console.warn('[midi] start failed', e);
@@ -315,8 +335,8 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     }
 
     return {
-        enable, disable, setInstrument, setSustainHoldMs,
+        enable, disable, setInstrument, setSustainHoldMs, setVelocitySensitivity,
         isAvailable, isEnabled,
-        getActiveNotes, getInstrumentId, getSustainHoldMs,
+        getActiveNotes, getInstrumentId, getSustainHoldMs, getVelocitySensitivity,
     };
 }
