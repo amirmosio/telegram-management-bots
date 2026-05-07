@@ -55,6 +55,12 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     // get amplified (more sensitive). <1 = soft touches get reduced (less
     // sensitive, need to play harder). Mapping: out = 127*(in/127)^(1/sens).
     let velocitySensitivity = 1.0;
+    // Reverb chain. Built lazily on the first AudioContext creation; reused
+    // across instrument switches via Channel.addEffect on each new
+    // instrument's output. Wet level controlled by the slider in the UI.
+    let reverbConvolver = null;
+    let reverbWetGain = null;
+    let reverbMix = 0.0;
 
     // midi pitch → StopFn returned by instrument.start. We hold the ref so
     // the matching note-off (or sustain release) can release the *exact*
@@ -76,6 +82,61 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     function getActiveNotes() { return new Set(activeStops.keys()); }
     function getSustainHoldMs() { return sustainHoldMs; }
     function getVelocitySensitivity() { return velocitySensitivity; }
+    function getReverbMix() { return reverbMix; }
+
+    // Slider in [0, 1]. 0 = dry, 1 = full wet. Applied to the global wetGain
+    // so it ramps smoothly without retriggering the IR.
+    function setReverbMix(v) {
+        const n = Number(v);
+        if (!isFinite(n)) return;
+        reverbMix = Math.max(0, Math.min(1, n));
+        if (reverbWetGain) {
+            // Short ramp avoids zipper noise when scrubbing the slider.
+            const t = audioCtx.currentTime;
+            reverbWetGain.gain.cancelScheduledValues(t);
+            reverbWetGain.gain.setTargetAtTime(reverbMix, t, 0.02);
+        }
+    }
+
+    // Generate a synthetic stereo impulse response — white noise with an
+    // exponential decay envelope. Cheap, no asset to fetch, and gives a
+    // pleasant ~2.5 s hall reverb for piano. Runs once per AudioContext.
+    function _ensureReverb() {
+        if (reverbConvolver) return;
+        if (!audioCtx) return;
+        const sampleRate = audioCtx.sampleRate;
+        const durationSec = 2.5;
+        const decay = 4;
+        const length = Math.floor(sampleRate * durationSec);
+        const ir = audioCtx.createBuffer(2, length, sampleRate);
+        for (let ch = 0; ch < 2; ch++) {
+            const data = ir.getChannelData(ch);
+            for (let i = 0; i < length; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+            }
+        }
+        reverbConvolver = audioCtx.createConvolver();
+        reverbConvolver.buffer = ir;
+        reverbWetGain = audioCtx.createGain();
+        reverbWetGain.gain.value = reverbMix;
+        reverbConvolver.connect(reverbWetGain);
+        reverbWetGain.connect(audioCtx.destination);
+    }
+
+    // Each new instrument's output channel needs to hand a copy of its
+    // signal to the shared reverb send. addEffect routes
+    //   instrument.volume → mix(gain=1) → reverbConvolver
+    // and the convolver's tail flows through reverbWetGain to destination.
+    function _attachReverbTo(instrumentObj) {
+        if (!instrumentObj || !reverbConvolver) return;
+        const out = instrumentObj.output;
+        if (!out || typeof out.addEffect !== 'function') return;
+        try {
+            out.addEffect('reverb', { input: reverbConvolver }, 1.0);
+        } catch (e) {
+            console.warn('[midi] reverb attach failed', e);
+        }
+    }
 
     // Slider in [0.5, 2.0]. 1.0 is linear. Out-of-range values get clamped.
     function setVelocitySensitivity(v) {
@@ -131,6 +192,7 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         if (audioCtx.state === 'suspended') {
             try { await audioCtx.resume(); } catch (_) {}
         }
+        _ensureReverb();
         loadingId = id;
         instrumentLoaded = false;
         if (onInstrumentLoading) onInstrumentLoading(true, id);
@@ -152,6 +214,7 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
             instrument = next;
             instrumentId = id;
             instrumentLoaded = true;
+            _attachReverbTo(instrument);
         } catch (e) {
             console.warn('[midi] instrument load failed', id, e);
             throw e;
@@ -351,8 +414,10 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     }
 
     return {
-        enable, disable, setInstrument, setSustainHoldMs, setVelocitySensitivity,
+        enable, disable, setInstrument,
+        setSustainHoldMs, setVelocitySensitivity, setReverbMix,
         isAvailable, isEnabled,
-        getActiveNotes, getInstrumentId, getSustainHoldMs, getVelocitySensitivity,
+        getActiveNotes, getInstrumentId,
+        getSustainHoldMs, getVelocitySensitivity, getReverbMix,
     };
 }

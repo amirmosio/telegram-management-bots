@@ -85499,6 +85499,9 @@ ${JSON.stringify(state)}`;
     let pedalDown = false;
     let sustainHoldMs = 0;
     let velocitySensitivity = 1;
+    let reverbConvolver = null;
+    let reverbWetGain = null;
+    let reverbMix = 0;
     const activeStops = /* @__PURE__ */ new Map();
     const sustainPending = /* @__PURE__ */ new Set();
     const pendingReleaseTimers = /* @__PURE__ */ new Map();
@@ -85519,6 +85522,50 @@ ${JSON.stringify(state)}`;
     }
     function getVelocitySensitivity() {
       return velocitySensitivity;
+    }
+    function getReverbMix() {
+      return reverbMix;
+    }
+    function setReverbMix(v) {
+      const n = Number(v);
+      if (!isFinite(n)) return;
+      reverbMix = Math.max(0, Math.min(1, n));
+      if (reverbWetGain) {
+        const t = audioCtx.currentTime;
+        reverbWetGain.gain.cancelScheduledValues(t);
+        reverbWetGain.gain.setTargetAtTime(reverbMix, t, 0.02);
+      }
+    }
+    function _ensureReverb() {
+      if (reverbConvolver) return;
+      if (!audioCtx) return;
+      const sampleRate = audioCtx.sampleRate;
+      const durationSec = 2.5;
+      const decay = 4;
+      const length = Math.floor(sampleRate * durationSec);
+      const ir = audioCtx.createBuffer(2, length, sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = ir.getChannelData(ch);
+        for (let i = 0; i < length; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+        }
+      }
+      reverbConvolver = audioCtx.createConvolver();
+      reverbConvolver.buffer = ir;
+      reverbWetGain = audioCtx.createGain();
+      reverbWetGain.gain.value = reverbMix;
+      reverbConvolver.connect(reverbWetGain);
+      reverbWetGain.connect(audioCtx.destination);
+    }
+    function _attachReverbTo(instrumentObj) {
+      if (!instrumentObj || !reverbConvolver) return;
+      const out = instrumentObj.output;
+      if (!out || typeof out.addEffect !== "function") return;
+      try {
+        out.addEffect("reverb", { input: reverbConvolver }, 1);
+      } catch (e) {
+        console.warn("[midi] reverb attach failed", e);
+      }
     }
     function setVelocitySensitivity(v) {
       const n = Number(v);
@@ -85560,6 +85607,7 @@ ${JSON.stringify(state)}`;
         } catch (_) {
         }
       }
+      _ensureReverb();
       loadingId = id;
       instrumentLoaded = false;
       if (onInstrumentLoading) onInstrumentLoading(true, id);
@@ -85583,6 +85631,7 @@ ${JSON.stringify(state)}`;
         instrument = next;
         instrumentId = id;
         instrumentLoaded = true;
+        _attachReverbTo(instrument);
       } catch (e) {
         console.warn("[midi] instrument load failed", id, e);
         throw e;
@@ -85750,12 +85799,14 @@ ${JSON.stringify(state)}`;
       setInstrument,
       setSustainHoldMs,
       setVelocitySensitivity,
+      setReverbMix,
       isAvailable,
       isEnabled,
       getActiveNotes,
       getInstrumentId,
       getSustainHoldMs,
-      getVelocitySensitivity
+      getVelocitySensitivity,
+      getReverbMix
     };
   }
   var import_process14, INSTRUMENTS, SUSTAIN_MAX_MS, SUSTAIN_HOLD_THRESHOLD_MS, DEFAULT_INSTRUMENT_ID, _instrumentById;
@@ -89582,7 +89633,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const sustainValue = document.getElementById("piano-midi-sustain-value");
         const sensSlider = document.getElementById("piano-midi-sens");
         const sensValue = document.getElementById("piano-midi-sens-value");
-        if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue || !sensSlider || !sensValue) return;
+        const reverbSlider = document.getElementById("piano-midi-reverb");
+        const reverbValue = document.getElementById("piano-midi-reverb-value");
+        if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue || !sensSlider || !sensValue || !reverbSlider || !reverbValue) return;
         if (!midiKeyboard.isAvailable()) {
           document.getElementById("piano-midi-controls")?.style?.setProperty("display", "none");
           return;
@@ -89662,6 +89715,16 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           _renderSensValue(s);
         });
         sensSlider.addEventListener("pointerdown", (e) => e.stopPropagation());
+        function _renderReverbValue(v) {
+          reverbValue.textContent = Math.round(Number(v) * 100) + "%";
+        }
+        _renderReverbValue(reverbSlider.value);
+        reverbSlider.addEventListener("input", () => {
+          const v = Number(reverbSlider.value);
+          midiKeyboard.setReverbMix(v);
+          _renderReverbValue(v);
+        });
+        reverbSlider.addEventListener("pointerdown", (e) => e.stopPropagation());
         toggleBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
           if (midiKeyboard.isEnabled()) {

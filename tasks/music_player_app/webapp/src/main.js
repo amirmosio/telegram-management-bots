@@ -4421,8 +4421,10 @@ installPiano({
     const sustainValue  = document.getElementById('piano-midi-sustain-value');
     const sensSlider    = document.getElementById('piano-midi-sens');
     const sensValue     = document.getElementById('piano-midi-sens-value');
+    const reverbSlider  = document.getElementById('piano-midi-reverb');
+    const reverbValue   = document.getElementById('piano-midi-reverb-value');
     if (!toggleBtn || !settingsBtn || !panel || !list || !sustainSlider || !sustainValue
-        || !sensSlider || !sensValue) return;
+        || !sensSlider || !sensValue || !reverbSlider || !reverbValue) return;
 
     if (!midiKeyboard.isAvailable()) {
         document.getElementById('piano-midi-controls')?.style?.setProperty('display', 'none');
@@ -4515,6 +4517,17 @@ installPiano({
         _renderSensValue(s);
     });
     sensSlider.addEventListener('pointerdown', e => e.stopPropagation());
+
+    function _renderReverbValue(v) {
+        reverbValue.textContent = Math.round(Number(v) * 100) + '%';
+    }
+    _renderReverbValue(reverbSlider.value);
+    reverbSlider.addEventListener('input', () => {
+        const v = Number(reverbSlider.value);
+        midiKeyboard.setReverbMix(v);
+        _renderReverbValue(v);
+    });
+    reverbSlider.addEventListener('pointerdown', e => e.stopPropagation());
 
     toggleBtn.addEventListener('click', async (e) => {
         e.stopPropagation();

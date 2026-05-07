@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=197">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=197">
-    <link rel="stylesheet" href="style.css?v=197">
+    <link rel="manifest" href="/manifest.json?v=198">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=198">
+    <link rel="stylesheet" href="style.css?v=198">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -492,6 +492,14 @@
                 <input type="range" id="piano-midi-sustain" class="piano-midi-slider" min="0" max="10" step="0.1" value="0" aria-label="Sustain hold time in seconds">
                 <div class="piano-midi-hint">How long notes ring out after key release. Pedal (CC 64) always holds notes regardless.</div>
             </div>
+            <div class="piano-midi-panel-section">
+                <div class="piano-midi-slider-row">
+                    <span>Reverb</span>
+                    <span class="piano-midi-slider-value" id="piano-midi-reverb-value">0%</span>
+                </div>
+                <input type="range" id="piano-midi-reverb" class="piano-midi-slider" min="0" max="1" step="0.01" value="0" aria-label="Reverb wet mix">
+                <div class="piano-midi-hint">Adds a hall-style tail to every note. 0 = dry, 100% = lush.</div>
+            </div>
         </div>
         <div id="piano-loading" aria-hidden="true">
             <div class="piano-spinner"></div>
@@ -507,6 +515,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=197"></script>
+    <script src="app.bundle.js?v=198"></script>
 </body>
 </html>
