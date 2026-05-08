@@ -2350,12 +2350,13 @@ async function showPlaylistPicker(mode) {
     playlistModalTitle.textContent = pickerMode === 'move' ? 'Move to playlist' : 'Add to playlist';
     modalPlaylists.innerHTML = '';
     pickable.forEach(p => {
-        const el = document.createElement('div');
-        el.className = 'modal-playlist-item';
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'modal-playlist-tag';
         const iconHtml = p.icon
-            ? `<div class="playlist-icon playlist-emoji">${p.icon}</div>`
-            : `<div class="playlist-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg></div>`;
-        el.innerHTML = `${iconHtml}<span class="playlist-title">${escapeHtml(p.title)}</span>`;
+            ? `<span class="modal-playlist-tag-icon playlist-emoji">${p.icon}</span>`
+            : `<span class="modal-playlist-tag-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg></span>`;
+        el.innerHTML = `${iconHtml}<span class="modal-playlist-tag-label">${escapeHtml(p.title)}</span>`;
         el.addEventListener('click', () => {
             if (pickerMode === 'move') moveTrackToPlaylist(p.id);
             else addTrackToPlaylist(p.id);
