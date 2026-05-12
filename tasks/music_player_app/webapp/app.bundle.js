@@ -88329,10 +88329,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var COPLAY_POLL_MS = 700;
       var COPLAY_POLL_MS_IOS = 3e3;
       var COPLAY_DRIFT_IGNORE_SEC = 0.03;
-      var COPLAY_DRIFT_TRIM_SEC = 0.3;
+      var COPLAY_DRIFT_TRIM_SEC = 1.5;
       var COPLAY_DRIFT_HARD_SEEK_IOS_SEC = 2;
       var COPLAY_RATE_TRIM_MAX = 0.05;
       var COPLAY_RATE_TRIM_GAIN = 0.2;
+      var COPLAY_HARD_SEEK_COOLDOWN_MS = 1500;
+      var COPLAY_GIVEUP_ESCAPE_DRIFT_SEC = 2;
       var COPLAY_RATE_WRITE_EPSILON = 5e-3;
       var IS_IOS = (() => {
         if (typeof navigator === "undefined") return false;
@@ -88903,6 +88905,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           // when did we last leave the IGNORE band?
           givenUp: false,
           // true while we've accepted persistent offset
+          lastHardSeekAt: 0,
+          // ms timestamp — for the post-seek cooldown
           // Track-switch lock: skip drift correction between detecting a
           // host track change and the new audio actually playing.
           trackSwitchInProgress: false,
@@ -89039,6 +89043,15 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           const drift = audio.currentTime - expected;
           const absDrift = Math.abs(drift);
           const insideIgnore = absDrift < (IS_IOS ? COPLAY_DRIFT_HARD_SEEK_IOS_SEC : COPLAY_DRIFT_IGNORE_SEC);
+          if (s.givenUp && absDrift > COPLAY_GIVEUP_ESCAPE_DRIFT_SEC) {
+            _coplayLog(
+              "giveup",
+              `escape: drift jumped to ${(drift * 1e3).toFixed(0)}ms (>${COPLAY_GIVEUP_ESCAPE_DRIFT_SEC}s) \u2014 host seeked; re-engaging sync`
+            );
+            s.givenUp = false;
+            s.correctingSinceMs = Date.now();
+            s.lastHardSeekAt = 0;
+          }
           if (insideIgnore) {
             if (s.correctingSinceMs !== null) {
               _coplayLog("giveup", `drift back inside ignore band (${(drift * 1e3).toFixed(0)}ms) \u2014 sync re-engaged`);
@@ -89051,24 +89064,28 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               s.givenUp = true;
               _coplayLog(
                 "giveup",
-                `drift=${(drift * 1e3).toFixed(0)}ms persisted \u2265${COPLAY_GIVEUP_AFTER_MS}ms \u2014 give up & accept offset (resumes on track change or host play/pause)`
+                `drift=${(drift * 1e3).toFixed(0)}ms persisted \u2265${COPLAY_GIVEUP_AFTER_MS}ms \u2014 give up & accept offset (resumes on track change, host play/pause, or big drift jump)`
               );
             }
           }
+          const inSeekCooldown = s.lastHardSeekAt && Date.now() - s.lastHardSeekAt < COPLAY_HARD_SEEK_COOLDOWN_MS;
           let bucket;
           if (s.givenUp) {
             if (audio.playbackRate !== 1) audio.playbackRate = 1;
             bucket = "GIVEUP";
           } else if (IS_IOS) {
-            if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC) {
+            if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC && !inSeekCooldown) {
               const from = audio.currentTime;
               const to = Math.max(0, Math.min(audio.duration, expected));
               try {
                 audio.currentTime = to;
               } catch {
               }
+              s.lastHardSeekAt = Date.now();
               _coplayLog("seek", `iOS hard-seek ${from.toFixed(3)} \u2192 ${to.toFixed(3)} (drift ${drift.toFixed(3)}s)`);
               bucket = "HARD-SEEK-iOS";
+            } else if (inSeekCooldown) {
+              bucket = "SEEK-COOLDOWN-iOS";
             } else {
               bucket = "IGNORE-iOS";
             }
@@ -89076,6 +89093,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           } else if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
             _coplaySetRateThrottled(1);
             bucket = "IGNORE";
+          } else if (inSeekCooldown) {
+            _coplaySetRateThrottled(1);
+            bucket = "SEEK-COOLDOWN";
           } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
             const offset = Math.max(
               -COPLAY_RATE_TRIM_MAX,
@@ -89090,6 +89110,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
               audio.currentTime = to;
             } catch {
             }
+            s.lastHardSeekAt = Date.now();
             _coplayLog("seek", `hard-seek ${from.toFixed(3)} \u2192 ${to.toFixed(3)} (drift ${drift.toFixed(3)}s)`);
             _coplaySetRateThrottled(1);
             bucket = "HARD-SEEK";

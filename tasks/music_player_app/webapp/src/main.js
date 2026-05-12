@@ -2755,10 +2755,25 @@ const COPLAY_HOST_KEY = 'coplay_host_msg';
 const COPLAY_POLL_MS = 700;
 const COPLAY_POLL_MS_IOS = 3000;
 const COPLAY_DRIFT_IGNORE_SEC = 0.03;
-const COPLAY_DRIFT_TRIM_SEC = 0.3;
+// Widened from 0.3 → 1.5 deliberately. A hard-seek costs ~300ms of
+// decoder stall on most browsers (the audio element pauses while the
+// new media-time is resolved). For drifts under ~1.5s, gentle rate-
+// trim closes the gap WITHOUT stalling the decoder — which means the
+// next tick measures a real drift, not the seek-stall artefact. The
+// earlier 300ms threshold caused a feedback loop: small drift → seek
+// → 300ms stall → fresh 300ms drift → seek again → never converges.
+const COPLAY_DRIFT_TRIM_SEC = 1.5;
 const COPLAY_DRIFT_HARD_SEEK_IOS_SEC = 2.0;
 const COPLAY_RATE_TRIM_MAX = 0.05;     // cap the rate offset at ±5 %
 const COPLAY_RATE_TRIM_GAIN = 0.2;     // 200 ms drift → 4 % rate offset
+// After a hard-seek the decoder needs ~1s to settle. Treat measurements
+// during this window as "wait", not "drift to act on", to prevent the
+// stall-causes-seek-causes-stall loop.
+const COPLAY_HARD_SEEK_COOLDOWN_MS = 1500;
+// If we've given up and drift suddenly jumps above this, the host
+// almost certainly seeked — drop give-up and re-engage sync. 2 s is
+// well above any plausible clock-skew between two consumer devices.
+const COPLAY_GIVEUP_ESCAPE_DRIFT_SEC = 2.0;
 // Only re-write playbackRate when it changes by at least this much.
 // Frequent writes glitch the audio decoder on iOS Safari (sounds robotic).
 const COPLAY_RATE_WRITE_EPSILON = 0.005;
@@ -3477,6 +3492,7 @@ async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
         // Anti-infinite-loop drift correction:
         correctingSinceMs: null,   // when did we last leave the IGNORE band?
         givenUp: false,            // true while we've accepted persistent offset
+        lastHardSeekAt: 0,         // ms timestamp — for the post-seek cooldown
         // Track-switch lock: skip drift correction between detecting a
         // host track change and the new audio actually playing.
         trackSwitchInProgress: false,
@@ -3650,6 +3666,18 @@ async function _coplayPollTick(initial) {
         const absDrift = Math.abs(drift);
         const insideIgnore = absDrift < (IS_IOS ? COPLAY_DRIFT_HARD_SEEK_IOS_SEC : COPLAY_DRIFT_IGNORE_SEC);
 
+        // Give-up escape: huge drift while in give-up almost certainly
+        // means the host seeked (clock skew on its own can't produce a
+        // 2 s jump). Drop give-up so the normal branches below run,
+        // and restart the convergence timer.
+        if (s.givenUp && absDrift > COPLAY_GIVEUP_ESCAPE_DRIFT_SEC) {
+            _coplayLog('giveup',
+                `escape: drift jumped to ${(drift * 1000).toFixed(0)}ms (>${COPLAY_GIVEUP_ESCAPE_DRIFT_SEC}s) — host seeked; re-engaging sync`);
+            s.givenUp = false;
+            s.correctingSinceMs = Date.now();
+            s.lastHardSeekAt = 0;   // clear cooldown — we WANT to seek now
+        }
+
         // Anti-infinite-loop bookkeeping. Track when we first slipped
         // out of the IGNORE band; if we never get back in for
         // COPLAY_GIVEUP_AFTER_MS, declare give-up and stop correcting.
@@ -3664,21 +3692,29 @@ async function _coplayPollTick(initial) {
             if (!s.givenUp && Date.now() - s.correctingSinceMs >= COPLAY_GIVEUP_AFTER_MS) {
                 s.givenUp = true;
                 _coplayLog('giveup',
-                    `drift=${(drift * 1000).toFixed(0)}ms persisted ≥${COPLAY_GIVEUP_AFTER_MS}ms — give up & accept offset (resumes on track change or host play/pause)`);
+                    `drift=${(drift * 1000).toFixed(0)}ms persisted ≥${COPLAY_GIVEUP_AFTER_MS}ms — give up & accept offset (resumes on track change, host play/pause, or big drift jump)`);
             }
         }
+
+        // Cooldown after a hard-seek — the decoder takes ~1 s to
+        // settle, during which audio.currentTime appears stalled,
+        // which looks like fresh drift. Don't act on that.
+        const inSeekCooldown = s.lastHardSeekAt && (Date.now() - s.lastHardSeekAt) < COPLAY_HARD_SEEK_COOLDOWN_MS;
 
         let bucket;
         if (s.givenUp) {
             if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
             bucket = 'GIVEUP';
         } else if (IS_IOS) {
-            if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC) {
+            if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC && !inSeekCooldown) {
                 const from = audio.currentTime;
                 const to = Math.max(0, Math.min(audio.duration, expected));
                 try { audio.currentTime = to; } catch {}
+                s.lastHardSeekAt = Date.now();
                 _coplayLog('seek', `iOS hard-seek ${from.toFixed(3)} → ${to.toFixed(3)} (drift ${drift.toFixed(3)}s)`);
                 bucket = 'HARD-SEEK-iOS';
+            } else if (inSeekCooldown) {
+                bucket = 'SEEK-COOLDOWN-iOS';
             } else {
                 bucket = 'IGNORE-iOS';
             }
@@ -3686,6 +3722,11 @@ async function _coplayPollTick(initial) {
         } else if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
             _coplaySetRateThrottled(1.0);
             bucket = 'IGNORE';
+        } else if (inSeekCooldown) {
+            // Just hard-seeked — wait for decoder to settle. Don't
+            // measure or correct against the seek-stall artefact.
+            _coplaySetRateThrottled(1.0);
+            bucket = 'SEEK-COOLDOWN';
         } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
             const offset = Math.max(
                 -COPLAY_RATE_TRIM_MAX,
@@ -3697,6 +3738,7 @@ async function _coplayPollTick(initial) {
             const from = audio.currentTime;
             const to = Math.max(0, Math.min(audio.duration, expected));
             try { audio.currentTime = to; } catch {}
+            s.lastHardSeekAt = Date.now();
             _coplayLog('seek', `hard-seek ${from.toFixed(3)} → ${to.toFixed(3)} (drift ${drift.toFixed(3)}s)`);
             _coplaySetRateThrottled(1.0);
             bucket = 'HARD-SEEK';
