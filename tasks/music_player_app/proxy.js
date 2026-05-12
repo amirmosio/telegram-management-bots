@@ -2,46 +2,83 @@
 //
 // Listens on 127.0.0.1:3001. Nginx terminates TLS and forwards /proxy → here.
 // Source of truth lives in this repo; deploy copies it to
-// /var/www/musicplayer/proxy.js on armanserver2 and `systemctl restart corsproxy`.
+// /var/www/musicplayer/proxy.js on the production VM and
+// `systemctl restart corsproxy`.
 //
 // Security perimeter (this file is what stops the box being used as an open
 // relay — keep these intact):
-//   1. Hostname allowlist          — only the upstream APIs the webapp
+//
+//   1. Caller authentication       — Origin / Referer header must match the
+//                                    configured frontend origin; X-App-Token
+//                                    must match the build-baked shared secret.
+//                                    Stops anyone but the legitimate webapp
+//                                    from using this endpoint.
+//   2. Hostname allowlist          — only the upstream APIs the webapp
 //                                    actually calls go through. Anything
 //                                    else gets a 403.
-//   2. Scheme + port restriction   — http(s) only, ports 80/443 only.
-//   3. SSRF guard                  — DNS resolution is intercepted; if the
+//   3. Scheme + port restriction   — http(s) only, ports 80/443 only.
+//   4. SSRF guard                  — DNS resolution is intercepted; if the
 //                                    name resolves to a private/loopback/
 //                                    link-local/multicast/ULA address, the
 //                                    request is refused. Pinning into the
 //                                    request's own lookup avoids any
 //                                    TOCTOU between checking and using.
-//   4. No header forwarding        — Cookie / Authorization / arbitrary
+//   5. No header forwarding        — Cookie / Authorization / arbitrary
 //                                    X-* are NOT relayed upstream. We
 //                                    serve public APIs; credential pass-
 //                                    through has no purpose and only
 //                                    creates risk.
-//   5. Per-IP rate limit           — 60-req burst, 60 req/min sustained.
-//   6. Response-size cap           — upstream responses larger than 5 MB
+//   6. Per-IP rate limit           — 60-req burst, 60 req/min sustained.
+//   7. Response-size cap           — upstream responses larger than 5 MB
 //                                    are truncated to prevent abuse.
-//   7. Method allowlist            — GET (and OPTIONS preflight) only.
+//   8. Method allowlist            — GET (and OPTIONS preflight) only.
+//
+// Environment variables (set in the systemd unit):
+//   ALLOWED_ORIGIN          required. Exact origin string of the webapp,
+//                           e.g. https://telemusic.duckdns.org. Both the
+//                           Origin and Referer checks compare to this.
+//   APP_TOKEN               required. 64-hex-char shared secret that must
+//                           match the value baked into the deployed
+//                           app.bundle.js at build time. Set this to the
+//                           same value used as APP_TOKEN when running
+//                           webapp/build.mjs, then restart corsproxy.
 //
 // History: 2026-05-06 abuse complaint from skhron.eu — server was probing
 // honeypot IPs on ports 80/443/9200 because an earlier version of this
 // proxy had no allowlist. The current allowlist + DNS pinning prevents the
 // proxy from being used to reach random IPs, including raw-IP destinations
 // (a numeric host like 45.154.199.179 won't match any allowlist entry).
+// 2026-05-12: added caller authentication (Origin + Referer + APP_TOKEN)
+// so the proxy is not abusable as a public-fetch utility by other apps.
 
 const http = require('http');
 const https = require('https');
 const dns = require('dns');
 const net = require('net');
+const crypto = require('crypto');
 const { URL } = require('url');
 
 const PORT = 3001;
 const HOST = '127.0.0.1';
 const REQUEST_TIMEOUT_MS = 15000;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+
+// Caller-authentication config. ALLOWED_ORIGIN MUST be set in production;
+// without it the proxy refuses every request (fail-closed). APP_TOKEN is
+// likewise required — if not set, every request returns 503. This makes
+// "forgot to configure" a loud failure instead of a silent open-relay.
+const ALLOWED_ORIGIN = (process.env.ALLOWED_ORIGIN || '').trim();
+const APP_TOKEN = (process.env.APP_TOKEN || '').trim();
+const APP_TOKEN_BUF = APP_TOKEN ? Buffer.from(APP_TOKEN, 'utf8') : null;
+
+if (!ALLOWED_ORIGIN || !APP_TOKEN) {
+    console.error('[proxy] FATAL: ALLOWED_ORIGIN and APP_TOKEN env vars must be set.');
+    console.error('[proxy]        ALLOWED_ORIGIN should be the exact webapp origin,');
+    console.error('[proxy]        e.g. https://telemusic.duckdns.org');
+    console.error('[proxy]        APP_TOKEN should match the value baked into the');
+    console.error('[proxy]        webapp bundle at build time (webapp/build.mjs).');
+    process.exit(1);
+}
 
 // Hostnames the webapp actually fetches via this proxy. New entries MUST
 // be vetted — this set is the perimeter that prevents open-relay abuse.
@@ -140,10 +177,55 @@ function clientIp(req) {
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 20 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 
+// ── Caller authentication ─────────────────────────────────────────────
+// Two independent checks; BOTH must pass.
+//
+//  (a) Origin / Referer header  — browsers always send at least one of these
+//      for fetch() / link navigation. We require the value to match the
+//      configured ALLOWED_ORIGIN exactly (Origin) or as a prefix (Referer).
+//      Spoofable by non-browser clients, but blocks every drive-by scraper
+//      and most opportunistic abuse.
+//
+//  (b) X-App-Token  — a 64-hex-char secret baked into the webapp bundle
+//      at build time. Constant-time comparison. Trivially extractable by
+//      anyone who downloads the bundle, so rotation on every deploy is the
+//      real protection: an old token from a cached copy of the bundle stops
+//      working as soon as a new build is shipped.
+//
+// Together these mean: anyone trying to "borrow" the proxy for their own
+// app's lyric / artwork lookups needs both the live token AND a way to
+// send the right Origin/Referer. Possible for a determined attacker, but
+// no longer trivial — the proxy is no longer a free public utility.
+function isAllowedOrigin(originHeader, refererHeader) {
+    if (originHeader && originHeader.trim() === ALLOWED_ORIGIN) return true;
+    if (refererHeader) {
+        try {
+            const r = new URL(refererHeader);
+            if (`${r.protocol}//${r.host}` === ALLOWED_ORIGIN) return true;
+        } catch (_) { /* malformed referer — fall through */ }
+    }
+    return false;
+}
+
+function isValidAppToken(headerValue) {
+    if (!headerValue || typeof headerValue !== 'string') return false;
+    const got = Buffer.from(headerValue.trim(), 'utf8');
+    // crypto.timingSafeEqual requires equal lengths; the length check is
+    // not itself secret (the deployed token's length is fixed and public).
+    if (got.length !== APP_TOKEN_BUF.length) return false;
+    return crypto.timingSafeEqual(got, APP_TOKEN_BUF);
+}
+
 const server = http.createServer((req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // CORS — echo the request's Origin only if it matches the allowlist.
+    // Never use the wildcard '*' here; that would defeat caller auth.
+    const reqOrigin = req.headers.origin;
+    if (reqOrigin && reqOrigin === ALLOWED_ORIGIN) {
+        res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+        res.setHeader('Vary', 'Origin');
+    }
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-App-Token');
 
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
     if (req.method !== 'GET') { res.writeHead(405); res.end('Method Not Allowed'); return; }
@@ -154,6 +236,20 @@ const server = http.createServer((req, res) => {
 
     if (reqUrl.pathname !== '/' && reqUrl.pathname !== '/proxy') {
         res.writeHead(404); res.end('Not Found'); return;
+    }
+
+    // Caller-auth fence: reject early so unauthorized hits don't consume
+    // the rate-limit budget or appear in our DNS lookups. Don't echo the
+    // reason — be opaque to scanners.
+    if (!isAllowedOrigin(req.headers.origin, req.headers.referer)) {
+        console.warn(`[proxy] denied (origin mismatch) ip=${clientIp(req)} origin=${req.headers.origin || '-'} referer=${(req.headers.referer || '-').slice(0, 80)}`);
+        res.writeHead(403); res.end('Forbidden');
+        return;
+    }
+    if (!isValidAppToken(req.headers['x-app-token'])) {
+        console.warn(`[proxy] denied (bad token) ip=${clientIp(req)}`);
+        res.writeHead(403); res.end('Forbidden');
+        return;
     }
 
     const target = reqUrl.searchParams.get('url');

@@ -73182,13 +73182,16 @@ ${JSON.stringify(state)}`;
     const proxyUrl = getProxyBase() + encodeURIComponent(url);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT);
-    return fetch(proxyUrl, { ...opts, signal: controller.signal }).then((resp) => resp.ok ? resp : null).catch(() => null).finally(() => clearTimeout(timer));
+    const headers = { ...opts.headers || {} };
+    if (APP_TOKEN) headers["X-App-Token"] = APP_TOKEN;
+    return fetch(proxyUrl, { ...opts, headers, signal: controller.signal }).then((resp) => resp.ok ? resp : null).catch(() => null).finally(() => clearTimeout(timer));
   }
-  var import_process4, TIMEOUT;
+  var import_process4, APP_TOKEN, TIMEOUT;
   var init_cors_proxy = __esm({
     "src/cors-proxy.js"() {
       init_define_process_env();
       import_process4 = __toESM(require_process());
+      APP_TOKEN = true ? "f16e803d6bd2d6764cea390fe6773c71212a3bbd659639f1ddc440a8abb8a789" : "";
       TIMEOUT = 1e4;
     }
   });
