@@ -2762,14 +2762,13 @@ const IS_IOS = (() => {
     return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
 })();
 
-// Diagnostic logging gate. Toggle in the browser console:
-//   localStorage.setItem('coplay_debug', '1')   // turn on
-//   localStorage.removeItem('coplay_debug')     // turn off
-// When on, follower poll ticks + every rate write + every seek + every
-// play/pause transition log one line each with prefix [coplay-follow].
+// Diagnostic logging. ON by default while we're chasing the "electric
+// beeps" / robotic sync issue. To silence in the browser console:
+//   localStorage.setItem('coplay_debug', '0')   // turn off
+//   localStorage.removeItem('coplay_debug')     // back to default (on)
 const _coplayDebug = () => {
-    try { return localStorage.getItem('coplay_debug') === '1'; }
-    catch { return false; }
+    try { return localStorage.getItem('coplay_debug') !== '0'; }
+    catch { return true; }
 };
 const _coplayLog = (tag, msg) => {
     if (!_coplayDebug()) return;
@@ -2777,6 +2776,14 @@ const _coplayLog = (tag, msg) => {
     // eslint-disable-next-line no-console
     console.log(`[coplay-${tag} ${t}] ${msg}`);
 };
+
+// Anti-infinite-loop: if drift never settles back into the IGNORE band
+// for longer than this, accept the offset and stop correcting until
+// something semantically changes (track switch or host play/pause
+// transition). This protects against persistent clock skew between
+// devices producing a steady stream of micro rate-writes — each write
+// hitches the audio decoder, which is the "electric beep" symptom.
+const COPLAY_GIVEUP_AFTER_MS = 15000;
 
 // Write audio.playbackRate only when the requested value differs from
 // the current one by more than the epsilon. On most browsers this is
@@ -3455,6 +3462,9 @@ async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
         lastTid: null,
         renderedRosterKey: null,
         lastFollowerWantsPlaying: null,
+        // Anti-infinite-loop drift correction:
+        correctingSinceMs: null,   // when did we last leave the IGNORE band?
+        givenUp: false,            // true while we've accepted persistent offset
     };
     // Render a placeholder host chip while we wait for the first poll
     // to come back with the real fromUserId + invitee list.
@@ -3549,6 +3559,9 @@ async function _coplayPollTick(initial) {
     if (tid && s.lastTid !== tid) {
         const prevTid = s.lastTid;
         s.lastTid = tid;
+        // Track switch is a clean retry point — drop any give-up state.
+        s.correctingSinceMs = null;
+        s.givenUp = false;
         if (!cid) {
             console.warn('[coplay] track changed but no cid; cannot fetch audio');
             return;
@@ -3586,8 +3599,31 @@ async function _coplayPollTick(initial) {
     if (state.playing && audio.duration) {
         const drift = audio.currentTime - expected; // +ahead, -behind
         const absDrift = Math.abs(drift);
+        const insideIgnore = absDrift < (IS_IOS ? COPLAY_DRIFT_HARD_SEEK_IOS_SEC : COPLAY_DRIFT_IGNORE_SEC);
+
+        // Anti-infinite-loop bookkeeping. Track when we first slipped
+        // out of the IGNORE band; if we never get back in for
+        // COPLAY_GIVEUP_AFTER_MS, declare give-up and stop correcting.
+        if (insideIgnore) {
+            if (s.correctingSinceMs !== null) {
+                _coplayLog('giveup', `drift back inside ignore band (${(drift * 1000).toFixed(0)}ms) — sync re-engaged`);
+            }
+            s.correctingSinceMs = null;
+            s.givenUp = false;
+        } else {
+            if (s.correctingSinceMs === null) s.correctingSinceMs = Date.now();
+            if (!s.givenUp && Date.now() - s.correctingSinceMs >= COPLAY_GIVEUP_AFTER_MS) {
+                s.givenUp = true;
+                _coplayLog('giveup',
+                    `drift=${(drift * 1000).toFixed(0)}ms persisted ≥${COPLAY_GIVEUP_AFTER_MS}ms — give up & accept offset (resumes on track change or host play/pause)`);
+            }
+        }
+
         let bucket;
-        if (IS_IOS) {
+        if (s.givenUp) {
+            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
+            bucket = 'GIVEUP';
+        } else if (IS_IOS) {
             if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC) {
                 const from = audio.currentTime;
                 const to = Math.max(0, Math.min(audio.duration, expected));
@@ -3627,19 +3663,27 @@ async function _coplayPollTick(initial) {
     // Play/pause reconciliation. On iOS we only act on a *transition*
     // of state.playing — calling audio.play() repeatedly during steady
     // playback can re-init the decoder and produce robotic stutters.
+    // A play/pause transition is also a natural "retry sync" point —
+    // drop give-up state so the next ticks attempt to converge again.
     if (IS_IOS) {
         if (state.playing !== s.lastFollowerWantsPlaying) {
             s.lastFollowerWantsPlaying = !!state.playing;
-            _coplayLog('transit', `iOS ${state.playing ? 'play()' : 'pause()'} (host transition)`);
+            s.correctingSinceMs = null;
+            s.givenUp = false;
+            _coplayLog('transit', `iOS ${state.playing ? 'play()' : 'pause()'} (host transition; give-up reset)`);
             if (state.playing) audio.play().catch(() => {});
             else audio.pause();
         }
     } else {
         if (state.playing && audio.paused) {
-            _coplayLog('transit', `play() (host says playing, we were paused)`);
+            s.correctingSinceMs = null;
+            s.givenUp = false;
+            _coplayLog('transit', `play() (host says playing, we were paused; give-up reset)`);
             audio.play().catch(() => {});
         } else if (!state.playing && !audio.paused) {
-            _coplayLog('transit', `pause() (host says paused, we were playing)`);
+            s.correctingSinceMs = null;
+            s.givenUp = false;
+            _coplayLog('transit', `pause() (host says paused, we were playing; give-up reset)`);
             audio.pause();
         }
     }

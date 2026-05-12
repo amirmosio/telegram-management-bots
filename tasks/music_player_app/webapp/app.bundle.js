@@ -88338,9 +88338,9 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       })();
       var _coplayDebug = () => {
         try {
-          return localStorage.getItem("coplay_debug") === "1";
+          return localStorage.getItem("coplay_debug") !== "0";
         } catch {
-          return false;
+          return true;
         }
       };
       var _coplayLog = (tag, msg) => {
@@ -88348,6 +88348,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const t = (/* @__PURE__ */ new Date()).toISOString().slice(11, 23);
         console.log(`[coplay-${tag} ${t}] ${msg}`);
       };
+      var COPLAY_GIVEUP_AFTER_MS = 15e3;
       function _coplaySetRateThrottled(target) {
         const current = audio.playbackRate || 1;
         if (Math.abs(current - target) >= COPLAY_RATE_WRITE_EPSILON) {
@@ -88892,7 +88893,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           invitees: null,
           lastTid: null,
           renderedRosterKey: null,
-          lastFollowerWantsPlaying: null
+          lastFollowerWantsPlaying: null,
+          // Anti-infinite-loop drift correction:
+          correctingSinceMs: null,
+          // when did we last leave the IGNORE band?
+          givenUp: false
+          // true while we've accepted persistent offset
         };
         _coplayRenderFollowerBanner(_coplaySession);
         showToast("Joining co-play\u2026");
@@ -88974,6 +88980,8 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (tid && s.lastTid !== tid) {
           const prevTid = s.lastTid;
           s.lastTid = tid;
+          s.correctingSinceMs = null;
+          s.givenUp = false;
           if (!cid) {
             console.warn("[coplay] track changed but no cid; cannot fetch audio");
             return;
@@ -88998,8 +89006,28 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (state.playing && audio.duration) {
           const drift = audio.currentTime - expected;
           const absDrift = Math.abs(drift);
+          const insideIgnore = absDrift < (IS_IOS ? COPLAY_DRIFT_HARD_SEEK_IOS_SEC : COPLAY_DRIFT_IGNORE_SEC);
+          if (insideIgnore) {
+            if (s.correctingSinceMs !== null) {
+              _coplayLog("giveup", `drift back inside ignore band (${(drift * 1e3).toFixed(0)}ms) \u2014 sync re-engaged`);
+            }
+            s.correctingSinceMs = null;
+            s.givenUp = false;
+          } else {
+            if (s.correctingSinceMs === null) s.correctingSinceMs = Date.now();
+            if (!s.givenUp && Date.now() - s.correctingSinceMs >= COPLAY_GIVEUP_AFTER_MS) {
+              s.givenUp = true;
+              _coplayLog(
+                "giveup",
+                `drift=${(drift * 1e3).toFixed(0)}ms persisted \u2265${COPLAY_GIVEUP_AFTER_MS}ms \u2014 give up & accept offset (resumes on track change or host play/pause)`
+              );
+            }
+          }
           let bucket;
-          if (IS_IOS) {
+          if (s.givenUp) {
+            if (audio.playbackRate !== 1) audio.playbackRate = 1;
+            bucket = "GIVEUP";
+          } else if (IS_IOS) {
             if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC) {
               const from = audio.currentTime;
               const to = Math.max(0, Math.min(audio.duration, expected));
@@ -89047,18 +89075,24 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (IS_IOS) {
           if (state.playing !== s.lastFollowerWantsPlaying) {
             s.lastFollowerWantsPlaying = !!state.playing;
-            _coplayLog("transit", `iOS ${state.playing ? "play()" : "pause()"} (host transition)`);
+            s.correctingSinceMs = null;
+            s.givenUp = false;
+            _coplayLog("transit", `iOS ${state.playing ? "play()" : "pause()"} (host transition; give-up reset)`);
             if (state.playing) audio.play().catch(() => {
             });
             else audio.pause();
           }
         } else {
           if (state.playing && audio.paused) {
-            _coplayLog("transit", `play() (host says playing, we were paused)`);
+            s.correctingSinceMs = null;
+            s.givenUp = false;
+            _coplayLog("transit", `play() (host says playing, we were paused; give-up reset)`);
             audio.play().catch(() => {
             });
           } else if (!state.playing && !audio.paused) {
-            _coplayLog("transit", `pause() (host says paused, we were playing)`);
+            s.correctingSinceMs = null;
+            s.givenUp = false;
+            _coplayLog("transit", `pause() (host says paused, we were playing; give-up reset)`);
             audio.pause();
           }
         }
