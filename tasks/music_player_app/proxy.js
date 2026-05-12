@@ -91,6 +91,8 @@ const ALLOWED_HOSTS = new Set([
     'api.discogs.com',
     'api.deezer.com',
     'translate.googleapis.com',
+    'lrclib.net',
+    'itunes.apple.com',
 ]);
 
 // ── SSRF guard ──────────────────────────────────────────────────────────
@@ -133,12 +135,23 @@ function isPrivateIP(addr) {
 function safeLookup(hostname, options, cb) {
     dns.lookup(hostname, options, (err, address, family) => {
         if (err) return cb(err);
-        if (isPrivateIP(address)) {
-            const e = new Error(`Resolved to private/unroutable IP: ${address}`);
-            e.code = 'EBLOCKEDPRIVATE';
-            return cb(e);
+        // Node's dns.lookup callback has two shapes:
+        //   - default: (err, address: string, family: number)
+        //   - with {all: true}: (err, addresses: [{address, family}])
+        // http.request in Node 20+ passes `all: true` for happy-eyeballs DNS,
+        // so we have to handle both. Reject if ANY resolved address is private.
+        const list = Array.isArray(address)
+            ? address
+            : [{ address, family }];
+        for (const a of list) {
+            if (isPrivateIP(a.address)) {
+                const e = new Error(`Resolved to private/unroutable IP: ${a.address}`);
+                e.code = 'EBLOCKEDPRIVATE';
+                return cb(e);
+            }
         }
-        cb(null, address, family);
+        if (Array.isArray(address)) cb(null, address);
+        else cb(null, address, family);
     });
 }
 
