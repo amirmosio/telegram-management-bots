@@ -2762,6 +2762,22 @@ const IS_IOS = (() => {
     return navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
 })();
 
+// Diagnostic logging gate. Toggle in the browser console:
+//   localStorage.setItem('coplay_debug', '1')   // turn on
+//   localStorage.removeItem('coplay_debug')     // turn off
+// When on, follower poll ticks + every rate write + every seek + every
+// play/pause transition log one line each with prefix [coplay-follow].
+const _coplayDebug = () => {
+    try { return localStorage.getItem('coplay_debug') === '1'; }
+    catch { return false; }
+};
+const _coplayLog = (tag, msg) => {
+    if (!_coplayDebug()) return;
+    const t = new Date().toISOString().slice(11, 23);   // hh:mm:ss.mmm
+    // eslint-disable-next-line no-console
+    console.log(`[coplay-${tag} ${t}] ${msg}`);
+};
+
 // Write audio.playbackRate only when the requested value differs from
 // the current one by more than the epsilon. On most browsers this is
 // a no-op optimisation; on iOS each write is expensive and audible,
@@ -2770,10 +2786,12 @@ function _coplaySetRateThrottled(target) {
     const current = audio.playbackRate || 1.0;
     if (Math.abs(current - target) >= COPLAY_RATE_WRITE_EPSILON) {
         audio.playbackRate = target;
+        _coplayLog('rate', `${current.toFixed(4)} → ${target.toFixed(4)} (write)`);
     } else if (target === 1.0 && current !== 1.0) {
         // Always snap exactly to 1.0 when we're done trimming so there
         // isn't a permanent residual offset.
         audio.playbackRate = 1.0;
+        _coplayLog('rate', `${current.toFixed(4)} → 1.0 (snap)`);
     }
 }
 
@@ -3564,33 +3582,47 @@ async function _coplayPollTick(initial) {
     const anchor = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
     const elapsed = Math.max(0, (Date.now() / 1000) - anchor);
     const expected = (state.pos || 0) + (state.playing ? elapsed : 0);
+    const ageMs = Math.round((Date.now() / 1000 - res.fetchedWallSec) * 1000);
     if (state.playing && audio.duration) {
         const drift = audio.currentTime - expected; // +ahead, -behind
         const absDrift = Math.abs(drift);
+        let bucket;
         if (IS_IOS) {
-            // iOS: very loose threshold so seeks rarely fire (each one
-            // makes the decoder hitch). No rate trim — iOS time-stretch
-            // is the artifact source.
             if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC) {
-                try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
+                const from = audio.currentTime;
+                const to = Math.max(0, Math.min(audio.duration, expected));
+                try { audio.currentTime = to; } catch {}
+                _coplayLog('seek', `iOS hard-seek ${from.toFixed(3)} → ${to.toFixed(3)} (drift ${drift.toFixed(3)}s)`);
+                bucket = 'HARD-SEEK-iOS';
+            } else {
+                bucket = 'IGNORE-iOS';
             }
             if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
         } else if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
             _coplaySetRateThrottled(1.0);
+            bucket = 'IGNORE';
         } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
-            // Proportional rate trim: rate = 1 - drift * GAIN, clamped.
-            // 200 ms behind → 1.04, 200 ms ahead → 0.96, 30 ms → 1.006.
             const offset = Math.max(
                 -COPLAY_RATE_TRIM_MAX,
                 Math.min(COPLAY_RATE_TRIM_MAX, drift * COPLAY_RATE_TRIM_GAIN),
             );
             _coplaySetRateThrottled(1 - offset);
+            bucket = `TRIM(${(1 - offset).toFixed(4)})`;
         } else {
-            try { audio.currentTime = Math.max(0, Math.min(audio.duration, expected)); } catch {}
+            const from = audio.currentTime;
+            const to = Math.max(0, Math.min(audio.duration, expected));
+            try { audio.currentTime = to; } catch {}
+            _coplayLog('seek', `hard-seek ${from.toFixed(3)} → ${to.toFixed(3)} (drift ${drift.toFixed(3)}s)`);
             _coplaySetRateThrottled(1.0);
+            bucket = 'HARD-SEEK';
         }
+        _coplayLog('tick',
+            `expected=${expected.toFixed(3)} actual=${audio.currentTime.toFixed(3)} drift=${(drift * 1000).toFixed(0)}ms age=${ageMs}ms → ${bucket}`);
     } else if (audio.playbackRate !== 1.0) {
         audio.playbackRate = 1.0;
+        _coplayLog('tick', `(not playing, snap rate → 1.0)`);
+    } else {
+        _coplayLog('tick', `expected=${expected.toFixed(3)} playing=${state.playing} (no-op)`);
     }
     // Play/pause reconciliation. On iOS we only act on a *transition*
     // of state.playing — calling audio.play() repeatedly during steady
@@ -3598,13 +3630,16 @@ async function _coplayPollTick(initial) {
     if (IS_IOS) {
         if (state.playing !== s.lastFollowerWantsPlaying) {
             s.lastFollowerWantsPlaying = !!state.playing;
+            _coplayLog('transit', `iOS ${state.playing ? 'play()' : 'pause()'} (host transition)`);
             if (state.playing) audio.play().catch(() => {});
             else audio.pause();
         }
     } else {
         if (state.playing && audio.paused) {
+            _coplayLog('transit', `play() (host says playing, we were paused)`);
             audio.play().catch(() => {});
         } else if (!state.playing && !audio.paused) {
+            _coplayLog('transit', `pause() (host says paused, we were playing)`);
             audio.pause();
         }
     }

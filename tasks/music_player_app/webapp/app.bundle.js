@@ -88336,12 +88336,26 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         if (/iPad|iPhone|iPod/.test(ua)) return true;
         return navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1;
       })();
+      var _coplayDebug = () => {
+        try {
+          return localStorage.getItem("coplay_debug") === "1";
+        } catch {
+          return false;
+        }
+      };
+      var _coplayLog = (tag, msg) => {
+        if (!_coplayDebug()) return;
+        const t = (/* @__PURE__ */ new Date()).toISOString().slice(11, 23);
+        console.log(`[coplay-${tag} ${t}] ${msg}`);
+      };
       function _coplaySetRateThrottled(target) {
         const current = audio.playbackRate || 1;
         if (Math.abs(current - target) >= COPLAY_RATE_WRITE_EPSILON) {
           audio.playbackRate = target;
+          _coplayLog("rate", `${current.toFixed(4)} \u2192 ${target.toFixed(4)} (write)`);
         } else if (target === 1 && current !== 1) {
           audio.playbackRate = 1;
+          _coplayLog("rate", `${current.toFixed(4)} \u2192 1.0 (snap)`);
         }
       }
       var btnCoplay = $("btn-coplay");
@@ -88980,47 +88994,71 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         const anchor = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
         const elapsed = Math.max(0, Date.now() / 1e3 - anchor);
         const expected = (state.pos || 0) + (state.playing ? elapsed : 0);
+        const ageMs = Math.round((Date.now() / 1e3 - res.fetchedWallSec) * 1e3);
         if (state.playing && audio.duration) {
           const drift = audio.currentTime - expected;
           const absDrift = Math.abs(drift);
+          let bucket;
           if (IS_IOS) {
             if (absDrift > COPLAY_DRIFT_HARD_SEEK_IOS_SEC) {
+              const from = audio.currentTime;
+              const to = Math.max(0, Math.min(audio.duration, expected));
               try {
-                audio.currentTime = Math.max(0, Math.min(audio.duration, expected));
+                audio.currentTime = to;
               } catch {
               }
+              _coplayLog("seek", `iOS hard-seek ${from.toFixed(3)} \u2192 ${to.toFixed(3)} (drift ${drift.toFixed(3)}s)`);
+              bucket = "HARD-SEEK-iOS";
+            } else {
+              bucket = "IGNORE-iOS";
             }
             if (audio.playbackRate !== 1) audio.playbackRate = 1;
           } else if (absDrift < COPLAY_DRIFT_IGNORE_SEC) {
             _coplaySetRateThrottled(1);
+            bucket = "IGNORE";
           } else if (absDrift < COPLAY_DRIFT_TRIM_SEC) {
             const offset = Math.max(
               -COPLAY_RATE_TRIM_MAX,
               Math.min(COPLAY_RATE_TRIM_MAX, drift * COPLAY_RATE_TRIM_GAIN)
             );
             _coplaySetRateThrottled(1 - offset);
+            bucket = `TRIM(${(1 - offset).toFixed(4)})`;
           } else {
+            const from = audio.currentTime;
+            const to = Math.max(0, Math.min(audio.duration, expected));
             try {
-              audio.currentTime = Math.max(0, Math.min(audio.duration, expected));
+              audio.currentTime = to;
             } catch {
             }
+            _coplayLog("seek", `hard-seek ${from.toFixed(3)} \u2192 ${to.toFixed(3)} (drift ${drift.toFixed(3)}s)`);
             _coplaySetRateThrottled(1);
+            bucket = "HARD-SEEK";
           }
+          _coplayLog(
+            "tick",
+            `expected=${expected.toFixed(3)} actual=${audio.currentTime.toFixed(3)} drift=${(drift * 1e3).toFixed(0)}ms age=${ageMs}ms \u2192 ${bucket}`
+          );
         } else if (audio.playbackRate !== 1) {
           audio.playbackRate = 1;
+          _coplayLog("tick", `(not playing, snap rate \u2192 1.0)`);
+        } else {
+          _coplayLog("tick", `expected=${expected.toFixed(3)} playing=${state.playing} (no-op)`);
         }
         if (IS_IOS) {
           if (state.playing !== s.lastFollowerWantsPlaying) {
             s.lastFollowerWantsPlaying = !!state.playing;
+            _coplayLog("transit", `iOS ${state.playing ? "play()" : "pause()"} (host transition)`);
             if (state.playing) audio.play().catch(() => {
             });
             else audio.pause();
           }
         } else {
           if (state.playing && audio.paused) {
+            _coplayLog("transit", `play() (host says playing, we were paused)`);
             audio.play().catch(() => {
             });
           } else if (!state.playing && !audio.paused) {
+            _coplayLog("transit", `pause() (host says paused, we were playing)`);
             audio.pause();
           }
         }

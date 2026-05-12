@@ -5,6 +5,21 @@ needs in place for the webapp + CORS proxy + recognize service to run. The
 operational runbook with copy-pastable commands is in `.claude/skills/deploy.md`
 (local-only).
 
+## Public domain
+
+**`telemusic.duckdns.org`** — the only domain this project serves. Used in:
+
+- nginx `server_name`
+- TLS cert subject (Let's Encrypt via certbot)
+- `ALLOWED_ORIGIN` env var in `/etc/musicplayer/corsproxy.env`
+- Origin/Referer allowlist in nginx + proxy.js
+- DuckDNS A record (update via DuckDNS panel or token-based curl, pointing
+  to the VPS's current public IP whenever it rotates)
+
+If you ever change this domain (move off DuckDNS, take a custom domain),
+search-and-replace it across this file, `proxy.js`, `webapp/build.mjs`,
+and `webapp/src/cors-proxy.js`, and re-issue the TLS cert.
+
 ## Topology
 
 ```
