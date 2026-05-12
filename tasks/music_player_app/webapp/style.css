@@ -1024,6 +1024,19 @@ html, body {
     align-items: center;
 }
 
+/* Normalise icon size across the five action buttons. SVGs were authored
+   with different intrinsic dimensions (18 vs 20) which made the share +
+   co-play icons visually smaller. Pin them all to 20px via CSS. */
+.overlay-actions > button > svg {
+    width: 20px;
+    height: 20px;
+}
+/* Co-play is stroke-only; match the visual weight of the filled icons
+   (share, add) by thickening its stroke. */
+.overlay-coplay-btn svg {
+    stroke-width: 2.4;
+}
+
 
 .overlay-add-btn {
     display: flex; align-items: center; justify-content: center;
