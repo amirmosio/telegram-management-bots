@@ -1006,9 +1006,22 @@ html, body {
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
     display: flex;
+    flex-wrap: wrap;           /* allow actions row to wrap below title when narrow */
     align-items: flex-end;
     gap: 8px;
+    row-gap: 10px;
     z-index: 2;
+}
+
+/* The five action buttons live in their own flex group so they can wrap
+   to a new row together (rather than each button wrapping individually)
+   when there isn't enough width for title + buttons on one line. */
+.overlay-actions {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;            /* natural width, do not shrink */
+    margin-left: auto;         /* push right when on the same row as title */
+    align-items: center;
 }
 
 
@@ -1103,8 +1116,13 @@ html, body {
 }
 
 /* ── Track Info ── */
+/* flex-basis 200px means: title needs at least that much room to be
+   readable. If the container can fit 200px (title) + 8px (gap) + 202px
+   (the five 34px buttons + their gaps) = 410px on one row, it does. If
+   not, flex-wrap puts the buttons on a second row and title takes the
+   full row above. min-width: 0 keeps text-overflow ellipsis working. */
 #track-info {
-    flex: 1; min-width: 0;
+    flex: 1 1 200px; min-width: 0;
 }
 
 #track-title {
