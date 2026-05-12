@@ -3477,6 +3477,10 @@ async function _coplayEnterFollower(syncMsgId, channelId, hintHostName) {
         // Anti-infinite-loop drift correction:
         correctingSinceMs: null,   // when did we last leave the IGNORE band?
         givenUp: false,            // true while we've accepted persistent offset
+        // Track-switch lock: skip drift correction between detecting a
+        // host track change and the new audio actually playing.
+        trackSwitchInProgress: false,
+        expectedTrackId: null,
     };
     // Render a placeholder host chip while we wait for the first poll
     // to come back with the real fromUserId + invitee list.
@@ -3574,7 +3578,17 @@ async function _coplayPollTick(initial) {
         // Track switch is a clean retry point — drop any give-up state.
         s.correctingSinceMs = null;
         s.givenUp = false;
+        // Stop the OLD audio immediately so it doesn't keep playing
+        // while we fetch the new song. Without this, drift-correction
+        // ticks during the fetch would try to seek/rate-adjust the
+        // stale audio against the NEW track's host position — which is
+        // exactly the symptom we're fixing ("syncs with the old song").
+        s.trackSwitchInProgress = true;
+        s.expectedTrackId = null;
+        try { audio.pause(); } catch {}
+        _coplayLog('switch', `track change → ${tid} (was ${prevTid}); paused old audio, fetching new`);
         if (!cid) {
+            s.trackSwitchInProgress = false;
             console.warn('[coplay] track changed but no cid; cannot fetch audio');
             return;
         }
@@ -3591,11 +3605,34 @@ async function _coplayPollTick(initial) {
             const elapsed = Math.max(0, (Date.now() / 1000) - anchor);
             _pendingSeekTime = Math.max(0, (state.pos || 0) + (state.playing ? elapsed : 0));
             _pendingSeekTrackId = track.id;
+            // Record the track id we're waiting for. Subsequent poll
+            // ticks will skip drift correction until currentTrackId
+            // matches this AND audio is no longer paused.
+            s.expectedTrackId = track.id;
             startPlayback([track], groupId, null, 0, false);
         } catch (e) {
+            s.trackSwitchInProgress = false;
             console.warn('[coplay] track switch failed:', e?.message || e);
         }
         return;
+    }
+
+    // Track switch in progress: the new audio source is being fetched
+    // / loaded. Skip every drift correction + play/pause action — they
+    // would otherwise act on the OLD audio element OR pre-empt the
+    // _pendingSeekTime placement that startPlayback is about to do.
+    // Clear the flag once the new track is actually mounted + playing.
+    if (s.trackSwitchInProgress) {
+        const mounted = (currentTrackId != null && currentTrackId === s.expectedTrackId);
+        if (mounted && !audio.paused && audio.readyState >= 2 /* HAVE_CURRENT_DATA */) {
+            s.trackSwitchInProgress = false;
+            s.expectedTrackId = null;
+            _coplayLog('switch', `new track ${currentTrackId} ready — sync resumed`);
+        } else {
+            _coplayLog('tick',
+                `track-switch wait: currentTrackId=${currentTrackId} expected=${s.expectedTrackId} paused=${audio.paused} readyState=${audio.readyState} — skipping correction`);
+            return;
+        }
     }
 
     // Reconcile position + play/pause. `anchor` is the host's wall-clock

@@ -88901,8 +88901,12 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           // Anti-infinite-loop drift correction:
           correctingSinceMs: null,
           // when did we last leave the IGNORE band?
-          givenUp: false
+          givenUp: false,
           // true while we've accepted persistent offset
+          // Track-switch lock: skip drift correction between detecting a
+          // host track change and the new audio actually playing.
+          trackSwitchInProgress: false,
+          expectedTrackId: null
         };
         _coplayRenderFollowerBanner(_coplaySession);
         showToast("Joining co-play\u2026");
@@ -88986,7 +88990,15 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
           s.lastTid = tid;
           s.correctingSinceMs = null;
           s.givenUp = false;
+          s.trackSwitchInProgress = true;
+          s.expectedTrackId = null;
+          try {
+            audio.pause();
+          } catch {
+          }
+          _coplayLog("switch", `track change \u2192 ${tid} (was ${prevTid}); paused old audio, fetching new`);
           if (!cid) {
+            s.trackSwitchInProgress = false;
             console.warn("[coplay] track changed but no cid; cannot fetch audio");
             return;
           }
@@ -88997,11 +89009,27 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             const elapsed2 = Math.max(0, Date.now() / 1e3 - anchor2);
             _pendingSeekTime = Math.max(0, (state.pos || 0) + (state.playing ? elapsed2 : 0));
             _pendingSeekTrackId = track.id;
+            s.expectedTrackId = track.id;
             startPlayback([track], groupId, null, 0, false);
           } catch (e) {
+            s.trackSwitchInProgress = false;
             console.warn("[coplay] track switch failed:", e?.message || e);
           }
           return;
+        }
+        if (s.trackSwitchInProgress) {
+          const mounted = currentTrackId != null && currentTrackId === s.expectedTrackId;
+          if (mounted && !audio.paused && audio.readyState >= 2) {
+            s.trackSwitchInProgress = false;
+            s.expectedTrackId = null;
+            _coplayLog("switch", `new track ${currentTrackId} ready \u2014 sync resumed`);
+          } else {
+            _coplayLog(
+              "tick",
+              `track-switch wait: currentTrackId=${currentTrackId} expected=${s.expectedTrackId} paused=${audio.paused} readyState=${audio.readyState} \u2014 skipping correction`
+            );
+            return;
+          }
         }
         const anchor = Number.isFinite(state.anchor) ? state.anchor : res.fetchedWallSec;
         const elapsed = Math.max(0, Date.now() / 1e3 - anchor);
