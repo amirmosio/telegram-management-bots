@@ -87171,6 +87171,10 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
                 console.warn("[stream] iter error at", pos, "(attempt", attempt + 1, "):", e?.message || e);
               }
               if (cancelled() || isFinished()) break;
+              if (pos >= fileSize) {
+                console.log("[stream] reached EOF with gaps below; leaving stream open for seek-fills");
+                break;
+              }
               attempt++;
               if (attempt >= MAX_ATTEMPTS) break;
               const advanced = pos > startPos;
@@ -87189,7 +87193,7 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
             }
           } finally {
             if (currentAbort === myCtrl) currentAbort = null;
-            if (!cancelled() && !isFinished() && dlGen === myDlGen) {
+            if (!cancelled() && !isFinished() && pos < fileSize && dlGen === myDlGen) {
               console.warn("[stream] giving up at", pos, "/", fileSize, "\u2014 signalling stream-end");
               try {
                 sw.postMessage({ type: "stream-end", key: blobKey });

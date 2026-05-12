@@ -1412,6 +1412,18 @@ async function _streamWithSeek(track, gen, sw) {
 
                 if (cancelled() || isFinished()) break;
 
+                // Forward iteration has reached EOF but `localFilled` doesn't
+                // cover [0, fileSize) — meaning we started this download at
+                // a non-zero offset (SW seek) and there are gaps below `pos`.
+                // Retrying the forward iterator can't fill those gaps; only
+                // a fresh startDownload(off) triggered by the SW seek handler
+                // can. Exit cleanly so the SW keeps the stream open for those
+                // future seek-fills instead of getting a misleading stream-end.
+                if (pos >= fileSize) {
+                    console.log('[stream] reached EOF with gaps below; leaving stream open for seek-fills');
+                    break;
+                }
+
                 // Iterator exited without finishing the file. Retry from the
                 // current position. If we didn't advance at all on this
                 // attempt, back off harder so we don't hot-loop on a dead
@@ -1426,11 +1438,11 @@ async function _streamWithSeek(track, gen, sw) {
             }
         } finally {
             if (currentAbort === myCtrl) currentAbort = null;
-            // If we burned through all retries and the file still isn't
-            // complete, unblock the SW so the <audio> element fails cleanly
-            // instead of hanging. Also clear the active flag so the next
-            // track's prefetch isn't gated out.
-            if (!cancelled() && !isFinished() && dlGen === myDlGen) {
+            // If we burned through all retries WITHOUT reaching EOF, unblock
+            // the SW so the <audio> element fails cleanly instead of hanging.
+            // (When we exit cleanly at EOF with sub-pos gaps, NO stream-end —
+            // the SW must stay open so future seek-fills can deliver chunks.)
+            if (!cancelled() && !isFinished() && pos < fileSize && dlGen === myDlGen) {
                 console.warn('[stream] giving up at', pos, '/', fileSize, '— signalling stream-end');
                 try { sw.postMessage({ type: 'stream-end', key: blobKey }); } catch {}
                 _streamDownloadActive = false;
