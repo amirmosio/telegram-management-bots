@@ -88164,6 +88164,23 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       var _shareCurrentTrack = null;
       var _share = pickerState();
       var _SHARE_KINDS = ["user", "bot", "group", "channel"];
+      var _dialogsCache = null;
+      var _dialogsRefreshing = false;
+      async function _loadDialogsFirstPage() {
+        if (_dialogsCache !== null) return _dialogsCache;
+        _dialogsCache = await listChatsForShare(200);
+        return _dialogsCache;
+      }
+      function _refreshDialogsInBackground(onFresh) {
+        if (_dialogsRefreshing) return;
+        _dialogsRefreshing = true;
+        listChatsForShare(200).then((fresh) => {
+          _dialogsCache = fresh;
+          if (onFresh) onFresh(fresh);
+        }).catch((e) => console.warn("[dialogs cache] background refresh failed:", e)).finally(() => {
+          _dialogsRefreshing = false;
+        });
+      }
       function _shareCaption() {
         const appUrl = window.location.origin + window.location.pathname;
         return `<a href="${escapeHtml(appUrl)}">Listen on Telemusic app</a>`;
@@ -88276,10 +88293,21 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         _shareCurrentLink = null;
         shareLinkText.textContent = "Tap to copy share link";
         shareLinkRow.classList.remove("preparing", "copied");
-        shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Loading chats\u2026</div>';
         shareModal.style.display = "flex";
+        if (_dialogsCache !== null) {
+          _share.chatsCache = _dialogsCache;
+          _renderShareChats();
+          _refreshDialogsInBackground((fresh) => {
+            if (_shareCurrentTrack === track && shareModal.style.display === "flex") {
+              _share.chatsCache = fresh;
+              _renderShareChats();
+            }
+          });
+          return;
+        }
+        shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Loading chats\u2026</div>';
         try {
-          _share.chatsCache = await listChatsForShare(200);
+          _share.chatsCache = await _loadDialogsFirstPage();
           if (_shareCurrentTrack === track) _renderShareChats();
         } catch (e) {
           console.error("List chats failed:", e);
@@ -88556,12 +88584,24 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
         }
         _coplayInviteList = [];
         _coplayUpdateStartButton();
-        coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Loading contacts\u2026</div>';
         coplaySearchInput.value = "";
         coplayModal.style.display = "flex";
+        const usersOnly = (list) => list.filter((c) => c.kind === "user");
+        if (_dialogsCache !== null) {
+          _coplay.chatsCache = usersOnly(_dialogsCache);
+          _coplayRenderChats();
+          _refreshDialogsInBackground((fresh) => {
+            if (coplayModal.style.display === "flex") {
+              _coplay.chatsCache = usersOnly(fresh);
+              _coplayRenderChats();
+            }
+          });
+          return;
+        }
+        coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Loading contacts\u2026</div>';
         try {
-          const all = await listChatsForShare(200);
-          _coplay.chatsCache = all.filter((c) => c.kind === "user");
+          const all = await _loadDialogsFirstPage();
+          _coplay.chatsCache = usersOnly(all);
           _coplayRenderChats();
         } catch (e) {
           console.error("[coplay] list chats failed:", e);

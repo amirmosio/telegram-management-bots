@@ -2519,6 +2519,32 @@ let _shareCurrentTrack = null;
 const _share = pickerState();
 const _SHARE_KINDS = ['user', 'bot', 'group', 'channel'];
 
+// Dialogs cache for share + co-play pickers. RAM-only — a module-level
+// `let` is cleared on page reload, which is what we want. Holds the
+// first page (200 items) of tg.listChatsForShare. Opening a picker:
+// cache hit → render immediately + kick a background refresh; cache miss
+// → show the "Loading…" placeholder and fetch synchronously.
+let _dialogsCache = null;
+let _dialogsRefreshing = false;
+
+async function _loadDialogsFirstPage() {
+    if (_dialogsCache !== null) return _dialogsCache;
+    _dialogsCache = await tg.listChatsForShare(200);
+    return _dialogsCache;
+}
+
+function _refreshDialogsInBackground(onFresh) {
+    if (_dialogsRefreshing) return;
+    _dialogsRefreshing = true;
+    tg.listChatsForShare(200)
+        .then(fresh => {
+            _dialogsCache = fresh;
+            if (onFresh) onFresh(fresh);
+        })
+        .catch(e => console.warn('[dialogs cache] background refresh failed:', e))
+        .finally(() => { _dialogsRefreshing = false; });
+}
+
 function _shareCaption() {
     // Send-to-chat already attaches the audio directly, so the caption
     // just advertises the webapp — no per-track deep link needed.
@@ -2661,11 +2687,25 @@ btnShare.addEventListener('click', async () => {
     // a track to a friend. The forward happens lazily on copy or send.
     shareLinkText.textContent = 'Tap to copy share link';
     shareLinkRow.classList.remove('preparing', 'copied');
-    shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Loading chats…</div>';
     shareModal.style.display = 'flex';
 
+    if (_dialogsCache !== null) {
+        // Cache hit — render instantly, refresh in background.
+        _share.chatsCache = _dialogsCache;
+        _renderShareChats();
+        _refreshDialogsInBackground(fresh => {
+            if (_shareCurrentTrack === track && shareModal.style.display === 'flex') {
+                _share.chatsCache = fresh;
+                _renderShareChats();
+            }
+        });
+        return;
+    }
+
+    // Cache miss — show loading placeholder, fetch synchronously.
+    shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Loading chats…</div>';
     try {
-        _share.chatsCache = await tg.listChatsForShare(200);
+        _share.chatsCache = await _loadDialogsFirstPage();
         if (_shareCurrentTrack === track) _renderShareChats();
     } catch (e) {
         console.error('List chats failed:', e);
@@ -3065,14 +3105,29 @@ async function _coplayOpenPicker() {
     }
     _coplayInviteList = [];
     _coplayUpdateStartButton();
-    coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Loading contacts…</div>';
     coplaySearchInput.value = '';
     coplayModal.style.display = 'flex';
+
+    // Co-play targets are people only — group/channel mention semantics
+    // don't fit our "tagged person opens app" model.
+    const usersOnly = (list) => list.filter(c => c.kind === 'user');
+
+    if (_dialogsCache !== null) {
+        _coplay.chatsCache = usersOnly(_dialogsCache);
+        _coplayRenderChats();
+        _refreshDialogsInBackground(fresh => {
+            if (coplayModal.style.display === 'flex') {
+                _coplay.chatsCache = usersOnly(fresh);
+                _coplayRenderChats();
+            }
+        });
+        return;
+    }
+
+    coplayChatsEl.innerHTML = '<div class="coplay-chats-placeholder">Loading contacts…</div>';
     try {
-        const all = await tg.listChatsForShare(200);
-        // Co-play targets are people only — group/channel mention semantics
-        // don't fit our "tagged person opens app" model.
-        _coplay.chatsCache = all.filter(c => c.kind === 'user');
+        const all = await _loadDialogsFirstPage();
+        _coplay.chatsCache = usersOnly(all);
         _coplayRenderChats();
     } catch (e) {
         console.error('[coplay] list chats failed:', e);
