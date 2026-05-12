@@ -1827,7 +1827,7 @@ html, body {
     .play-btn { background: var(--accent); color: #fff; }
 
     /* Bigger touch targets for overlay buttons on mobile */
-    .overlay-add-btn, .overlay-share-btn, .overlay-move-btn, .overlay-delete-btn {
+    .overlay-add-btn, .overlay-share-btn, .overlay-coplay-btn, .overlay-move-btn, .overlay-delete-btn {
         width: 40px; height: 40px; min-width: 40px;
     }
     #artwork-overlay { gap: 12px; }
