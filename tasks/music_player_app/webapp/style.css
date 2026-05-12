@@ -1024,6 +1024,17 @@ html, body {
     align-items: center;
 }
 
+/* One rule = one fixed size for every action button (alongside the
+   per-class rules below). Lives at higher specificity (.overlay-actions
+   > button = 0,1,1) than each per-class size (0,1,0) so this wins
+   uniformly across all five buttons and both mobile + desktop. */
+.overlay-actions > button {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    flex-shrink: 0;
+}
+
 /* Normalise icon size across the five action buttons. SVGs were authored
    with different intrinsic dimensions (18 vs 20) which made the share +
    co-play icons visually smaller. Pin them all to 20px via CSS. */
