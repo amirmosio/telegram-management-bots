@@ -351,21 +351,21 @@ The webapp build (`webapp/build.mjs`) bakes `APP_TOKEN` into
 `app.bundle.js` at compile time via esbuild's `define`. Because that
 makes the bundle a carrier of the secret, **the bundle MUST NOT be
 committed to git** — it's listed in the root `.gitignore` as
-`tasks/music_player_app/webapp/app.bundle.js`. The bundle is produced
-**on the server** at deploy time, reading `APP_TOKEN` from the
-authoritative location (`/etc/musicplayer/corsproxy.env`).
+`tasks/music_player_app/webapp/app.bundle.js`.
 
-### One-time: install the webapp's build dependencies on the server
+The bundle is **built on the laptop** with `APP_TOKEN` read from the
+gitignored `.app-token` file at the repo root, then `scp`'d to the
+server. The server box is intentionally not asked to run `npm install`
++ `npm run build` — it has 2 GB of RAM that's already busy with
+nginx + node + postgres + python services, and the laptop's dev
+toolchain is unconditionally available there anyway.
 
-```bash
-sudo apt-get install -y nodejs npm     # already done per §0/topology
-cd /home/ubuntu/telegram-management-bots/tasks/music_player_app/webapp
-npm install                            # gets esbuild + plugins (~50 MB)
-```
-
-`npm install` only needs to be re-run when `package.json` / `package-lock.json`
-change (very rare — esbuild updates only). The build script (`node build.mjs`)
-runs in ~200 ms with peak memory <500 MB, well within the 2 GB box.
+Single-source-of-truth invariant for the token:
+- Laptop: `.app-token` (gitignored, mode 600)
+- Server: `/etc/musicplayer/corsproxy.env` (mode 640, root:www-data)
+- These two values must match. The bundle that lands on the server
+  via scp must have been built with the same `APP_TOKEN` that's in
+  the server's env file.
 
 ## Per-release checklist (every deploy must do these)
 
@@ -381,54 +381,59 @@ Each public deploy MUST:
    grep -n '?v=' tasks/music_player_app/webapp/index.html
    ```
 
-   All matches should share the new number.
-
-2. **Commit + push** the change set (`index.html` cache-bust, any code
-   edits). The bundle is **not** in the commit — it's gitignored.
-
-3. **Pull + rebuild on the server** in one command:
+2. **Build on the laptop** with the production `APP_TOKEN`:
 
    ```bash
-   ssh armanserver2 '
-     cd ~/telegram-management-bots && git pull --ff-only && \
-     cd tasks/music_player_app/webapp && \
-     APP_TOKEN=$(sudo awk -F= "/^APP_TOKEN=/{print \$2}" /etc/musicplayer/corsproxy.env) \
-       npm run build
-   '
+   cd tasks/music_player_app/webapp
+   APP_TOKEN=$(cat ../../../.app-token) npm run build
+   ```
+
+   The output `app.bundle.js` is gitignored and won't end up in any
+   commit.
+
+3. **Commit + push** the change set (`index.html` cache-bust, any code
+   edits). The bundle is NOT in the commit.
+
+4. **Ship the bundle + pull the rest on the server**:
+
+   ```bash
+   # Push the freshly-built bundle straight to the server's webapp dir.
+   scp tasks/music_player_app/webapp/app.bundle.js \
+       armanserver2:/home/ubuntu/telegram-management-bots/tasks/music_player_app/webapp/
+   # Pull the HTML/CSS/other code changes.
+   ssh armanserver2 'cd ~/telegram-management-bots && git pull --ff-only'
    ```
 
    nginx serves the new bundle on the next request — no service restart.
-   Rebuilding doesn't change the `APP_TOKEN` (it's read FROM the env file,
-   not generated); the env file remains the single source of truth.
 
-4. **Verify** with the four curl tests in `.claude/skills/deploy.md`.
+5. **Verify** with the four curl tests in `.claude/skills/deploy.md`.
    Expected: 403 (no auth), 403 (wrong Origin), 200 (correct Origin + token),
    `{"ok": true}` from `/api/recognize/health`.
 
 ### Rotating `APP_TOKEN`
 
-Rotation is a server-side operation now — the laptop is uninvolved.
+The token has to be updated in BOTH places, in this order, with no
+gap when the values disagree (otherwise the proxy 403s every request):
 
 ```bash
-ssh armanserver2 '
-  NEW=$(openssl rand -hex 32)
-  sudo sed -i "s|^APP_TOKEN=.*|APP_TOKEN=$NEW|" /etc/musicplayer/corsproxy.env
-  cd ~/telegram-management-bots/tasks/music_player_app/webapp
-  APP_TOKEN="$NEW" npm run build
-  sudo systemctl restart corsproxy
-'
+# 1. Generate a fresh token on the laptop.
+NEW=$(openssl rand -hex 32)
+echo "$NEW" > /Volumes/CrucialSSD/telegram-management-bots/.app-token
+
+# 2. Rebuild the bundle with the new token.
+cd /Volumes/CrucialSSD/telegram-management-bots/tasks/music_player_app/webapp
+APP_TOKEN="$NEW" npm run build
+
+# 3. Push the matching value to the server's env file FIRST, then ship
+#    the bundle so the two land in sync.
+ssh armanserver2 "sudo sed -i 's|^APP_TOKEN=.*|APP_TOKEN=$NEW|' /etc/musicplayer/corsproxy.env && sudo systemctl restart corsproxy"
+scp app.bundle.js armanserver2:/home/ubuntu/telegram-management-bots/tasks/music_player_app/webapp/
 ```
 
-Bundle and env file land in sync — the server reads from the env file
-to set the build's `__APP_TOKEN__`, then the corsproxy reloads the same
-env file on restart. There's no laptop ↔ server token-sync to keep
-straight, and the token never appears in git.
-
 If you skip step 1 of the per-release checklist (the `?v=` bump),
-browsers will keep the old `app.bundle.js` from cache and call the
-proxy with the old `APP_TOKEN`, which the env file has just rotated
-away — every page in every open tab will show 403s until the user
-hard-refreshes.
+browsers will keep the old `app.bundle.js` from cache, which carries
+the old `APP_TOKEN` — every page in every open tab will show 403s
+until the user hard-refreshes.
 
 ## What gets checked at request time
 
