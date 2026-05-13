@@ -89689,6 +89689,33 @@ Cache the remaining ${notYet.length} track${notYet.length === 1 ? "" : "s"} for 
       $("btn-watch").addEventListener("click", _openWatchModal);
       $("watch-cancel").addEventListener("click", _closeWatchModal);
       $("watch-modal").querySelector(".modal-backdrop").addEventListener("click", _closeWatchModal);
+      function _openAboutModal() {
+        $("about-modal").style.display = "flex";
+      }
+      function _closeAboutModal() {
+        $("about-modal").style.display = "none";
+      }
+      $("btn-about").addEventListener("click", _openAboutModal);
+      $("about-close").addEventListener("click", _closeAboutModal);
+      $("about-modal").querySelector(".modal-backdrop").addEventListener("click", _closeAboutModal);
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && $("about-modal").style.display === "flex") _closeAboutModal();
+      });
+      $("about-modal-email").addEventListener("click", async (e) => {
+        const link = e.currentTarget;
+        try {
+          await navigator.clipboard.writeText(link.textContent.trim());
+          e.preventDefault();
+          const original = link.textContent;
+          link.classList.add("copied");
+          link.textContent = "copied \u2713";
+          setTimeout(() => {
+            link.textContent = original;
+            link.classList.remove("copied");
+          }, 1200);
+        } catch (_) {
+        }
+      });
       $("watch-token-row").addEventListener("click", async () => {
         const row = $("watch-token-row");
         const txt = $("watch-token-text").textContent || "";

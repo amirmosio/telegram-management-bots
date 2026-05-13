@@ -114,9 +114,14 @@ When the player fetches art from the internet, a **Save to Telegram** button app
 
 - See [`doc.md`](./doc.md) for details on external services the player integrates with (lyrics providers, album-art providers, recognition, Telegram API) and the internal HTTP endpoints.
 
+## Feedback & Support
+
+Found a bug, have a feature idea, or just want to say hello? Drop me a line at **[amir.mn.mosio@gmail.com](mailto:amir.mn.mosio@gmail.com)** — I read every message.
+
 ## Credits
 
 - [shkyb](https://github.com/shkyb) — Original idea and project direction
+- **Shakib Alipour** — Suggested adding a feedback / support contact in the README
 
 ## License
 

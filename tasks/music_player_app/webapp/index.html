@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=213">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=213">
-    <link rel="stylesheet" href="style.css?v=213">
+    <link rel="manifest" href="/manifest.json?v=214">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=214">
+    <link rel="stylesheet" href="style.css?v=214">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -62,6 +62,13 @@
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="6" y="6" width="12" height="12" rx="2"/>
                         <path d="M9 6V3h6v3M9 18v3h6v-3"/>
+                    </svg>
+                </button>
+                <button id="btn-about" class="icon-btn" title="About this app" aria-label="About this app">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
                     </svg>
                 </button>
                 <button id="btn-logout" class="icon-btn" title="Log out" aria-label="Log out">
@@ -381,6 +388,43 @@
         </div>
     </div>
 
+    <!-- About / Feedback modal: project overview + support email + credits -->
+    <div id="about-modal" style="display:none">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content" id="about-modal-content">
+            <h3>About Telegram Music Player</h3>
+            <p class="about-modal-tagline">A web-based music player that turns your Telegram account into a personal music library — browse audio in any channel or group you belong to, organize tracks into playlists, and play them back with synced lyrics and album art, online or offline.</p>
+
+            <h4>What it can do</h4>
+            <ul class="about-modal-features">
+                <li><strong>Play anything in your Telegram</strong> — any audio message in any channel or group becomes a playable track.</li>
+                <li><strong>Synced lyrics + album art</strong> — fetched automatically, click a line to jump to that moment.</li>
+                <li><strong>Playlists</strong> — live as forum topics in a dedicated supergroup so they travel with your account.</li>
+                <li><strong>Offline playback</strong> — tracks, lyrics, and artwork cache to IndexedDB; install as a PWA for a home-screen app experience.</li>
+                <li><strong>Song recognition</strong> — Shazam-style mic button to identify whatever's playing around you.</li>
+                <li><strong>Co-play</strong> — listen in sync with friends; one device drives, the others follow.</li>
+                <li><strong>Lock-screen controls + background playback</strong> — wired up via the OS media session.</li>
+            </ul>
+
+            <h4>Feedback &amp; Support</h4>
+            <p class="about-modal-contact">
+                Found a bug, have a feature idea, or just want to say hello? Email
+                <a id="about-modal-email" href="mailto:amir.mn.mosio@gmail.com" title="Tap to copy">amir.mn.mosio@gmail.com</a>
+                — every message gets read.
+            </p>
+
+            <h4>Credits</h4>
+            <ul class="about-modal-credits">
+                <li><a href="https://github.com/shkyb" target="_blank" rel="noopener">shkyb</a> — original idea and project direction</li>
+                <li>Shakib Alipour — suggested adding this in-app feedback contact</li>
+            </ul>
+
+            <div id="about-modal-actions">
+                <button id="about-close" class="text-btn accent">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Recognize Overlay (floating, like search) -->
     <div id="recognize-overlay">
         <div id="recognize-overlay-header">
@@ -528,6 +572,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=213"></script>
+    <script src="app.bundle.js?v=214"></script>
 </body>
 </html>

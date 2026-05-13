@@ -4346,6 +4346,35 @@ $('btn-watch').addEventListener('click', _openWatchModal);
 $('watch-cancel').addEventListener('click', _closeWatchModal);
 $('watch-modal').querySelector('.modal-backdrop').addEventListener('click', _closeWatchModal);
 
+// ── About / Feedback modal ──
+function _openAboutModal() { $('about-modal').style.display = 'flex'; }
+function _closeAboutModal() { $('about-modal').style.display = 'none'; }
+$('btn-about').addEventListener('click', _openAboutModal);
+$('about-close').addEventListener('click', _closeAboutModal);
+$('about-modal').querySelector('.modal-backdrop').addEventListener('click', _closeAboutModal);
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('about-modal').style.display === 'flex') _closeAboutModal();
+});
+// Tap email → copy to clipboard (still preserves the mailto: behaviour
+// on long-press / right-click via the underlying <a href>).
+$('about-modal-email').addEventListener('click', async (e) => {
+    const link = e.currentTarget;
+    try {
+        await navigator.clipboard.writeText(link.textContent.trim());
+        e.preventDefault();
+        const original = link.textContent;
+        link.classList.add('copied');
+        link.textContent = 'copied ✓';
+        setTimeout(() => {
+            link.textContent = original;
+            link.classList.remove('copied');
+        }, 1200);
+    } catch (_) {
+        // clipboard refused (no permission, insecure context) — fall back
+        // to the default mailto: navigation by NOT preventing default.
+    }
+});
+
 $('watch-token-row').addEventListener('click', async () => {
     const row = $('watch-token-row');
     const txt = $('watch-token-text').textContent || '';
