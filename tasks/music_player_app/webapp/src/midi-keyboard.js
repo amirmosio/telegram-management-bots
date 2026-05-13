@@ -19,10 +19,16 @@ export const INSTRUMENTS = [
         config: { type: 'splendid' } },
     { id: 'splendid-mellow',           label: 'Steinway — Mellow',
         config: { type: 'splendid', decayTime: 0.5 } },
+    { id: 'splendid-rich',             label: 'Steinway — Rich',
+        config: { type: 'splendid', decayTime: 1.5 } },
     { id: 'musyng-acoustic',           label: 'Acoustic Grand (Musyng)',
         config: { type: 'soundfont', kit: 'MusyngKite', name: 'acoustic_grand_piano' } },
     { id: 'fluid-acoustic',            label: 'Acoustic Grand (FluidR3)',
         config: { type: 'soundfont', kit: 'FluidR3_GM', name: 'acoustic_grand_piano' } },
+    { id: 'fatboy-acoustic',           label: 'Acoustic Grand (FatBoy)',
+        config: { type: 'soundfont', kit: 'FatBoy', name: 'acoustic_grand_piano' } },
+    { id: 'fluid-bright',              label: 'Bright Acoustic (FluidR3)',
+        config: { type: 'soundfont', kit: 'FluidR3_GM', name: 'bright_acoustic_piano' } },
 ];
 
 // Sustain slider runs 0 → SUSTAIN_MAX_MS. Above SUSTAIN_HOLD_THRESHOLD we
@@ -183,6 +189,20 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         return Math.max(0.72, 1.0 - (midi - middleC) * 0.005);
     }
 
+    // Soft-clip the upper half of velocity so hard hits don't trigger
+    // the brightest / harshest sample layer. Below the knee everything
+    // is linear (soft-touch dynamics preserved); above the knee every
+    // unit of extra MIDI velocity is scaled. 1.0 → ~0.78. Empirically
+    // this brings the soft↔hard timbral gap close enough that a small
+    // extra pressure no longer triggers the jarring "ff" layer in
+    // 2-layer GM soundfonts.
+    const VELOCITY_SOFT_CLIP_KNEE = 0.55;
+    const VELOCITY_SOFT_CLIP_RATIO = 0.5;
+    function _softClipUpper(v) {
+        if (v <= VELOCITY_SOFT_CLIP_KNEE) return v;
+        return VELOCITY_SOFT_CLIP_KNEE + (v - VELOCITY_SOFT_CLIP_KNEE) * VELOCITY_SOFT_CLIP_RATIO;
+    }
+
     function _shapeVelocity(rawVel, midi) {
         let baseNorm;
         if (velocityMode === 'soft') {
@@ -191,9 +211,12 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
             baseNorm = VELOCITY_LOCKED_HIGH / 127;
         } else {
             const inNorm = Math.max(0, Math.min(127, rawVel)) / 127;
-            baseNorm = velocitySensitivity === 1.0
+            const curved = velocitySensitivity === 1.0
                 ? inNorm
                 : Math.pow(inNorm, 1 / velocitySensitivity);
+            // Only in sensitive mode — locked modes already pick a fixed
+            // velocity so they don't need the compression.
+            baseNorm = _softClipUpper(curved);
         }
         // Per-pitch tilt still applies in fixed modes too — keeps right-
         // hand strikes from sounding disproportionately bright when locked.
