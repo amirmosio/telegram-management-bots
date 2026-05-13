@@ -930,30 +930,36 @@ html, body {
 .modal-content h3 { margin-bottom: 12px; font-size: 16px; }
 
 #modal-playlists {
-    margin-bottom: 12px;
+    margin-bottom: 14px;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    /* Between-chip spacing widened (was 8px) so two adjacent chips
+       can't be hit by the same fat-finger tap on mobile. */
+    gap: 14px;
     /* If the user has a lot of playlists the chip cloud can get tall —
        cap it and let only this region scroll, leaving the modal title
        and the Cancel button in place. */
     max-height: 50vh;
     overflow-y: auto;
-    padding: 4px;
-    margin-left: -4px;
-    margin-right: -4px;
+    padding: 6px;
+    margin-left: -6px;
+    margin-right: -6px;
 }
 
 .modal-playlist-tag {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
+    /* Icon-to-label gap widened to match the chunkier chip. */
+    gap: 9px;
+    /* Padding bumped (was 6px 12px). Chip height now ≈ 42px, close to
+       the 44px iOS / 48dp Material touch-target guideline, so an
+       accidental neighbour-tap is much less likely. */
+    padding: 12px 18px;
     border: 1px solid var(--border);
     border-radius: 999px;
     background: transparent;
     color: var(--text);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     line-height: 1.3;
