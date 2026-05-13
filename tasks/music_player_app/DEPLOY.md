@@ -20,6 +20,78 @@ If you ever change this domain (move off DuckDNS, take a custom domain),
 search-and-replace it across this file, `proxy.js`, `webapp/build.mjs`,
 and `webapp/src/cors-proxy.js`, and re-issue the TLS cert.
 
+## Source code on the server — GitHub deploy key
+
+The server has a **read-only GitHub deploy key** for this repo so it
+can `git pull` even after the repo is made private. The key is on disk
+at `~/.ssh/gh-telegram-music` (ubuntu user), and the matching public
+key is registered on GitHub under
+*Settings → Deploy keys → "armanserver2-telegram-music-deploy-…"*.
+
+To make `git pull` automatically use that key (rather than HTTPS + no
+auth), the server's `~/.ssh/config` defines a per-repo alias:
+
+```ssh-config
+Host github-telegram-music
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/gh-telegram-music
+    IdentitiesOnly yes
+```
+
+The checkout's `origin` URL uses that alias instead of `github.com`:
+
+```bash
+git remote -v
+# origin  git@github-telegram-music:amirmosio/telegram-management-bots.git (fetch)
+# origin  git@github-telegram-music:amirmosio/telegram-management-bots.git (push)
+```
+
+Push won't work from the server (the key is read-only on the GitHub
+side) — that's intentional. The server is a read-only consumer of the
+repo; pushes happen from your laptop.
+
+**First-time setup on a fresh box** (or if the box was rebuilt):
+
+```bash
+# 1. Generate the keypair on the server (ed25519, no passphrase).
+ssh-keygen -t ed25519 -N "" \
+    -C "armanserver2-telegram-music-deploy-$(date +%Y%m%d)" \
+    -f ~/.ssh/gh-telegram-music
+
+# 2. Paste ~/.ssh/gh-telegram-music.pub into the repo's Deploy keys
+#    page on GitHub (Allow write access: UNCHECKED).
+
+# 3. Add the SSH alias above to ~/.ssh/config.
+
+# 4. Pre-seed the github.com host key so the first pull doesn't prompt:
+ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts
+
+# 5. Clone (or re-point an existing checkout):
+git clone git@github-telegram-music:amirmosio/telegram-management-bots.git \
+    /home/ubuntu/telegram-management-bots
+# OR for an existing checkout:
+cd /home/ubuntu/telegram-management-bots
+git remote set-url origin git@github-telegram-music:amirmosio/telegram-management-bots.git
+
+# 6. Verify:
+ssh -T git@github-telegram-music
+# Expect: "Hi amirmosio/telegram-management-bots! You've successfully authenticated, ..."
+```
+
+**Deploys are git-pull only.** Every release lands via:
+
+```bash
+ssh armanserver2 'cd ~/telegram-management-bots && git pull --ff-only'
+```
+
+No `rsync`, no `scp`, no file-by-file copies — because that would
+silently carry over untracked files (`.DS_Store`, build caches, stray
+backup zips) and drift from what's actually committed. Anything that
+needs to be on the server but NOT in the repo (e.g. the `APP_TOKEN`
+secret, the corsproxy env file, the Python venv) is provisioned out-of-band
+via the §3, §5 etc. sections below — never via the deploy path.
+
 ## Topology
 
 ```
@@ -275,29 +347,35 @@ sudo -u www-data touch /tmp/should-not-exist /var/test
 
 ## Build artefact requirements
 
-The webapp build (`webapp/build.mjs`) expects `APP_TOKEN` to be set in the
-environment when run. Production builds **must** set it. Build-side flow:
+The webapp build (`webapp/build.mjs`) bakes `APP_TOKEN` into
+`app.bundle.js` at compile time via esbuild's `define`. Because that
+makes the bundle a carrier of the secret, **the bundle MUST NOT be
+committed to git** — it's listed in the root `.gitignore` as
+`tasks/music_player_app/webapp/app.bundle.js`. The bundle is produced
+**on the server** at deploy time, reading `APP_TOKEN` from the
+authoritative location (`/etc/musicplayer/corsproxy.env`).
+
+### One-time: install the webapp's build dependencies on the server
 
 ```bash
-export APP_TOKEN=$(openssl rand -hex 32)
-echo "$APP_TOKEN" > .app-token        # local-only, gitignored
-cd tasks/music_player_app/webapp && APP_TOKEN="$APP_TOKEN" npm run build
+sudo apt-get install -y nodejs npm     # already done per §0/topology
+cd /home/ubuntu/telegram-management-bots/tasks/music_player_app/webapp
+npm install                            # gets esbuild + plugins (~50 MB)
 ```
 
-The same `APP_TOKEN` value must then be written into the server's
-`/etc/musicplayer/corsproxy.env` before `systemctl restart corsproxy`. Order
-matters — push the bundle first (so users with a fresh page-load see the new
-token), then update the env file and restart.
+`npm install` only needs to be re-run when `package.json` / `package-lock.json`
+change (very rare — esbuild updates only). The build script (`node build.mjs`)
+runs in ~200 ms with peak memory <500 MB, well within the 2 GB box.
 
 ## Per-release checklist (every deploy must do these)
 
 Each public deploy MUST:
 
 1. **Bump the cache-bust version in `webapp/index.html`.** Search for every
-   `?v=N` (where `N` is an integer) and increment them all to the same new
-   value. There are at least two — `style.css?v=N` near the top and
-   `app.bundle.js?v=N` near the bottom. Both are SW-cached by URL; a forgotten
-   one means returning users keep the stale file. Sanity-check with:
+   `?v=N` and increment them all to the same new value. There are at least
+   four — `manifest.json?v=N`, `apple-touch-icon?v=N`, `style.css?v=N`,
+   `app.bundle.js?v=N`. All are SW-cached by URL; a forgotten one means
+   returning users keep the stale file. Sanity-check with:
 
    ```bash
    grep -n '?v=' tasks/music_player_app/webapp/index.html
@@ -305,22 +383,51 @@ Each public deploy MUST:
 
    All matches should share the new number.
 
-2. **Rotate `APP_TOKEN`** (see the section above). Generate a fresh
-   64-hex-char value, build with `APP_TOKEN=… npm run build`, push, then push
-   the matching value to `/etc/musicplayer/corsproxy.env` on the server and
-   restart `corsproxy`.
+2. **Commit + push** the change set (`index.html` cache-bust, any code
+   edits). The bundle is **not** in the commit — it's gitignored.
 
-3. **Commit + push** the version bump + rebuilt bundle in one commit, then
-   `ssh armanserver2 'cd ~/telegram-management-bots && git pull'`.
+3. **Pull + rebuild on the server** in one command:
 
-4. **Verify** with the four curl tests in `.claude/skills/deploy.md` (the
-   operational runbook). Expected status codes: 403 (no auth), 403 (wrong
-   Origin), 200 (correct Origin + token), `{"ok": true}` from
-   `/api/recognize/health`.
+   ```bash
+   ssh armanserver2 '
+     cd ~/telegram-management-bots && git pull --ff-only && \
+     cd tasks/music_player_app/webapp && \
+     APP_TOKEN=$(sudo awk -F= "/^APP_TOKEN=/{print \$2}" /etc/musicplayer/corsproxy.env) \
+       npm run build
+   '
+   ```
 
-If you skip step 1, browsers will keep the old `app.bundle.js` from cache
-and call the proxy with the **old** `APP_TOKEN`, which the server has just
-rotated away — every page in every open tab will show 403s until the user
+   nginx serves the new bundle on the next request — no service restart.
+   Rebuilding doesn't change the `APP_TOKEN` (it's read FROM the env file,
+   not generated); the env file remains the single source of truth.
+
+4. **Verify** with the four curl tests in `.claude/skills/deploy.md`.
+   Expected: 403 (no auth), 403 (wrong Origin), 200 (correct Origin + token),
+   `{"ok": true}` from `/api/recognize/health`.
+
+### Rotating `APP_TOKEN`
+
+Rotation is a server-side operation now — the laptop is uninvolved.
+
+```bash
+ssh armanserver2 '
+  NEW=$(openssl rand -hex 32)
+  sudo sed -i "s|^APP_TOKEN=.*|APP_TOKEN=$NEW|" /etc/musicplayer/corsproxy.env
+  cd ~/telegram-management-bots/tasks/music_player_app/webapp
+  APP_TOKEN="$NEW" npm run build
+  sudo systemctl restart corsproxy
+'
+```
+
+Bundle and env file land in sync — the server reads from the env file
+to set the build's `__APP_TOKEN__`, then the corsproxy reloads the same
+env file on restart. There's no laptop ↔ server token-sync to keep
+straight, and the token never appears in git.
+
+If you skip step 1 of the per-release checklist (the `?v=` bump),
+browsers will keep the old `app.bundle.js` from cache and call the
+proxy with the old `APP_TOKEN`, which the env file has just rotated
+away — every page in every open tab will show 403s until the user
 hard-refreshes.
 
 ## What gets checked at request time

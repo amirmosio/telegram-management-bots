@@ -15,3 +15,9 @@ node_modules/
 *.pem
 *.key
 .claude/
+
+# Webapp bundle is built on the server during deploy (NOT on the
+# laptop, never committed). The build-time APP_TOKEN secret is baked
+# into the bundle by esbuild — keeping that out of git is the whole
+# point of building on the server.
+tasks/music_player_app/webapp/app.bundle.js
