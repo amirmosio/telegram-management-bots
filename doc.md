@@ -10,12 +10,14 @@ Supplementary technical docs for *Telegram Music Player*. This file covers exter
 - **Session:** stored as a Telethon session file (Python) or a `StringSession` in `localStorage` (browser)
 - **Used for:** listing dialogs, scanning groups for audio messages, streaming audio bytes, forwarding tracks into playlist topics, deleting & re-sending messages (artwork save), creating the *Playlists Cache* supergroup and its forum topics
 
-### Lyrics (fallback chain)
-The player tries each source in order and stops at the first hit.
+### Lyrics (parallel fan-out)
+The player queries every source in parallel and keeps the best hit (synced wins over plain; among ties, earlier sources win).
 
 1. **[lrclib.net](https://lrclib.net)** — Synced (timestamped) + plain lyrics. Free, no API key
-2. **[lyrics.ovh](https://lyrics.ovh)** — Plain lyrics aggregated from Genius, AZLyrics, etc. Free, no API key
-3. **[ChartLyrics](http://www.chartlyrics.com)** — Plain lyrics via XML API. Free, no API key
+2. **[Musixmatch](https://www.musixmatch.com)** — Synced + plain via the public web-app token. Free, no API key
+3. **[lyrics.ovh](https://lyrics.ovh)** — Plain lyrics aggregated from Genius, AZLyrics, etc. Free, no API key
+4. **[ChartLyrics](http://www.chartlyrics.com)** — Plain lyrics via XML API. Free, no API key
+5. **[musicsweb.ir](https://musicsweb.ir)** — Persian (Farsi) lyrics. The site has no API, so the player runs a `site:musicsweb.ir <artist> <title>` query against DuckDuckGo's HTML endpoint and scrapes the lyric block from the matched post. Fills the gap for Persian songs that the English-language APIs don't index.
 
 If no synced lyrics are found but plain lyrics are, the player distributes lines evenly across the track duration to approximate syncing.
 
@@ -95,7 +97,7 @@ Browser (localhost:<PORT> or installed PWA)
             │
             ├── Telegram (GramJS, browser variant)          ─── MTProto
             ├── aiohttp Python server (desktop variant)     ─── REST above
-            ├── Lyrics APIs (lrclib, lyrics.ovh, ChartLyrics)
+            ├── Lyrics APIs (lrclib, Musixmatch, lyrics.ovh, ChartLyrics, musicsweb.ir)
             ├── Album art APIs (Deezer, iTunes)
             └── Recognition service (ShazamIO)
 ```

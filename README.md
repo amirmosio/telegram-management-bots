@@ -114,7 +114,7 @@ When the player fetches art from the internet, a **Save to Telegram** button app
 
 This is a **thin Telegram client** that runs entirely in your browser. Once the page is loaded, the JS talks **directly to Telegram's servers** (over MTProto) for everything to do with your account — browsing channels, fetching audio, creating playlists. No central database, no account on our side, no analytics; your music data never leaves your Telegram account.
 
-After the bundle is downloaded, the app keeps working even if our server goes away — tracks are cached in your browser (IndexedDB) and played from there, including for full offline playback as a PWA or the macOS menu-bar app. Our server is only used as a CORS bridge for **lyric and album-art lookups** (those upstream services — lrclib, lyrics.ovh, musixmatch, deezer, iTunes, discogs — don't support cross-origin requests, so they need a proxy in front). Nothing about your tracks or your listening habits is stored on our side.
+After the bundle is downloaded, the app keeps working even if our server goes away — tracks are cached in your browser (IndexedDB) and played from there, including for full offline playback as a PWA or the macOS menu-bar app. Our server is only used as a CORS bridge for **lyric and album-art lookups** (those upstream services — lrclib, lyrics.ovh, musixmatch, musicsweb.ir, deezer, iTunes, discogs — don't support cross-origin requests, so they need a proxy in front). Nothing about your tracks or your listening habits is stored on our side.
 
 ## Further reading
 
