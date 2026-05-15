@@ -404,6 +404,23 @@ Each public deploy MUST:
 
    nginx serves the new bundle on the next request — no service restart.
 
+   **If `proxy.js` changed**, also sync it to `/var/www/musicplayer/`
+   (the systemd unit's `WorkingDirectory` — see §2) and restart corsproxy.
+   The file there is a standalone copy owned by `root:www-data`, NOT a
+   symlink to the git checkout, so `git pull` alone does not update it.
+
+   ```bash
+   ssh -t armanserver2 'sudo install -o root -g www-data -m 644 \
+       ~ubuntu/telegram-management-bots/tasks/music_player_app/proxy.js \
+       /var/www/musicplayer/proxy.js && sudo systemctl restart corsproxy'
+   ```
+
+   Skipping this leaves the proxy serving the previous `ALLOWED_HOSTS`,
+   rate limits, etc., even though `git log` on the server claims the
+   change is deployed. Symptom: the new webapp bundle calls a freshly-
+   allowlisted host and gets 403 with `[proxy] blocked host=…` in
+   `journalctl -u corsproxy`.
+
 5. **Verify** with the four curl tests below. Expected: 403, 403, 200,
    `{"ok": true}`. A safe upstream target for tests 1–3 is any allowlisted
    host (here: `lrclib.net`):
