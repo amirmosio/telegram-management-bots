@@ -1,9 +1,7 @@
 # Music Player — production deployment checklist
 
 This file lives in the repo (visible on GitHub). It documents what the server
-needs in place for the webapp + CORS proxy + recognize service to run. The
-operational runbook with copy-pastable commands is in `.claude/skills/deploy.md`
-(local-only).
+needs in place for the webapp + CORS proxy + recognize service to run.
 
 ## Public domain
 
@@ -406,9 +404,29 @@ Each public deploy MUST:
 
    nginx serves the new bundle on the next request — no service restart.
 
-5. **Verify** with the four curl tests in `.claude/skills/deploy.md`.
-   Expected: 403 (no auth), 403 (wrong Origin), 200 (correct Origin + token),
-   `{"ok": true}` from `/api/recognize/health`.
+5. **Verify** with the four curl tests below. Expected: 403, 403, 200,
+   `{"ok": true}`. A safe upstream target for tests 1–3 is any allowlisted
+   host (here: `lrclib.net`):
+
+   ```bash
+   PROXY="https://telemusic.duckdns.org/proxy"
+   URL="https%3A%2F%2Flrclib.net%2Fapi%2Fsearch%3Fq%3Dtest"
+
+   # (1) No Origin / Referer / token → 403
+   curl -sS -o /dev/null -w "%{http_code}\n" "$PROXY?url=$URL"
+
+   # (2) Wrong Origin → 403
+   curl -sS -o /dev/null -w "%{http_code}\n" \
+       -H "Origin: https://evil.example" "$PROXY?url=$URL"
+
+   # (3) Correct Origin + token → 200
+   curl -sS -o /dev/null -w "%{http_code}\n" \
+       -H "Origin: https://telemusic.duckdns.org" \
+       -H "X-App-Token: $(cat .app-token)" "$PROXY?url=$URL"
+
+   # (4) Recognize service health
+   curl -sS "https://telemusic.duckdns.org/api/recognize/health"
+   ```
 
 ### Rotating `APP_TOKEN`
 
