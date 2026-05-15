@@ -242,9 +242,14 @@ async function tryChartLyrics(title, artist) {
     return result;
 }
 
-// musicsweb.ir — Persian lyrics. The site has its own ?s= search but it's
-// flaky on English-transliterated titles, so we let DuckDuckGo do the
-// matching with a site: filter, then scrape the post.
+// musicsweb.ir — Persian lyrics. Two indirections, both forced on us:
+//   1. musicsweb.ir's own ?s= search is flaky on English-transliterated
+//      titles, so we let DuckDuckGo do the matching with a site: filter.
+//   2. musicsweb.ir's origin geoblocks foreign IPs (AS48715, Tehran), so
+//      our proxy can't actually reach it. We read the post via the
+//      Wayback Machine's id_ raw-content endpoint, which is globally
+//      reachable and returns the archived HTML verbatim (same <p>…♪♪</p>
+//      structure, so the extractor works unchanged).
 async function tryMusicsweb(title, artist) {
     const result = { synced: null, plain: null, source: 'musicsweb.ir' };
     const query = (artist ? `${artist} ${title}` : title).trim();
@@ -259,8 +264,9 @@ async function tryMusicsweb(title, artist) {
         const m = ddgHtml.match(/musicsweb\.ir\/content\/\d+\/?/);
         if (!m) return result;
         const pageUrl = `https://${m[0].replace(/\/?$/, '/')}`;
+        const waybackUrl = `https://web.archive.org/web/0id_/${pageUrl}`;
 
-        const pageResp = await corsFetch(pageUrl);
+        const pageResp = await corsFetch(waybackUrl);
         if (!pageResp) return result;
         const pageHtml = await pageResp.text();
 

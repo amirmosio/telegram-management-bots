@@ -96,8 +96,11 @@ const ALLOWED_HOSTS = new Set([
     'translate.googleapis.com',
     'lrclib.net',
     'itunes.apple.com',
-    'musicsweb.ir',
     'html.duckduckgo.com',
+    // We don't allow musicsweb.ir directly — the origin geoblocks foreign
+    // IPs, so the proxy can't reach it. We read posts via the Wayback
+    // Machine's id_ raw endpoint instead (see webapp/src/lyrics.js).
+    'web.archive.org',
 ]);
 
 // ── SSRF guard ──────────────────────────────────────────────────────────

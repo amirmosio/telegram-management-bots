@@ -192,9 +192,12 @@ class LyricsFetcher:
                 if not page_match:
                     return result
                 page_url = "https://" + page_match.group(0).rstrip("/") + "/"
+                # musicsweb.ir geoblocks foreign IPs — read via Wayback's
+                # raw-content endpoint, which is globally reachable.
+                wayback_url = f"https://web.archive.org/web/0id_/{page_url}"
 
                 async with session.get(
-                    page_url, timeout=TIMEOUT, headers=_BROWSER_HEADERS,
+                    wayback_url, timeout=TIMEOUT, headers=_BROWSER_HEADERS,
                 ) as resp:
                     if resp.status != 200:
                         return result
