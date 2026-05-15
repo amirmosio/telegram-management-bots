@@ -5,6 +5,15 @@ import aiohttp
 
 TIMEOUT = aiohttp.ClientTimeout(total=10)
 HEADERS = {"User-Agent": "TelegramMusicPlayer/1.0"}
+# DuckDuckGo and musicsweb.ir reject the default UA — use a browser-like one.
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Safari/605.1.15"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,fa;q=0.8",
+}
 
 
 class LyricsFetcher:
@@ -26,6 +35,7 @@ class LyricsFetcher:
             lambda t, a: self._try_lrclib(t, a, duration),
             self._try_lyrics_ovh,
             self._try_chartlyrics,
+            self._try_musicsweb,
         ]
 
         for source_fn in sources:
@@ -153,6 +163,50 @@ class LyricsFetcher:
             pass
         return result
 
+    # ── Source 4: musicsweb.ir (Persian, plain) ──
+    # Persian songs are rarely in the English-language APIs above. musicsweb.ir
+    # is a WordPress lyrics/download site whose own search is unreliable on
+    # transliterated titles, so we let DuckDuckGo do the matching with a
+    # site: filter, then scrape the lyrics block from the post.
+
+    async def _try_musicsweb(self, title: str, artist: str) -> dict:
+        result = {"synced": None, "plain": None, "source": "musicsweb.ir"}
+
+        query = f"{artist} {title}".strip() if artist else title.strip()
+        if not query:
+            return result
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    "https://html.duckduckgo.com/html/",
+                    params={"q": f"site:musicsweb.ir {query}"},
+                    timeout=TIMEOUT,
+                    headers=_BROWSER_HEADERS,
+                ) as resp:
+                    if resp.status != 200:
+                        return result
+                    ddg_html = await resp.text()
+
+                page_match = re.search(r"musicsweb\.ir/content/\d+/?", ddg_html)
+                if not page_match:
+                    return result
+                page_url = "https://" + page_match.group(0).rstrip("/") + "/"
+
+                async with session.get(
+                    page_url, timeout=TIMEOUT, headers=_BROWSER_HEADERS,
+                ) as resp:
+                    if resp.status != 200:
+                        return result
+                    page_html = await resp.text()
+
+                lyrics = _extract_musicsweb_lyrics(page_html)
+                if lyrics:
+                    result["plain"] = lyrics
+        except Exception:
+            pass
+        return result
+
     # ── Source 3: ChartLyrics (plain, XML) ──
 
     async def _try_chartlyrics(self, title: str, artist: str) -> dict:
@@ -205,6 +259,37 @@ def parse_lrc(lrc_text: str) -> list[dict]:
 # ══════════════════════════════════════
 #  HELPERS
 # ══════════════════════════════════════
+
+_MUSIC_NOTE_RE = re.compile(r"[♩♪♫♬♭♮♯]+")
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_MUSICSWEB_P_RE = re.compile(r"<p\b[^>]*>(.*?)</p>", re.DOTALL | re.IGNORECASE)
+
+
+def _extract_musicsweb_lyrics(html: str) -> str | None:
+    """Extract lyric text from a musicsweb.ir post.
+
+    Each lyric line is a <p> ending with one or more music-note glyphs
+    (e.g. ♪♪). We pick those <p>s, strip HTML and the note marker, and
+    join with newlines. Lines without the marker are intros / metadata.
+    """
+    lines = []
+    for m in _MUSICSWEB_P_RE.finditer(html):
+        inner = m.group(1)
+        if not _MUSIC_NOTE_RE.search(inner):
+            continue
+        text = _HTML_TAG_RE.sub("", inner)
+        text = (text.replace("&nbsp;", " ")
+                    .replace("&amp;", "&")
+                    .replace("&quot;", '"')
+                    .replace("&#039;", "'")
+                    .replace("&#8217;", "’"))
+        text = _MUSIC_NOTE_RE.sub("", text).strip()
+        if text:
+            lines.append(text)
+    if len(lines) < 2:
+        return None
+    return "\n".join(lines)
+
 
 def _url_encode(s: str) -> str:
     """Minimal URL-safe encoding for path segments."""

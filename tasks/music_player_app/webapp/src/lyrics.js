@@ -23,6 +23,7 @@ export async function searchLyrics(title, artist = '', duration = 0) {
         tryMusixmatch(t, a),
         tryLyricsOvh(t, a),
         tryChartLyrics(t, a),
+        tryMusicsweb(t, a),
     ]);
 
     // Prefer synced lyrics, then plain. Among ties, prefer earlier sources (order above).
@@ -239,6 +240,56 @@ async function tryChartLyrics(title, artist) {
         }
     } catch (e) { /* ignore */ }
     return result;
+}
+
+// musicsweb.ir — Persian lyrics. The site has its own ?s= search but it's
+// flaky on English-transliterated titles, so we let DuckDuckGo do the
+// matching with a site: filter, then scrape the post.
+async function tryMusicsweb(title, artist) {
+    const result = { synced: null, plain: null, source: 'musicsweb.ir' };
+    const query = (artist ? `${artist} ${title}` : title).trim();
+    if (!query) return result;
+
+    try {
+        const ddgUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(`site:musicsweb.ir ${query}`)}`;
+        const ddgResp = await corsFetch(ddgUrl);
+        if (!ddgResp) return result;
+        const ddgHtml = await ddgResp.text();
+
+        const m = ddgHtml.match(/musicsweb\.ir\/content\/\d+\/?/);
+        if (!m) return result;
+        const pageUrl = `https://${m[0].replace(/\/?$/, '/')}`;
+
+        const pageResp = await corsFetch(pageUrl);
+        if (!pageResp) return result;
+        const pageHtml = await pageResp.text();
+
+        const lyrics = extractMusicswebLyrics(pageHtml);
+        if (lyrics) result.plain = lyrics;
+    } catch { /* ignore */ }
+    return result;
+}
+
+const _MUSIC_NOTE_RE = /[♩♪♫♬♭♮♯]+/g;
+
+function extractMusicswebLyrics(html) {
+    const lines = [];
+    const pRe = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
+    let m;
+    while ((m = pRe.exec(html)) !== null) {
+        const inner = m[1];
+        if (!_MUSIC_NOTE_RE.test(inner)) continue;
+        _MUSIC_NOTE_RE.lastIndex = 0; // reset, since /g + .test() is stateful
+        let text = inner.replace(/<[^>]+>/g, '');
+        text = text.replace(/&nbsp;/g, ' ')
+                   .replace(/&amp;/g, '&')
+                   .replace(/&quot;/g, '"')
+                   .replace(/&#0?39;/g, "'")
+                   .replace(/&#8217;/g, '’');
+        text = text.replace(_MUSIC_NOTE_RE, '').trim();
+        if (text) lines.push(text);
+    }
+    return lines.length >= 2 ? lines.join('\n') : null;
 }
 
 // ══════════════════════════════════════

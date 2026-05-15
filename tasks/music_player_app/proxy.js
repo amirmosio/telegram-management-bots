@@ -29,9 +29,12 @@
 //                                    through has no purpose and only
 //                                    creates risk.
 //   6. Per-IP rate limit           — 60-req burst, 60 req/min sustained.
-//   7. Response-size cap           — upstream responses larger than 5 MB
+//   7. Global daily quota          — 200 successfully-proxied requests per
+//                                    UTC day across all IPs combined. In-
+//                                    memory; resets on process restart.
+//   8. Response-size cap           — upstream responses larger than 5 MB
 //                                    are truncated to prevent abuse.
-//   8. Method allowlist            — GET (and OPTIONS preflight) only.
+//   9. Method allowlist            — GET (and OPTIONS preflight) only.
 //
 // Environment variables (set in the systemd unit):
 //   ALLOWED_ORIGIN          required. Exact origin string of the webapp,
@@ -93,6 +96,8 @@ const ALLOWED_HOSTS = new Set([
     'translate.googleapis.com',
     'lrclib.net',
     'itunes.apple.com',
+    'musicsweb.ir',
+    'html.duckduckgo.com',
 ]);
 
 // ── SSRF guard ──────────────────────────────────────────────────────────
@@ -172,6 +177,31 @@ function rateLimit(ip) {
     }
     if (b.tokens < 1) return false;
     b.tokens -= 1;
+    return true;
+}
+
+// ── Global daily quota (all IPs combined) ──────────────────────────────
+// Hard cap on total proxied requests per UTC day, to bound cost / abuse
+// exposure across every client. In-memory only — a process restart resets
+// the counter, which is acceptable (corsproxy.service only restarts on
+// deploy or crash). UTC midnight rollover.
+const GLOBAL_DAILY_LIMIT = 200;
+let dailyCount = 0;
+let dailyResetAt = nextUtcMidnight();
+
+function nextUtcMidnight() {
+    const d = new Date();
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
+}
+
+function globalQuota() {
+    const now = Date.now();
+    if (now >= dailyResetAt) {
+        dailyCount = 0;
+        dailyResetAt = nextUtcMidnight();
+    }
+    if (dailyCount >= GLOBAL_DAILY_LIMIT) return false;
+    dailyCount += 1;
     return true;
 }
 // Trim idle buckets so the Map can't grow without bound under scan storms.
@@ -272,6 +302,13 @@ const server = http.createServer((req, res) => {
     if (!rateLimit(ip)) {
         res.setHeader('Retry-After', '5');
         res.writeHead(429); res.end('Too many requests');
+        return;
+    }
+    if (!globalQuota()) {
+        const retryAfterSec = Math.max(1, Math.ceil((dailyResetAt - Date.now()) / 1000));
+        res.setHeader('Retry-After', String(retryAfterSec));
+        console.warn(`[proxy] denied (daily quota exhausted) ip=${ip}`);
+        res.writeHead(429); res.end('Daily quota exhausted');
         return;
     }
 
