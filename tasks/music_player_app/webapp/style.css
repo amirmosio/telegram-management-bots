@@ -2757,3 +2757,77 @@ body.coplay-follower #progress-bar {
     pointer-events: none;
     opacity: 0.45;
 }
+
+/* ── "Add as shared playlist" button on browse rows ── */
+.group-add-playlist {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+}
+.group-add-playlist:hover {
+    background: var(--bg-hover);
+    color: var(--accent);
+    border-color: var(--accent);
+}
+.group-add-playlist:active { transform: scale(0.92); }
+.group-add-playlist.added {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(82, 136, 193, 0.12);
+    cursor: default;
+    pointer-events: none;
+}
+
+/* ── Shared (external-chat) playlists ── */
+.playlist-shared-badge {
+    flex-shrink: 0;
+    font-size: 14px;
+    line-height: 1;
+    margin-left: 4px;
+    opacity: 0.85;
+}
+.playlist-remove {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-radius: 50%;
+    margin-left: 4px;
+    transition: background 0.15s, color 0.15s;
+}
+.playlist-remove:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+}
+.playlist-icon-photo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bg-tertiary);
+}
+
+/* Shared chip in the add/move modal — same chip, with a 👥 trailing badge. */
+.modal-playlist-tag-badge {
+    flex-shrink: 0;
+    font-size: 12px;
+    line-height: 1;
+    margin-left: 4px;
+    opacity: 0.85;
+}

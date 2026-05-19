@@ -26,6 +26,38 @@ let playlists = [];
 let currentPlaylistTopicId = null;
 let playlistTracks = [];
 
+// External "shared" playlists: dialogs (DMs/groups/channels) the user has
+// pinned as playlists alongside the topic-backed personal ones. Stored in
+// localStorage as [{ id, title, kind, username? }]. When one is open,
+// `currentPlaylistKind === 'shared'` and `currentPlaylistTopicId` holds the
+// external chat's id (Number). Track scanning then runs against that chat
+// with topicId=null (whole chat is the playlist).
+let externalPlaylists = [];
+let currentPlaylistKind = 'personal'; // 'personal' | 'shared'
+
+function loadExternalPlaylists() {
+    try {
+        const raw = localStorage.getItem('external_playlists');
+        if (!raw) { externalPlaylists = []; return; }
+        const arr = JSON.parse(raw);
+        externalPlaylists = Array.isArray(arr) ? arr : [];
+    } catch { externalPlaylists = []; }
+}
+function saveExternalPlaylists() {
+    try { localStorage.setItem('external_playlists', JSON.stringify(externalPlaylists)); } catch {}
+}
+
+// Resolve the (groupId, topicId) pair the currently-open playlist scans
+// against. Use this everywhere instead of inlining playlistGroupId so
+// shared playlists (backed by external chats) route correctly.
+function currentScanContext() {
+    if (currentPlaylistKind === 'shared' && currentPlaylistTopicId != null && currentPlaylistTopicId !== '__all__') {
+        return { groupId: currentPlaylistTopicId, topicId: null };
+    }
+    const topicId = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+    return { groupId: playlistGroupId, topicId };
+}
+
 let playerTracks = [];
 let playerGroupId = null;
 let playerTopicId = null;
@@ -267,7 +299,7 @@ async function loadPlaylists() {
 
 function renderPlaylists() {
     playlistsContainer.innerHTML = '';
-    if (playlists.length === 0) {
+    if (playlists.length === 0 && externalPlaylists.length === 0) {
         playlistsContainer.innerHTML = '<div class="lyrics-placeholder">No playlists yet</div>';
         return;
     }
@@ -282,11 +314,72 @@ function renderPlaylists() {
         el.addEventListener('click', () => openPlaylist(p));
         playlistsContainer.appendChild(el);
     });
+    // Shared playlists (external chats) — appended after topic playlists.
+    // Each carries a 👥 badge so the user can tell at a glance which
+    // playlists are private vs shared with other people.
+    externalPlaylists.forEach(ext => {
+        const el = document.createElement('div');
+        el.className = 'playlist-item playlist-item-shared';
+        el.innerHTML = `
+            <div class="playlist-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
+            <span class="playlist-title">${escapeHtml(ext.title)}</span>
+            <span class="playlist-shared-badge" title="Shared playlist" aria-label="Shared playlist">👥</span>
+            <button type="button" class="playlist-remove" title="Remove from playlists" aria-label="Remove from playlists">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+            <span class="playlist-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>
+        `;
+        // Swap in the chat photo when available.
+        tg.getGroupPhoto(ext.id).then(url => {
+            if (!url) return;
+            const icon = el.querySelector('.playlist-icon');
+            const img = document.createElement('img');
+            img.className = 'group-photo playlist-icon-photo';
+            img.src = url;
+            img.alt = '';
+            icon.replaceWith(img);
+        }).catch(() => {});
+        el.addEventListener('click', () => openExternalPlaylist(ext));
+        const removeBtn = el.querySelector('.playlist-remove');
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeExternalPlaylist(ext);
+        });
+        playlistsContainer.appendChild(el);
+    });
+}
+
+async function openExternalPlaylist(ext) {
+    currentPlaylistKind = 'shared';
+    currentPlaylistTopicId = ext.id;
+    showPlaylistTracks();
+    panelTitle.textContent = ext.title;
+    playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+    try {
+        playlistTracks = await tg.scanTracks(ext.id, null);
+        renderTracksInto(playlistTracksContainer, playlistTracks, '',
+            { groupId: ext.id, topicId: null, showAddBtn: false });
+    } catch (e) {
+        playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder">Failed to load</div>';
+    }
+}
+
+async function removeExternalPlaylist(ext) {
+    const ok = await showConfirmModal(
+        `Remove "${ext.title}" from playlists?`,
+        `The chat itself stays in Telegram. Only its pinning as a playlist is removed.`,
+    );
+    if (!ok) return;
+    externalPlaylists = externalPlaylists.filter(p => String(p.id) !== String(ext.id));
+    saveExternalPlaylists();
+    renderPlaylists();
+    try { _renderBrowseDialogs(); } catch {}
 }
 
 async function openPlaylist(p) {
     // Use '__all__' as sentinel for the synthetic "All" entry so switchTab
     // can distinguish "All view open" from "playlists list view".
+    currentPlaylistKind = 'personal';
     currentPlaylistTopicId = p.isAll ? '__all__' : p.id;
     const topicIdForApi = p.isAll ? null : p.id;
     showPlaylistTracks();
@@ -308,7 +401,10 @@ function showPlaylistTracks() {
     // Re-derive the header title on every entry — switchTab() reuses this
     // view when the user bounces between tabs, and without this the title
     // still reads whatever the previous tab set (e.g. the browse group).
-    if (currentPlaylistTopicId === '__all__') {
+    if (currentPlaylistKind === 'shared') {
+        const ext = externalPlaylists.find(p => String(p.id) === String(currentPlaylistTopicId));
+        if (ext) panelTitle.textContent = ext.title;
+    } else if (currentPlaylistTopicId === '__all__') {
         panelTitle.textContent = 'All';
     } else {
         const p = playlists.find(p => p.id === currentPlaylistTopicId);
@@ -423,15 +519,15 @@ playlistTracksSearch.addEventListener('input', () => {
     clearTimeout(browseSearchTimeout);
     browseSearchTimeout = setTimeout(async () => {
         const q = playlistTracksSearch.value.trim();
-        const topicIdForApi = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+        const { groupId, topicId } = currentScanContext();
         if (!q) {
-            renderTracksInto(playlistTracksContainer, playlistTracks, '', { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false });
+            renderTracksInto(playlistTracksContainer, playlistTracks, '', { groupId, topicId, showAddBtn: false });
             return;
         }
         playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
         try {
-            const results = await tg.searchTracksInChat(playlistGroupId, topicIdForApi, q);
-            renderTracksInto(playlistTracksContainer, results, '', { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false }, { isSearchResult: true });
+            const results = await tg.searchTracksInChat(groupId, topicId, q);
+            renderTracksInto(playlistTracksContainer, results, '', { groupId, topicId, showAddBtn: false }, { isSearchResult: true });
         } catch (e) {
             playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
         }
@@ -443,11 +539,15 @@ const btnDownloadAll = $('btn-download-all');
 let _downloadAllInFlight = false;
 btnDownloadAll.addEventListener('click', async () => {
     if (_downloadAllInFlight) return;
-    if (!playlistGroupId || currentPlaylistTopicId === null) {
+    if (currentPlaylistTopicId === null) {
         showToast('Open a playlist first');
         return;
     }
-    const topicIdForApi = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+    const { groupId: scanGroupId, topicId: topicIdForApi } = currentScanContext();
+    if (!scanGroupId) {
+        showToast('Open a playlist first');
+        return;
+    }
 
     // Try to upgrade to persistent storage again — Chrome sometimes grants
     // it only after meaningful user engagement.
@@ -456,8 +556,8 @@ btnDownloadAll.addEventListener('click', async () => {
     // Drain all pages first so we know the true total.
     showToast('Counting tracks…');
     try {
-        await tg.loadAllTracks(playlistGroupId, topicIdForApi, (newPage) => {
-            const ctx = { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false };
+        await tg.loadAllTracks(scanGroupId, topicIdForApi, (newPage) => {
+            const ctx = { groupId: scanGroupId, topicId: topicIdForApi, showAddBtn: false };
             for (const track of newPage) {
                 playlistTracksContainer.appendChild(_createTrackEl(track, playlistTracks, ctx));
             }
@@ -465,7 +565,7 @@ btnDownloadAll.addEventListener('click', async () => {
     } catch (e) { /* best effort */ }
 
     const total = playlistTracks.length;
-    const notYet = playlistTracks.filter(t => !tg.isTrackDownloaded(playlistGroupId, t.id));
+    const notYet = playlistTracks.filter(t => !tg.isTrackDownloaded(scanGroupId, t.id));
     const alreadyCount = total - notYet.length;
     if (total === 0) { showToast('No tracks to download'); return; }
     if (notYet.length === 0) { showToast('All tracks already downloaded'); return; }
@@ -500,7 +600,7 @@ btnDownloadAll.addEventListener('click', async () => {
     const failures = []; // track failures for diagnostics
     for (const track of notYet) {
         try {
-            const status = await tg.prefetchTrack(playlistGroupId, track.id);
+            const status = await tg.prefetchTrack(scanGroupId, track.id);
             if (status === 'already') already++;
             else done++;
         } catch (e) {
@@ -558,6 +658,7 @@ btnBack.addEventListener('click', () => {
         tabPlaylistTracks.classList.remove('active');
         tabPlaylists.classList.add('active');
         currentPlaylistTopicId = null;
+        currentPlaylistKind = 'personal';
     }
 });
 
@@ -571,12 +672,24 @@ function createGroupElement(g, onClick) {
     if (g.kind === 'user') sub = g.username ? `@${g.username}` : 'DM';
     else if (g.kind === 'bot') sub = g.username ? `@${g.username}` : 'Bot';
     else sub = `${g.kind}${g.forum ? ' (forum)' : ''}`;
+    // Show the "+" (add as shared playlist) action on every dialog except
+    // the user's own personal playlist group — that one is already the home
+    // for topic-backed playlists. Already-pinned dialogs get a filled state
+    // so the user knows the action is a no-op.
+    const isPlaylistGroup = playlistGroupId && String(g.id) === String(playlistGroupId);
+    const alreadyPinned = externalPlaylists.some(p => String(p.id) === String(g.id));
+    const addBtnHtml = isPlaylistGroup
+        ? ''
+        : `<button type="button" class="group-add-playlist${alreadyPinned ? ' added' : ''}" title="${alreadyPinned ? 'Already a shared playlist' : 'Add as shared playlist'}" aria-label="Add as shared playlist">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>`;
     el.innerHTML = `
         <div class="group-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
         <div class="group-info">
             <div class="group-title">${escapeHtml(g.title)}</div>
             <div class="group-type">${escapeHtml(sub)}</div>
         </div>
+        ${addBtnHtml}
     `;
     // Load group photo asynchronously
     tg.getGroupPhoto(g.id).then(url => {
@@ -590,7 +703,62 @@ function createGroupElement(g, onClick) {
         }
     }).catch(() => {});
     el.addEventListener('click', () => onClick(g));
+    const addBtn = el.querySelector('.group-add-playlist');
+    if (addBtn) {
+        addBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            confirmAddAsPlaylist(g);
+        });
+    }
     return el;
+}
+
+// Confirm-and-register a dialog as a "shared playlist". For DMs this just
+// echoes the other user's name; for groups we fetch a few participants so
+// the user sees who the playlist will be shared with. Channels can't be
+// enumerated reliably, so we use a generic subscriber line.
+async function confirmAddAsPlaylist(g) {
+    if (externalPlaylists.some(p => String(p.id) === String(g.id))) {
+        showToast('Already a shared playlist');
+        return;
+    }
+    let body;
+    if (g.kind === 'user') {
+        body = `Shared with ${g.title}.`;
+    } else if (g.kind === 'bot') {
+        body = `Shared with ${g.title} (bot).`;
+    } else if (g.kind === 'channel') {
+        body = `Shared with subscribers of ${g.title}.`;
+    } else {
+        // Group: try to enumerate. Best effort — getChatParticipants
+        // returns [] on failure, in which case we fall back.
+        let parts = [];
+        try { parts = await tg.getChatParticipants(g.id, 5); } catch {}
+        if (parts.length === 0) {
+            body = `Shared with members of ${g.title}.`;
+        } else {
+            const names = parts.map(p => p.title).slice(0, 3).join(', ');
+            const extra = parts.length > 3 ? `, and ${parts.length - 3} other${parts.length - 3 === 1 ? '' : 's'}` : '';
+            body = `Shared with ${names}${extra}.`;
+        }
+    }
+    const ok = await showConfirmModal(
+        `Use "${g.title}" as a playlist?`,
+        `${body}\n\nFrom now on, this chat will appear in your Playlists list.`,
+    );
+    if (!ok) return;
+    externalPlaylists.push({
+        id: g.id,
+        title: g.title,
+        kind: g.kind,
+        username: g.username || '',
+    });
+    saveExternalPlaylists();
+    renderPlaylists();
+    showToast('Added to playlists');
+    // Refresh the browse list so the row's + button switches to "added".
+    try { _renderBrowseDialogs(); } catch {}
+    switchTab('playlists');
 }
 
 // ══════════════════════════════════════
@@ -1404,7 +1572,7 @@ async function _streamWithSeek(track, gen, sw) {
                             cachedToIdb = true;
                             _streamDownloadActive = false;
                             const blob = new Blob([localBuffer], { type: mime });
-                            const topicIdForCache = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+                            const topicIdForCache = currentScanContext().topicId;
                             tg.cacheTrack(gId, track.id, {
                                 blob, track,
                                 topicId: topicIdForCache,
@@ -1518,9 +1686,9 @@ async function _shuffleEnsureWindow(ws) {
         _shuffleWindowTrackIds.set(ws, ids);
 
         // Append new rows to the visible sidebar if we're viewing this list.
-        const cpT = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
-        if (newTracks.length > 0 && playerGroupId === playlistGroupId && playerTopicId === cpT) {
-            const ctx = { groupId: playlistGroupId, topicId: cpT, showAddBtn: false };
+        const view = currentScanContext();
+        if (newTracks.length > 0 && playerGroupId === view.groupId && playerTopicId === view.topicId) {
+            const ctx = { groupId: view.groupId, topicId: view.topicId, showAddBtn: false };
             const sentinel = playlistTracksContainer.querySelector('.load-more-sentinel');
             for (const track of newTracks) {
                 const el = _createTrackEl(track, playerTracks, ctx);
@@ -1770,9 +1938,9 @@ async function _shuffleDrainIntoPlayer() {
         await tg.loadAllTracks(playerGroupId, playerTopicId, (newPage) => {
             // playerTracks is the same array reference as the cache — it grew.
             // Append corresponding rows to the visible list if it matches.
-            const cpT = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
-            if (playerGroupId === playlistGroupId && playerTopicId === cpT) {
-                const ctx = { groupId: playlistGroupId, topicId: cpT, showAddBtn: false };
+            const view = currentScanContext();
+            if (playerGroupId === view.groupId && playerTopicId === view.topicId) {
+                const ctx = { groupId: view.groupId, topicId: view.topicId, showAddBtn: false };
                 const sentinel = playlistTracksContainer.querySelector('.load-more-sentinel');
                 for (const track of newPage) {
                     const el = _createTrackEl(track, playlistTracks, ctx);
@@ -2020,7 +2188,7 @@ async function fetchLyricsForTrack(track, gen) {
         // if needed and fills in the topicId / topicTitle / track meta
         // so offline views can surface the track later.
         if (result?.synced || result?.plain) {
-            const topicIdForRow = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
+            const topicIdForRow = currentScanContext().topicId;
             tg.updateTrackLyrics(playerGroupId, track.id, result, {
                 topicId: playerTopicId ?? topicIdForRow,
                 topicTitle: panelTitle?.textContent || null,
@@ -2351,10 +2519,11 @@ async function showPlaylistPicker(mode) {
     // Exclude the synthetic "All" entry and the General/Search topic (id=1)
     // from the picker — neither is a real destination playlist.
     const pickable = playlists.filter(p => !p.isAll && p.id !== 1);
+    const sharedPickable = externalPlaylists.slice();
 
     // No playlists yet — skip the empty picker and prompt to create one,
     // then add/move the pending track straight into it.
-    if (pickable.length === 0) {
+    if (pickable.length === 0 && sharedPickable.length === 0) {
         if (!playlistGroupId) { showToast('Playlist group not ready'); pendingAddTrack = null; return; }
         const name = await showPromptModal('Create your first playlist', { placeholder: 'Playlist name' });
         if (!name?.trim()) { pendingAddTrack = null; return; }
@@ -2384,6 +2553,20 @@ async function showPlaylistPicker(mode) {
         el.addEventListener('click', () => {
             if (pickerMode === 'move') moveTrackToPlaylist(p.id);
             else addTrackToPlaylist(p.id);
+        });
+        modalPlaylists.appendChild(el);
+    });
+    // Shared playlists — same row, but tagged with the 👥 badge so the user
+    // can see which destinations will publish the track to other people.
+    sharedPickable.forEach(ext => {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'modal-playlist-tag modal-playlist-tag-shared';
+        const iconHtml = `<span class="modal-playlist-tag-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></span>`;
+        el.innerHTML = `${iconHtml}<span class="modal-playlist-tag-label">${escapeHtml(ext.title)}</span><span class="modal-playlist-tag-badge" title="Shared">👥</span>`;
+        el.addEventListener('click', () => {
+            if (pickerMode === 'move') moveTrackToExternalPlaylist(ext.id);
+            else addTrackToExternalPlaylist(ext.id);
         });
         modalPlaylists.appendChild(el);
     });
@@ -2489,6 +2672,49 @@ async function moveTrackToPlaylist(topicId) {
             showToast('Moved to playlist');
             // Drop the moved track from any in-memory list rendered from the
             // source so the row disappears immediately without a reload.
+            _removeTrackFromRenderedLists(groupId, trackId);
+        } else if (result.forwarded > 0) {
+            showToast('Copied, but delete failed');
+        } else {
+            showToast('Failed to move');
+        }
+    } catch (e) {
+        showToast('Failed to move');
+    } finally {
+        if (moveBtn) moveBtn.classList.remove('moving');
+    }
+}
+
+// ── Shared playlists (external chats) ──
+// Same shape as the personal add/move flow, but the destination is the
+// external chat itself (topicId=null). For "move" we still call
+// moveTracksToPlaylist so the source row gets deleted on success — even
+// though the visible result is the track posted to a real chat.
+async function addTrackToExternalPlaylist(extId) {
+    if (!pendingAddTrack) return;
+    const { trackId, groupId } = pendingAddTrack;
+    pendingAddTrack = null;
+    playlistModal.style.display = 'none';
+    try {
+        const result = await tg.addTracksToPlaylist(extId, null, groupId, [trackId]);
+        if (result.added > 0) showToast('Added to shared playlist');
+        else showToast('Failed to add');
+    } catch (e) {
+        showToast('Failed to add');
+    }
+}
+
+async function moveTrackToExternalPlaylist(extId) {
+    if (!pendingAddTrack) return;
+    const { trackId, groupId } = pendingAddTrack;
+    pendingAddTrack = null;
+    playlistModal.style.display = 'none';
+    const moveBtn = $('btn-move-playing');
+    if (moveBtn) moveBtn.classList.add('moving');
+    try {
+        const result = await tg.moveTracksToPlaylist(extId, null, groupId, [trackId]);
+        if (result.moved > 0) {
+            showToast('Moved to shared playlist');
             _removeTrackFromRenderedLists(groupId, trackId);
         } else if (result.forwarded > 0) {
             showToast('Copied, but delete failed');
@@ -4082,10 +4308,13 @@ function saveSession() {
 
         // Playlist context
         currentPlaylistTopicId,
+        currentPlaylistKind,
         currentPlaylistTitle: currentPlaylistTopicId === '__all__'
             ? 'All'
             : (currentPlaylistTopicId
-                ? (playlists.find(p => p.id === currentPlaylistTopicId)?.title || '')
+                ? (currentPlaylistKind === 'shared'
+                    ? (externalPlaylists.find(p => String(p.id) === String(currentPlaylistTopicId))?.title || '')
+                    : (playlists.find(p => p.id === currentPlaylistTopicId)?.title || ''))
                 : null),
 
         // Player state
@@ -4304,20 +4533,27 @@ async function restoreSession() {
         fetchLyricsForTrack(track, _playGeneration);
 
         // ── 3. Restore sidebar view ──
-        if (s.currentPlaylistTopicId && playlistGroupId && s.activeTab === 'playlists') {
+        if (s.currentPlaylistTopicId && s.activeTab === 'playlists') {
             currentPlaylistTopicId = s.currentPlaylistTopicId;
-            const topicIdForApi = currentPlaylistTopicId === '__all__' ? null : currentPlaylistTopicId;
-            showPlaylistTracks();
-            panelTitle.textContent = s.currentPlaylistTitle || (currentPlaylistTopicId === '__all__' ? 'All' : '');
-
-            // If playing from this playlist, reuse tracks; otherwise scan
-            if (String(s.playerGroupId) === String(playlistGroupId) && s.playerTopicId === topicIdForApi) {
-                playlistTracks = tracks;
+            currentPlaylistKind = s.currentPlaylistKind === 'shared' ? 'shared' : 'personal';
+            // Personal-kind requires a playlistGroupId; shared works
+            // standalone (the chat ID lives in currentPlaylistTopicId).
+            if (currentPlaylistKind === 'personal' && !playlistGroupId) {
+                currentPlaylistTopicId = null;
             } else {
-                try { playlistTracks = await tg.scanTracks(playlistGroupId, topicIdForApi); } catch (e) {}
+                const { groupId: scanGroupId, topicId: topicIdForApi } = currentScanContext();
+                showPlaylistTracks();
+                panelTitle.textContent = s.currentPlaylistTitle || (currentPlaylistTopicId === '__all__' ? 'All' : '');
+
+                // If playing from this playlist, reuse tracks; otherwise scan
+                if (String(s.playerGroupId) === String(scanGroupId) && s.playerTopicId === topicIdForApi) {
+                    playlistTracks = tracks;
+                } else {
+                    try { playlistTracks = await tg.scanTracks(scanGroupId, topicIdForApi); } catch (e) {}
+                }
+                renderTracksInto(playlistTracksContainer, playlistTracks, '',
+                    { groupId: scanGroupId, topicId: topicIdForApi, showAddBtn: false });
             }
-            renderTracksInto(playlistTracksContainer, playlistTracks, '',
-                { groupId: playlistGroupId, topicId: topicIdForApi, showAddBtn: false });
         }
 
         // Restore browse tracks if browsing a different group
@@ -4495,6 +4731,8 @@ async function initAfterLogin() {
         // downloaded playlists before any network request.
         loadPlaylists();
     }
+
+    loadExternalPlaylists();
 
     loadGroups();
 

@@ -2255,6 +2255,32 @@ export async function listAllDialogs(limit = 500) {
     return chats;
 }
 
+// Fetch a few participants of a chat so the "add as playlist" confirmation
+// dialog can display who the playlist will be shared with. Best-effort —
+// for channels you don't admin gramjs may refuse or return zero. Callers
+// must degrade gracefully (e.g. fall back to "members of <title>").
+export async function getChatParticipants(chatId, limit = 5) {
+    try {
+        await _ensureConnected();
+        const entity = await _getEntity(chatId);
+        const parts = await client.getParticipants(entity, { limit });
+        const out = [];
+        for (const u of parts) {
+            const rawId = u.id?.value ?? u.id;
+            const id = Number(typeof rawId === 'bigint' ? rawId : rawId);
+            if (u.self) continue;
+            const first = u.firstName || '';
+            const last = u.lastName || '';
+            const title = (first + ' ' + last).trim() || u.username || 'User';
+            out.push({ id, title });
+        }
+        return out;
+    } catch (e) {
+        console.warn('[getChatParticipants] failed:', e?.message || e);
+        return [];
+    }
+}
+
 // Returns true if `msgId` still exists in the given channel and has
 // audio media attached. Used by the share flow to detect stale cached
 // share-channel forwards (msg deleted by mod, by user, or stale entry
