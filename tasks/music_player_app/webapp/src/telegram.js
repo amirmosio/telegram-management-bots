@@ -2324,7 +2324,6 @@ export async function scanPlaylistInvites() {
     try { channel = await findOrCreateShareChannel(); }
     catch (e) { console.warn('[invites] share channel resolve failed:', e?.message || e); return []; }
     const entity = await _getEntity(channel.id);
-    const me = await getMyUserId();
     const out = [];
     const seenChats = new Set();
     try {
@@ -2332,55 +2331,110 @@ export async function scanPlaylistInvites() {
         // window of recent activity without paging.
         const msgs = await client.getMessages(entity, { limit: 60 });
         for (const msg of msgs) {
-            if (!msg || !msg.message) continue;
-            const text = String(msg.message);
-            if (!text.startsWith(PLAYLIST_INVITE_MARKER)) continue;
-            if (msg.out) continue; // skip own posts
-
-            let payload = null;
-            try {
-                const afterMarker = text.slice(PLAYLIST_INVITE_MARKER.length);
-                const nl = afterMarker.indexOf('\n');
-                const jsonStr = nl === -1 ? afterMarker : afterMarker.slice(0, nl);
-                payload = JSON.parse(jsonStr);
-            } catch { continue; }
-            if (!payload || payload.v !== 1 || !payload.chat?.id) continue;
-
-            // Must be explicitly addressed to me.
-            const ids = Array.isArray(payload.inv) ? payload.inv.map(n => Number(n)) : [];
-            if (!me || !ids.includes(me)) continue;
-
-            // De-dupe by chatId — if multiple people invited me to the
-            // same chat, only show the most recent one (loop is newest-
-            // first, so the first hit per chat wins).
-            const chatId = Number(payload.chat.id);
-            if (seenChats.has(chatId)) continue;
-            seenChats.add(chatId);
-
-            // Resolve sender user id (so the FAB can fetch the avatar).
-            let fromUserId = null;
-            const fromId = msg.fromId;
-            if (fromId) {
-                const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
-                if (raw != null) fromUserId = Number(typeof raw === 'bigint' ? raw : raw);
-            }
-            if (msg.sender instanceof Api.User && fromUserId && !_groupsCache[fromUserId]) {
-                _groupsCache[fromUserId] = msg.sender;
-            }
-
-            out.push({
-                chatId,
-                chatTitle: payload.chat.title || '',
-                chatKind: payload.chat.kind || 'group',
-                msgId: msg.id,
-                fromName: payload.fromName || '',
-                fromUserId,
-            });
+            const parsed = await _parsePlaylistInviteMsg(msg);
+            if (!parsed) continue;
+            // De-dupe by resolved chatId — newest-first, first hit wins.
+            if (seenChats.has(parsed.chatId)) continue;
+            seenChats.add(parsed.chatId);
+            out.push(parsed);
         }
     } catch (e) {
         console.warn('[invites] scan failed:', e?.message || e);
     }
     return out;
+}
+
+// Parse a single share-channel message into a playlist-invite shape, or
+// return null if it's not an invite for me. Mirrors the per-message
+// filtering in scanPlaylistInvites so realtime + catch-up paths agree.
+//
+// DM (kind=user) special-case: payload.chat.id is the sender's view of
+// the DM (= the receiver's own user id). The receiver's view of the
+// same DM is keyed by the SENDER's user id. So when kind=user we
+// override chatId to fromUserId and chatTitle to the sender's display
+// name. Group invites are symmetric — chat.id and chat.title carry
+// across both sides unchanged.
+async function _parsePlaylistInviteMsg(msg) {
+    if (!msg || !msg.message) return null;
+    const text = String(msg.message);
+    if (!text.startsWith(PLAYLIST_INVITE_MARKER)) return null;
+    if (msg.out) return null;
+    let payload = null;
+    try {
+        const afterMarker = text.slice(PLAYLIST_INVITE_MARKER.length);
+        const nl = afterMarker.indexOf('\n');
+        const jsonStr = nl === -1 ? afterMarker : afterMarker.slice(0, nl);
+        payload = JSON.parse(jsonStr);
+    } catch { return null; }
+    if (!payload || payload.v !== 1 || !payload.chat) return null;
+    const me = await getMyUserId();
+    const ids = Array.isArray(payload.inv) ? payload.inv.map(n => Number(n)) : [];
+    if (!me || !ids.includes(me)) return null;
+    let fromUserId = null;
+    const fromId = msg.fromId;
+    if (fromId) {
+        const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
+        if (raw != null) fromUserId = Number(typeof raw === 'bigint' ? raw : raw);
+    }
+    if (msg.sender instanceof Api.User && fromUserId && !_groupsCache[fromUserId]) {
+        _groupsCache[fromUserId] = msg.sender;
+    }
+    const kind = payload.chat.kind || 'group';
+    let chatId, chatTitle;
+    if (kind === 'user') {
+        if (!fromUserId) return null;
+        chatId = fromUserId;
+        // Resolve the sender's display name from the cached user entity
+        // populated above. Fall back to the payload's fromName, then to
+        // the chat title (which on the sender's side IS my name —
+        // unhelpful — but still safer than empty).
+        chatTitle = await getUserDisplayName(fromUserId);
+        if (!chatTitle || chatTitle === 'Someone') chatTitle = payload.fromName || payload.chat.title || '';
+    } else {
+        if (!payload.chat.id) return null;
+        chatId = Number(payload.chat.id);
+        chatTitle = payload.chat.title || '';
+    }
+    return {
+        chatId,
+        chatTitle,
+        chatKind: kind,
+        msgId: msg.id,
+        fromName: payload.fromName || '',
+        fromUserId,
+    };
+}
+
+// Register a realtime NewMessage handler scoped to the share channel.
+// Fires the callback the moment Telegram pushes a new invite — same
+// pattern as installCoplayInviteListener, no polling delay. Boot-time
+// scanPlaylistInvites still runs to backfill anything that landed
+// before this client was online.
+let _playlistInviteHandlerInstalled = false;
+export async function installPlaylistInviteListener(callback) {
+    if (_playlistInviteHandlerInstalled) return;
+    await _ensureConnected();
+    let channel;
+    try { channel = await findOrCreateShareChannel(); }
+    catch (e) { console.warn('[invites] listener channel resolve failed:', e?.message || e); return; }
+    const bareChannelId = channel.id < 0
+        ? Number(String(channel.id).replace(/^-100/, ''))
+        : channel.id;
+    const handler = async (event) => {
+        const msg = event.message;
+        if (!msg) return;
+        const peerCh = msg.peerId?.channelId;
+        const ch = peerCh != null
+            ? Number(typeof peerCh === 'bigint' ? peerCh : (peerCh.value ?? peerCh))
+            : null;
+        if (ch !== bareChannelId) return;
+        const parsed = await _parsePlaylistInviteMsg(msg);
+        if (!parsed) return;
+        try { callback(parsed); }
+        catch (e) { console.warn('[invites] cb threw:', e?.message || e); }
+    };
+    client.addEventHandler(handler, new NewMessage({}));
+    _playlistInviteHandlerInstalled = true;
 }
 
 // Fetch a few participants of a chat so the "add as playlist" confirmation

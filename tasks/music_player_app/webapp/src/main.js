@@ -797,6 +797,8 @@ async function _computeInviteeIds(g) {
 
 // Cached display name for the logged-in user. Used in invite payloads
 // so the recipient can show "<Name> added this chat to a playlist".
+// Falls back to a live `getUserDisplayName(myId)` lookup if the
+// localStorage user cache hasn't been populated yet.
 let _myDisplayName = null;
 async function _getMyDisplayName() {
     if (_myDisplayName) return _myDisplayName;
@@ -807,6 +809,13 @@ async function _getMyDisplayName() {
             const last = me.lastName || '';
             const name = (first + ' ' + last).trim() || me.username || '';
             if (name) { _myDisplayName = name; return name; }
+        }
+    } catch {}
+    try {
+        const myId = await tg.getMyUserId();
+        if (myId) {
+            const name = await tg.getUserDisplayName(myId);
+            if (name && name !== 'Someone') { _myDisplayName = name; return name; }
         }
     } catch {}
     return '';
@@ -857,15 +866,27 @@ async function checkPlaylistInvites() {
     _renderPlaylistInviteFab();
 }
 
-// Re-check when the tab regains focus — covers the "Amir's app was
-// already open when Shima sent the invite" case without needing a
-// hard reload. Also re-check periodically as a backstop.
+// Re-check when the tab regains focus — backstop in case the realtime
+// listener (installed below) missed a message while disconnected.
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
         checkPlaylistInvites().catch(() => {});
     }
 });
-setInterval(() => { checkPlaylistInvites().catch(() => {}); }, 60_000);
+
+// Handle a single realtime invite — same pipeline as the boot scan,
+// just one invite at a time. De-dupe against pinned chats, the
+// dismiss list, and anything already queued.
+function _onPlaylistInviteArrived(inv) {
+    console.info('[invites] realtime invite arrived:', inv);
+    const pinnedIds = new Set(externalPlaylists.map(p => String(p.id)));
+    if (pinnedIds.has(String(inv.chatId))) return;
+    const dismissed = _loadDismissedInvites();
+    if (dismissed.has(_inviteKey(inv))) return;
+    if (_pendingPlaylistInvites.some(p => p.chatId === inv.chatId)) return;
+    _pendingPlaylistInvites.push(inv);
+    _renderPlaylistInviteFab();
+}
 
 function _renderPlaylistInviteFab() {
     const fab = $('playlist-invite-floating');
@@ -4935,8 +4956,14 @@ async function initAfterLogin() {
 
     // Scan dialogs for incoming playlist invites — fire-and-forget so a
     // slow network doesn't block boot. The FAB stays hidden until a
-    // hit shows up.
-    (async () => { try { await checkPlaylistInvites(); } catch {} })();
+    // hit shows up. Also install the realtime listener so subsequent
+    // invites surface instantly, no polling delay.
+    (async () => {
+        try { await checkPlaylistInvites(); } catch {}
+        try { await tg.installPlaylistInviteListener(_onPlaylistInviteArrived); } catch (e) {
+            console.warn('[invites] listener install failed:', e?.message || e);
+        }
+    })();
 
     // Find or create playlist group (confirms/updates the cached value).
     // Fire-and-forget so offline boot doesn't block the UI.
