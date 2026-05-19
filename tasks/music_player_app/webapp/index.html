@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=222">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=222">
-    <link rel="stylesheet" href="style.css?v=222">
+    <link rel="manifest" href="/manifest.json?v=223">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=223">
+    <link rel="stylesheet" href="style.css?v=223">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -334,6 +334,24 @@
         <span id="coplay-fab-badge" class="coplay-fab-badge" style="display:none">+0</span>
     </button>
 
+    <!-- Floating button: someone added a shared chat as a playlist; offer to pin -->
+    <div id="playlist-invite-floating" class="playlist-invite-fab" style="display:none">
+        <button id="playlist-invite-accept" type="button" title="Pin this chat as a shared playlist">
+            <span class="coplay-fab-avatar">
+                <img id="playlist-invite-avatar-img" alt="">
+                <span id="playlist-invite-avatar-fallback">?</span>
+            </span>
+            <span class="playlist-invite-text">
+                <span class="playlist-invite-line1">Add as playlist</span>
+                <span id="playlist-invite-line2" class="playlist-invite-line2"></span>
+            </span>
+            <span id="playlist-invite-badge" class="coplay-fab-badge" style="display:none">+0</span>
+        </button>
+        <button id="playlist-invite-dismiss" type="button" class="playlist-invite-dismiss" title="Dismiss invite" aria-label="Dismiss">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+    </div>
+
     <!-- Playlist picker modal -->
     <div id="playlist-modal" style="display:none">
         <div class="modal-backdrop"></div>
@@ -591,6 +609,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=222"></script>
+    <script src="app.bundle.js?v=223"></script>
 </body>
 </html>

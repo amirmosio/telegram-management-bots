@@ -303,18 +303,8 @@ function renderPlaylists() {
         playlistsContainer.innerHTML = '<div class="lyrics-placeholder">No playlists yet</div>';
         return;
     }
-    playlists.filter(p => p.id !== 1).forEach(p => {
-        const el = document.createElement('div');
-        el.className = 'playlist-item';
-        const iconHtml = p.icon
-            ? `<div class="playlist-icon playlist-emoji">${p.icon}</div>`
-            : `<div class="playlist-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg></div>`;
-        el.innerHTML = `${iconHtml}<span class="playlist-title">${escapeHtml(p.title)}</span>
-            <span class="playlist-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>`;
-        el.addEventListener('click', () => openPlaylist(p));
-        playlistsContainer.appendChild(el);
-    });
-    // Shared playlists (external chats) — appended after topic playlists.
+    // Shared playlists (external chats) — rendered FIRST so the user
+    // sees what they're collaborating on before their solo topics.
     // Each carries a 👥 badge so the user can tell at a glance which
     // playlists are private vs shared with other people.
     externalPlaylists.forEach(ext => {
@@ -345,6 +335,18 @@ function renderPlaylists() {
             e.stopPropagation();
             removeExternalPlaylist(ext);
         });
+        playlistsContainer.appendChild(el);
+    });
+    // Topic-backed personal playlists — rendered AFTER shared ones.
+    playlists.filter(p => p.id !== 1).forEach(p => {
+        const el = document.createElement('div');
+        el.className = 'playlist-item';
+        const iconHtml = p.icon
+            ? `<div class="playlist-icon playlist-emoji">${p.icon}</div>`
+            : `<div class="playlist-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z"/></svg></div>`;
+        el.innerHTML = `${iconHtml}<span class="playlist-title">${escapeHtml(p.title)}</span>
+            <span class="playlist-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>`;
+        el.addEventListener('click', () => openPlaylist(p));
         playlistsContainer.appendChild(el);
     });
 }
@@ -717,7 +719,7 @@ function createGroupElement(g, onClick) {
 // echoes the other user's name; for groups we fetch a few participants so
 // the user sees who the playlist will be shared with. Channels can't be
 // enumerated reliably, so we use a generic subscriber line.
-async function confirmAddAsPlaylist(g) {
+async function confirmAddAsPlaylist(g, { silent = false } = {}) {
     if (externalPlaylists.some(p => String(p.id) === String(g.id))) {
         showToast('Already a shared playlist');
         return;
@@ -759,7 +761,164 @@ async function confirmAddAsPlaylist(g) {
     // Refresh the browse list so the row's + button switches to "added".
     try { _renderBrowseDialogs(); } catch {}
     switchTab('playlists');
+    // Sync to the other members of this chat. `silent` is set when the
+    // user is ACCEPTING someone else's invite — in that case the chat
+    // already has a marker message in it, so re-sending would just churn.
+    if (!silent) {
+        try {
+            const myName = await _getMyDisplayName();
+            tg.sendPlaylistInvite(g.id, myName).catch(() => {});
+        } catch { /* best effort */ }
+    }
 }
+
+// Cached display name for the logged-in user. Used in invite payloads
+// so the recipient can show "<Name> added this chat to a playlist".
+let _myDisplayName = null;
+async function _getMyDisplayName() {
+    if (_myDisplayName) return _myDisplayName;
+    try {
+        const me = tg.getCachedUser?.();
+        if (me) {
+            const first = me.firstName || '';
+            const last = me.lastName || '';
+            const name = (first + ' ' + last).trim() || me.username || '';
+            if (name) { _myDisplayName = name; return name; }
+        }
+    } catch {}
+    return '';
+}
+
+// ══════════════════════════════════════
+//  PLAYLIST INVITES (incoming)
+// ══════════════════════════════════════
+// On boot, scan recent dialogs for invite markers. If any are addressed
+// to a chat I haven't already pinned and haven't dismissed, surface a
+// floating FAB. Accepting calls confirmAddAsPlaylist with silent=true so
+// the chain doesn't ping-pong.
+let _pendingPlaylistInvites = [];
+let _activeInviteIdx = 0;
+
+function _loadDismissedInvites() {
+    try {
+        const raw = localStorage.getItem('playlist_invite_dismissed');
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    } catch { return new Set(); }
+}
+function _saveDismissedInvites(set) {
+    try {
+        localStorage.setItem('playlist_invite_dismissed', JSON.stringify([...set]));
+    } catch {}
+}
+// Key shape: "<chatId>:<msgId>" — a specific invite message, not the chat
+// as a whole, so a fresh re-invite after a dismiss does surface.
+function _inviteKey(inv) { return `${inv.chatId}:${inv.msgId}`; }
+
+async function checkPlaylistInvites() {
+    let invites;
+    try { invites = await tg.scanPlaylistInvites(); }
+    catch (e) { console.warn('[invites] scan failed:', e?.message || e); return; }
+    const dismissed = _loadDismissedInvites();
+    const pinnedIds = new Set(externalPlaylists.map(p => String(p.id)));
+    _pendingPlaylistInvites = invites.filter(inv =>
+        !pinnedIds.has(String(inv.chatId)) &&
+        !dismissed.has(_inviteKey(inv))
+    );
+    _activeInviteIdx = 0;
+    _renderPlaylistInviteFab();
+}
+
+function _renderPlaylistInviteFab() {
+    const fab = $('playlist-invite-floating');
+    if (!fab) return;
+    if (_pendingPlaylistInvites.length === 0) {
+        fab.style.display = 'none';
+        return;
+    }
+    const inv = _pendingPlaylistInvites[_activeInviteIdx];
+    if (!inv) { fab.style.display = 'none'; return; }
+    const line2 = $('playlist-invite-line2');
+    const who = inv.fromName ? `${inv.fromName} — ${inv.chatTitle}` : inv.chatTitle;
+    line2.textContent = who;
+    // Swap in the chat photo as the avatar.
+    const img = $('playlist-invite-avatar-img');
+    const fb = $('playlist-invite-avatar-fallback');
+    img.classList.remove('loaded');
+    fb.textContent = (inv.chatTitle || '?').slice(0, 1).toUpperCase();
+    tg.getGroupPhoto(inv.chatId).then(url => {
+        if (!url) return;
+        if (_pendingPlaylistInvites[_activeInviteIdx]?.chatId !== inv.chatId) return;
+        img.src = url;
+        img.onload = () => img.classList.add('loaded');
+    }).catch(() => {});
+    const badge = $('playlist-invite-badge');
+    const extras = _pendingPlaylistInvites.length - 1;
+    if (extras > 0) {
+        badge.textContent = `+${extras}`;
+        badge.style.display = 'inline-flex';
+    } else {
+        badge.style.display = 'none';
+    }
+    fab.style.display = 'flex';
+}
+
+function _consumeActiveInvite() {
+    if (_pendingPlaylistInvites.length === 0) return null;
+    const [inv] = _pendingPlaylistInvites.splice(_activeInviteIdx, 1);
+    _activeInviteIdx = 0;
+    _renderPlaylistInviteFab();
+    return inv;
+}
+
+(() => {
+    // The invite FAB lives in the DOM unconditionally; wire its buttons
+    // once at module load. The bundle script tag is at the end of body
+    // so the elements are already parsed by the time we reach here.
+    const accept = document.getElementById('playlist-invite-accept');
+    const dismiss = document.getElementById('playlist-invite-dismiss');
+    if (!accept || !dismiss) return;
+    accept.addEventListener('click', async () => {
+        const inv = _pendingPlaylistInvites[_activeInviteIdx];
+        if (!inv) return;
+        // Pretend it's a browse dialog so confirmAddAsPlaylist reuses
+        // its participants-fetching + confirmation modal verbatim.
+        const dialog = {
+            id: inv.chatId,
+            title: inv.chatTitle,
+            kind: inv.chatKind,
+            username: '',
+            forum: false,
+        };
+        // silent=true: don't re-send the invite (the chat already has
+        // the originator's marker message). Also drop this invite from
+        // the queue regardless of confirm outcome — re-prompting on
+        // the same message would be noisy.
+        const before = externalPlaylists.length;
+        await confirmAddAsPlaylist(dialog, { silent: true });
+        const accepted = externalPlaylists.length > before;
+        // Whether they confirmed or cancelled, remove this invite from
+        // the visible queue. If they cancelled, the next page reload
+        // will re-detect it (we don't add to dismissed) so they get
+        // another chance later.
+        _consumeActiveInvite();
+        if (accepted) {
+            // Also mark dismissed so a reload doesn't immediately offer
+            // the same chat again — externalPlaylists check already
+            // covers it but belt-and-suspenders avoids any race.
+            const dismissedSet = _loadDismissedInvites();
+            dismissedSet.add(_inviteKey(inv));
+            _saveDismissedInvites(dismissedSet);
+        }
+    });
+    dismiss.addEventListener('click', () => {
+        const inv = _consumeActiveInvite();
+        if (!inv) return;
+        const dismissedSet = _loadDismissedInvites();
+        dismissedSet.add(_inviteKey(inv));
+        _saveDismissedInvites(dismissedSet);
+    });
+})();
 
 // ══════════════════════════════════════
 //  SEARCH (FAB + OVERLAY)
@@ -4735,6 +4894,11 @@ async function initAfterLogin() {
     loadExternalPlaylists();
 
     loadGroups();
+
+    // Scan dialogs for incoming playlist invites — fire-and-forget so a
+    // slow network doesn't block boot. The FAB stays hidden until a
+    // hit shows up.
+    (async () => { try { await checkPlaylistInvites(); } catch {} })();
 
     // Find or create playlist group (confirms/updates the cached value).
     // Fire-and-forget so offline boot doesn't block the UI.

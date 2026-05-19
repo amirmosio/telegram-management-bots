@@ -2255,6 +2255,120 @@ export async function listAllDialogs(limit = 500) {
     return chats;
 }
 
+// ════════════════════════════════════════════════════════════
+//  SHARED PLAYLIST INVITES  —  one-message sync inside the chat
+// ────────────────────────────────────────────────────────────
+// When user A pins a chat as a shared playlist, A's client sends a
+// single marker message INTO that chat. Other members' clients scan
+// recent dialog messages for the marker and surface a "join" floating
+// button. Accepting registers the chat locally with no additional
+// network round-trip — and explicitly does NOT re-send the invite so
+// the propagation doesn't ping-pong forever.
+// ════════════════════════════════════════════════════════════
+
+const PLAYLIST_INVITE_MARKER = '[telemusic-playlist-invite-v1] ';
+
+// Build the invite message text. Format mirrors COPLAY_MARKER:
+//   <marker> {json}\n<human-readable line>
+// Telegram displays the human-readable line; the webapp parses the JSON.
+function _playlistInviteBuildMessage(fromName) {
+    const json = JSON.stringify({ v: 1, fromName: String(fromName || '').slice(0, 64) });
+    const human = `🎵 added this chat to Music Player as a shared playlist.`;
+    return PLAYLIST_INVITE_MARKER + json + '\n' + human;
+}
+
+export async function sendPlaylistInvite(chatId, fromName) {
+    await _ensureConnected();
+    const entity = await _getEntity(chatId);
+    const text = _playlistInviteBuildMessage(fromName);
+    try {
+        await client.sendMessage(entity, { message: text });
+        return true;
+    } catch (e) {
+        // Permission errors (can't post in this channel, write-restricted,
+        // etc.) are non-fatal — the local pinning still works.
+        console.warn('[playlist-invite] send failed:', e?.message || e);
+        return false;
+    }
+}
+
+// Pull the same dialogs result `listAllDialogs` uses and inspect each
+// dialog's latest message for the invite marker. Returns invites NOT
+// authored by the current user. Cheap: one call already in flight at
+// boot for the dialog cache.
+//
+// Returns [{ chatId, chatTitle, chatKind, msgId, fromName, fromUserId, raw }]
+export async function scanPlaylistInvites() {
+    await _ensureConnected();
+    if (!client.connected) return [];
+    const me = await getMyUserId();
+    const [main, archived] = await Promise.all([
+        client.getDialogs({ limit: 500, archived: false }).catch(() => []),
+        client.getDialogs({ limit: 200, archived: true }).catch(() => []),
+    ]);
+    const out = [];
+    const seen = new Set();
+    for (const d of [...main, ...archived]) {
+        const entity = d.entity;
+        const msg = d.message;
+        if (!entity || !msg || !msg.message) continue;
+        const text = String(msg.message);
+        if (!text.startsWith(PLAYLIST_INVITE_MARKER)) continue;
+        // Skip own messages — the sender already has it pinned locally.
+        if (msg.out) continue;
+
+        // Parse the embedded JSON for fromName.
+        let data = {};
+        try {
+            const afterMarker = text.slice(PLAYLIST_INVITE_MARKER.length);
+            const nl = afterMarker.indexOf('\n');
+            const jsonStr = nl === -1 ? afterMarker : afterMarker.slice(0, nl);
+            data = JSON.parse(jsonStr) || {};
+        } catch { /* keep data = {} — name falls back below */ }
+
+        // Resolve sender user id (so the FAB can fetch the avatar).
+        let fromUserId = null;
+        const fromId = msg.fromId;
+        if (fromId) {
+            const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
+            if (raw != null) fromUserId = Number(typeof raw === 'bigint' ? raw : raw);
+        }
+        if (fromUserId && fromUserId === me) continue;
+
+        // Resolve chat metadata.
+        let chatId, chatTitle, chatKind;
+        if (entity instanceof Api.User) {
+            const raw = entity.id?.value ?? entity.id;
+            chatId = Number(typeof raw === 'bigint' ? raw : raw);
+            const first = entity.firstName || '';
+            const last = entity.lastName || '';
+            chatTitle = (first + ' ' + last).trim() || entity.username || 'User';
+            chatKind = entity.bot ? 'bot' : 'user';
+        } else if (_isGroup(entity)) {
+            chatId = _entityId(entity);
+            chatTitle = entity.title || 'Group';
+            chatKind = _isChannel(entity) ? (entity.broadcast ? 'channel' : 'group') : 'group';
+        } else {
+            continue;
+        }
+        if (seen.has(chatId)) continue;
+        seen.add(chatId);
+        _groupsCache[chatId] = entity;
+        if (msg.sender instanceof Api.User && fromUserId && !_groupsCache[fromUserId]) {
+            _groupsCache[fromUserId] = msg.sender;
+        }
+        out.push({
+            chatId,
+            chatTitle,
+            chatKind,
+            msgId: msg.id,
+            fromName: data.fromName || '',
+            fromUserId,
+        });
+    }
+    return out;
+}
+
 // Fetch a few participants of a chat so the "add as playlist" confirmation
 // dialog can display who the playlist will be shared with. Best-effort —
 // for channels you don't admin gramjs may refuse or return zero. Callers

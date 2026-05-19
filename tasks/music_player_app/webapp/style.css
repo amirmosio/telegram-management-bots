@@ -2831,3 +2831,68 @@ body.coplay-follower #progress-bar {
     margin-left: 4px;
     opacity: 0.85;
 }
+
+/* ── Playlist invite floating button ── */
+/* Mirrors #coplay-floating-button but sits a stack higher so both can
+   coexist when both invites are pending. Composite container: the
+   primary "accept" pill plus a tight × dismiss button. */
+.playlist-invite-fab {
+    position: fixed;
+    right: 16px;
+    bottom: 146px;
+    z-index: 95;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+#playlist-invite-accept {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px 8px 8px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+#playlist-invite-accept:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(0,0,0,0.5);
+}
+.playlist-invite-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.1;
+}
+.playlist-invite-line1 {
+    font-weight: 600;
+    white-space: nowrap;
+}
+.playlist-invite-line2 {
+    font-size: 11px;
+    opacity: 0.85;
+    max-width: 180px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.playlist-invite-dismiss {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+.playlist-invite-dismiss:hover { background: rgba(0,0,0,0.7); }
