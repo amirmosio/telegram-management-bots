@@ -32,6 +32,8 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     const pianoTabTranscribe = $('piano-tab-transcribe');
     const pianoTabUpload = $('piano-tab-upload');
     const pianoSheetToggle = $('piano-sheet-toggle');
+    const pianoSpeedToggle = $('piano-speed-toggle');
+    const pianoSpeedLabel = $('piano-speed-label');
     const pianoSheet = $('piano-sheet');
     const pianoSheetNow = $('piano-sheet-now');
     const pianoSheetStaff = $('piano-sheet-staff');
@@ -487,6 +489,18 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         audio.volume = 0; // silence the track audio; synth takes over
         _midiActiveNotes.clear();
         _midiSchedIdx = 0;
+        // The synth has to be ready before currentTime crosses any note
+        // boundary — otherwise the scheduler fires but `playNote` is a
+        // no-op until smplr finishes its soundfont download. Trigger an
+        // async load and don't block.
+        try { midiKeyboard?.ensureLoaded?.(); } catch (_) {}
+        // MIDI playback needs `audio.currentTime` to advance, which only
+        // happens when the underlying audio element is playing. If the
+        // user entered piano mode while paused, kick playback so the
+        // synth starts.
+        if (audio.paused) {
+            audio.play().catch(() => {});
+        }
     }
     function _deactivateMidiPlayback() {
         audio.volume = _savedAudioVolume || 1;
@@ -535,6 +549,38 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         pianoMidiFileInput.value = ''; // allow re-uploading the same file
         if (!file) return;
         await _loadFromMidiFile(file);
+    });
+
+    // === Playback speed cycle ===============================================
+    // Cycles 1× → 0.75× → 0.5× → 0.25× → 1× for slow-practice playback.
+    // Persisted to localStorage so the preference survives reloads. Pitch
+    // is preserved (preservesPitch) so slowed-down audio stays in tune.
+    const SPEED_STEPS = [1, 0.75, 0.5, 0.25];
+    let _speedIdx = 0;
+    try {
+        const raw = parseFloat(localStorage.getItem('piano_playback_speed') || '');
+        if (Number.isFinite(raw)) {
+            const idx = SPEED_STEPS.indexOf(raw);
+            if (idx >= 0) _speedIdx = idx;
+        }
+    } catch (_) {}
+    function _applySpeed() {
+        const rate = SPEED_STEPS[_speedIdx];
+        try { audio.preservesPitch = true; } catch (_) {}
+        try { audio.mozPreservesPitch = true; } catch (_) {}
+        try { audio.webkitPreservesPitch = true; } catch (_) {}
+        audio.playbackRate = rate;
+        if (pianoSpeedLabel) pianoSpeedLabel.textContent = (rate === 1 ? '1×' : (rate + '×'));
+        pianoSpeedToggle?.classList.toggle('active', rate !== 1);
+        try { localStorage.setItem('piano_playback_speed', String(rate)); } catch (_) {}
+    }
+    _applySpeed();
+    pianoSpeedToggle?.addEventListener('click', () => {
+        _speedIdx = (_speedIdx + 1) % SPEED_STEPS.length;
+        _applySpeed();
+        // Resync the MIDI scheduler so a held voice doesn't drag past
+        // its new boundary at the new rate.
+        _midiResync();
     });
     // === Always-visible source tabs =========================================
     // The tabs row sits at the top of the piano overlay and lets the user

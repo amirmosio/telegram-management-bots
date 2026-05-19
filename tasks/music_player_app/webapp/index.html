@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=229">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=229">
-    <link rel="stylesheet" href="style.css?v=229">
+    <link rel="manifest" href="/manifest.json?v=230">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=230">
+    <link rel="stylesheet" href="style.css?v=230">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -565,6 +565,10 @@
             <div id="piano-seekbar-handle"></div>
         </div>
         <div id="piano-midi-controls">
+            <button id="piano-speed-toggle" type="button" aria-label="Playback speed" title="Cycle playback speed for slow practice">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                <span class="piano-midi-label" id="piano-speed-label">1×</span>
+            </button>
             <button id="piano-sheet-toggle" type="button" aria-pressed="false" aria-label="Toggle sheet music view" title="Show sheet music">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 10h18M3 14h18M3 18h18"/></svg>
                 <span class="piano-midi-label">Sheet</span>
@@ -632,6 +636,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=229"></script>
+    <script src="app.bundle.js?v=230"></script>
 </body>
 </html>

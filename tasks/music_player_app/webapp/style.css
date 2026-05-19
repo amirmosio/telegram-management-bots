@@ -2236,7 +2236,7 @@ html, body {
     gap: 6px;
     z-index: 4;
 }
-#piano-midi-toggle, #piano-midi-settings {
+#piano-midi-toggle, #piano-midi-settings, #piano-sheet-toggle, #piano-speed-toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -2258,14 +2258,21 @@ html, body {
     transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
 }
 #piano-midi-settings { padding: 6px 8px; }
-#piano-midi-toggle:hover, #piano-midi-settings:hover { background: rgba(40, 50, 70, 0.75); }
-#piano-midi-toggle.on {
+#piano-midi-toggle:hover,
+#piano-midi-settings:hover,
+#piano-sheet-toggle:hover,
+#piano-speed-toggle:hover { background: rgba(40, 50, 70, 0.75); }
+#piano-midi-toggle.on,
+#piano-sheet-toggle.active,
+#piano-speed-toggle.active {
     background: rgba(45, 95, 145, 0.85);
     border-color: rgba(126, 182, 240, 0.7);
     color: #ffffff;
 }
 #piano-midi-toggle.loading { opacity: 0.6; pointer-events: none; }
-#piano-midi-toggle .piano-midi-label { line-height: 1; }
+#piano-midi-toggle .piano-midi-label,
+#piano-sheet-toggle .piano-midi-label,
+#piano-speed-toggle .piano-midi-label { line-height: 1; }
 #piano-midi-settings.open {
     background: rgba(45, 95, 145, 0.85);
     border-color: rgba(126, 182, 240, 0.7);
