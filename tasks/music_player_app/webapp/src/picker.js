@@ -1,40 +1,32 @@
 // Reusable contact/chat picker primitives.
 //
-// Shared search/debounce machinery used by both the share modal
-// (single-select) and the co-play picker (multi-select). The picker
-// keeps a small state object; on each keystroke it kicks off (debounced)
-// a Telegram contacts.Search and re-renders. Empty query → render the
-// recent-dialogs cache the modal preloaded. The picker does NOT own the
-// rendering — each caller renders its own row markup so share rows can
-// show the destination kind label and co-play rows can show checkboxes.
+// Shared by the share modal (single-select) and the co-play picker
+// (multi-select). The opener preloads `state.chatsCache` with a slice of
+// the dialog list (PVs only, since both pickers are PV-only). Search is
+// a synchronous local substring filter over that cache against name AND
+// username — same behaviour as Telegram's general search, but restricted
+// to chats the user is already in. chatsCache arrives in recent-activity
+// order from getDialogs and the filter preserves that order.
 
-import * as tg from './telegram.js';
 import { escapeHtml } from './utils.js';
 
 export function pickerState() {
     return {
-        chatsCache: [],   // recent dialogs preloaded by the modal opener
-        remoteHits: [],   // server-side search results for `remoteQuery`
-        remoteQuery: '',  // the lower-cased query those hits came from
-        searching: false, // true while a debounced API call is in flight
-        debounce: null,
-        token: 0,
+        chatsCache: [], // dialogs preloaded by the modal opener, in recent-activity order
     };
 }
 
 export function pickerVisibleList(state, query) {
     const q = (query || '').trim().toLowerCase();
     if (!q) return state.chatsCache;
-    if (state.remoteQuery === q) return state.remoteHits;
-    return []; // search in flight or hasn't started yet
+    return state.chatsCache.filter(c =>
+        (c.title || '').toLowerCase().includes(q) ||
+        (c.username || '').toLowerCase().includes(q)
+    );
 }
 
 export function pickerReset(state) {
-    state.remoteHits = [];
-    state.remoteQuery = '';
-    state.searching = false;
-    if (state.debounce) { clearTimeout(state.debounce); state.debounce = null; }
-    state.token = 0;
+    state.chatsCache = [];
 }
 
 // Build one chat row. Shared between the share modal (single-select,
@@ -73,38 +65,3 @@ export function pickerRenderRow(chat, opts) {
     return el;
 }
 
-// Debounced search-input handler. `kinds` filters server-side results
-// (e.g. ['user'] for co-play, all kinds for share). `render` redraws
-// the UI off the picker state.
-export function pickerOnSearchInput(state, value, kinds, render) {
-    if (state.debounce) clearTimeout(state.debounce);
-    const q = (value || '').trim();
-    if (!q) {
-        state.remoteHits = [];
-        state.remoteQuery = '';
-        state.searching = false;
-        state.token = 0;
-        render();
-        return;
-    }
-    state.searching = true;
-    render();
-    const token = ++state.token;
-    state.debounce = setTimeout(async () => {
-        try {
-            const hits = await tg.searchContactsByQuery(q, { kinds, limit: 30 });
-            if (token !== state.token) return; // a newer keystroke superseded us
-            state.remoteHits = hits;
-            state.remoteQuery = q.toLowerCase();
-        } catch (e) {
-            if (token !== state.token) return;
-            state.remoteHits = [];
-            state.remoteQuery = q.toLowerCase();
-        } finally {
-            if (token === state.token) {
-                state.searching = false;
-                render();
-            }
-        }
-    }, 220);
-}

@@ -670,46 +670,6 @@ function _isChannel(entity) {
     return entity instanceof Api.Channel;
 }
 
-export async function listGroups(limit = 30) {
-    await _ensureConnected();
-    if (!client.connected) return [];
-    const dialogs = await client.getDialogs({ limit });
-    const groups = [];
-    for (const d of dialogs) {
-        const entity = d.entity;
-        if (!_isGroup(entity)) continue;
-        const g = {
-            id: _entityId(entity),
-            title: entity.title || String(entity.id),
-            type: _isChannel(entity) ? 'channel' : 'group',
-            forum: !!entity.forum,
-        };
-        _groupsCache[g.id] = entity;
-        groups.push(g);
-    }
-    return groups;
-}
-
-export async function searchGroups(keyword) {
-    await _ensureConnected();
-    const result = await client.invoke(
-        new Api.contacts.Search({ q: keyword, limit: 20 })
-    );
-    const groups = [];
-    for (const chat of result.chats) {
-        if (!_isGroup(chat)) continue;
-        const g = {
-            id: _entityId(chat),
-            title: chat.title || '',
-            type: _isChannel(chat) ? 'channel' : 'group',
-            forum: !!chat.forum,
-        };
-        _groupsCache[g.id] = chat;
-        groups.push(g);
-    }
-    return groups;
-}
-
 async function _getEntity(groupId) {
     if (_groupsCache[groupId]) return _groupsCache[groupId];
     await _ensureConnected();
@@ -2235,14 +2195,30 @@ export async function shareTrack(shareGroupId, sourceGroupId, trackId) {
     return { msgId: newMsgId, link };
 }
 
-// List chats (users, groups, channels) suitable as share destinations.
-// Skips the share-aggregator channel itself and anything the user can't post to.
-export async function listChatsForShare(limit = 80) {
+// Unified dialog list used by the browse tab, share modal, and co-play
+// picker. Returns every dialog (user, bot, group, channel) the account
+// has — callers narrow by `kind` afterwards (share/co-play want PV only,
+// browse wants everything).
+//
+// Fetches BOTH the main folder and the archive so dialogs the user has
+// archived still appear. Search across all three surfaces is now a purely
+// local filter over this list (no contacts.Search), so anything not in
+// the returned array is unreachable from the UI — limits are generous
+// (500 main + 200 archived covers virtually every account).
+//
+// Telegram returns dialogs in last-activity order within each folder; we
+// concat main first then archived, so recent activity floats to the top
+// — which is the order the user sees in every surface.
+export async function listAllDialogs(limit = 500) {
     await _ensureConnected();
     if (!client.connected) return [];
-    const dialogs = await client.getDialogs({ limit });
+    const [main, archived] = await Promise.all([
+        client.getDialogs({ limit, archived: false }).catch(() => []),
+        client.getDialogs({ limit: 200, archived: true }).catch(() => []),
+    ]);
     const chats = [];
-    for (const d of dialogs) {
+    const seen = new Set();
+    for (const d of [...main, ...archived]) {
         const entity = d.entity;
         if (!entity) continue;
 
@@ -2259,8 +2235,10 @@ export async function listChatsForShare(limit = 80) {
             id = _entityId(entity);
             title = entity.title || 'Group';
             if (_isChannel(entity)) {
+                // Hide the internal share-aggregator channel — it's an
+                // implementation detail of the share/co-play flow that
+                // users shouldn't see as a browse/share target.
                 if (entity.username === SHARE_CHANNEL_USERNAME) continue;
-                if (entity.broadcast && !(entity.creator || entity.adminRights)) continue;
                 kind = entity.broadcast ? 'channel' : 'group';
             } else {
                 kind = 'group';
@@ -2269,69 +2247,12 @@ export async function listChatsForShare(limit = 80) {
             continue;
         }
 
+        if (seen.has(id)) continue;
+        seen.add(id);
         _groupsCache[id] = entity;
-        chats.push({ id, title, kind, username: entity.username || '' });
+        chats.push({ id, title, kind, username: entity.username || '', forum: !!entity.forum });
     }
     return chats;
-}
-
-// Telegram-side contact / chat search shared by both the share modal
-// (single-select, all kinds) and the co-play picker (multi-select,
-// users-only). Returns hits in the same shape as listChatsForShare;
-// entities are cached so getCachedUserEntity works for picks.
-//
-//   searchContactsByQuery('amir', { kinds: ['user'] })
-//   searchContactsByQuery('amir', { kinds: ['user','group','channel','bot'] })
-export async function searchContactsByQuery(q, opts = {}) {
-    const limit = opts.limit ?? 20;
-    const allowed = new Set(opts.kinds || ['user', 'bot', 'group', 'channel']);
-    if (!q || q.trim().length < 2) return [];
-    await _ensureConnected();
-    if (!client.connected) return [];
-    let result;
-    try {
-        result = await client.invoke(new Api.contacts.Search({ q: q.trim(), limit }));
-    } catch (e) {
-        console.warn('searchContactsByQuery failed:', e?.message || e);
-        return [];
-    }
-    const out = [];
-    const seen = new Set();
-
-    for (const u of result.users || []) {
-        if (!(u instanceof Api.User)) continue;
-        if (u.self || u.deleted) continue;
-        const kind = u.bot ? 'bot' : 'user';
-        if (!allowed.has(kind)) continue;
-        const raw = u.id?.value ?? u.id;
-        const id = Number(typeof raw === 'bigint' ? raw : raw);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        const first = u.firstName || '';
-        const last = u.lastName || '';
-        const title = (first + ' ' + last).trim() || u.username || 'User';
-        _groupsCache[id] = u;
-        out.push({ id, title, kind, username: u.username || '' });
-    }
-
-    for (const c of result.chats || []) {
-        if (!_isGroup(c)) continue;
-        if (c.username === SHARE_CHANNEL_USERNAME) continue;
-        // Only surface places the user can actually post to: skip
-        // broadcast channels they're not an admin of.
-        if (_isChannel(c) && c.broadcast && !(c.creator || c.adminRights)) continue;
-        const kind = _isChannel(c)
-            ? (c.broadcast ? 'channel' : 'group')
-            : 'group';
-        if (!allowed.has(kind)) continue;
-        const id = _entityId(c);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        _groupsCache[id] = c;
-        out.push({ id, title: c.title || 'Group', kind, username: c.username || '' });
-    }
-
-    return out;
 }
 
 // Returns true if `msgId` still exists in the given channel and has
@@ -3251,7 +3172,7 @@ export async function installCoplayInviteListener(callback) {
 }
 
 // Resolve a user's display name + cached entity by chat id (positive user id)
-// from the cache populated by listChatsForShare. Used by main.js to enrich
+// from the cache populated by listAllDialogs. Used by main.js to enrich
 // invitee picks with the InputUser needed for mention entities.
 export function getCachedUserEntity(userId) {
     return _groupsCache[userId] || null;

@@ -6,7 +6,7 @@ import * as tg from './telegram.js';
 import { searchLyrics, parseTrackInfo } from './lyrics.js';
 import { searchArtwork } from './artwork.js';
 import { formatTime, escapeHtml, showToast, formatBytes, encodeTrackId, decodeTrackId } from './utils.js';
-import { pickerState, pickerVisibleList, pickerReset, pickerRenderRow, pickerOnSearchInput } from './picker.js';
+import { pickerState, pickerVisibleList, pickerReset, pickerRenderRow } from './picker.js';
 import { installRecognize } from './recognize.js';
 import { installHypnotise } from './visualizers/hypnotise.js';
 import { installButterchurn } from './visualizers/butterchurn.js';
@@ -154,23 +154,46 @@ function switchTab(name) {
 // ══════════════════════════════════════
 //  BROWSE TAB
 // ══════════════════════════════════════
-let browseSearchTimeout = null;
+// Browse pulls from the shared _dialogsCache (defined with the picker
+// code below) — every dialog the account has, in recent-activity order.
+// Search is an in-memory substring filter over name + username so users
+// see only chats they're already in (no global Telegram results).
 let browseGroupsLoading = false;
+// Shared debounce token for the track-search inputs further down
+// (browse-tracks + playlist-tracks). The chat-list search above no longer
+// debounces because it's a synchronous local filter.
+let browseSearchTimeout = null;
+
+function _renderBrowseDialogs() {
+    const q = (browseSearch?.value || '').trim().toLowerCase();
+    const all = _dialogsCache || [];
+    const list = q
+        ? all.filter(c =>
+              (c.title || '').toLowerCase().includes(q) ||
+              (c.username || '').toLowerCase().includes(q))
+        : all;
+    browseGroups.innerHTML = '';
+    if (list.length === 0) {
+        browseGroups.innerHTML = '<div class="lyrics-placeholder">No chats found</div>';
+        return;
+    }
+    for (const g of list) {
+        browseGroups.appendChild(createGroupElement(g, openBrowseGroup));
+    }
+}
 
 async function loadGroups() {
+    if (_dialogsCache !== null) {
+        _renderBrowseDialogs();
+        _refreshDialogsInBackground(() => _renderBrowseDialogs());
+        return;
+    }
     if (browseGroupsLoading) return;
     browseGroupsLoading = true;
     browseGroups.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
     try {
-        const groups = await tg.listGroups(50);
-        browseGroups.innerHTML = '';
-        if (groups.length === 0) {
-            browseGroups.innerHTML = '<div class="lyrics-placeholder">No groups found</div>';
-        } else {
-            for (const g of groups) {
-                browseGroups.appendChild(createGroupElement(g, openBrowseGroup));
-            }
-        }
+        await _loadDialogsFirstPage();
+        _renderBrowseDialogs();
     } catch (e) {
         const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
         browseGroups.innerHTML = `<div class="lyrics-placeholder">${offline ? 'Offline — groups will load when you\u2019re back online' : 'Failed to load'}</div>`;
@@ -179,23 +202,8 @@ async function loadGroups() {
 }
 
 browseSearch.addEventListener('input', () => {
-    clearTimeout(browseSearchTimeout);
-    const q = browseSearch.value.trim();
-    browseSearchTimeout = setTimeout(async () => {
-        if (!q) { loadGroups(); return; }
-        browseGroups.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
-        try {
-            const groups = await tg.searchGroups(q);
-            browseGroups.innerHTML = '';
-            if (groups.length === 0) {
-                browseGroups.innerHTML = '<div class="lyrics-placeholder">No groups found</div>';
-            } else {
-                for (const g of groups) browseGroups.appendChild(createGroupElement(g, openBrowseGroup));
-            }
-        } catch (e) {
-            browseGroups.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
-        }
-    }, 300);
+    if (_dialogsCache === null) return; // cache still loading; loading placeholder is up
+    _renderBrowseDialogs();
 });
 
 async function openBrowseGroup(g) {
@@ -559,11 +567,15 @@ btnBack.addEventListener('click', () => {
 function createGroupElement(g, onClick) {
     const el = document.createElement('div');
     el.className = 'group-item';
+    let sub;
+    if (g.kind === 'user') sub = g.username ? `@${g.username}` : 'DM';
+    else if (g.kind === 'bot') sub = g.username ? `@${g.username}` : 'Bot';
+    else sub = `${g.kind}${g.forum ? ' (forum)' : ''}`;
     el.innerHTML = `
         <div class="group-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
         <div class="group-info">
             <div class="group-title">${escapeHtml(g.title)}</div>
-            <div class="group-type">${g.type}${g.forum ? ' (forum)' : ''}</div>
+            <div class="group-type">${escapeHtml(sub)}</div>
         </div>
     `;
     // Load group photo asynchronously
@@ -2529,32 +2541,42 @@ const shareCancelBtn = $('share-cancel');
 let _shareCurrentLink = null;
 let _shareCurrentTrack = null;
 const _share = pickerState();
-const _SHARE_KINDS = ['user', 'bot', 'group', 'channel'];
 
-// Dialogs cache for share + co-play pickers. RAM-only — a module-level
-// `let` is cleared on page reload, which is what we want. Holds the
-// first page (200 items) of tg.listChatsForShare. Opening a picker:
-// cache hit → render immediately + kick a background refresh; cache miss
-// → show the "Loading…" placeholder and fetch synchronously.
+// Dialog list cache shared by the browse tab, share modal, and co-play
+// picker. RAM-only — a module-level `let` is cleared on page reload,
+// which is what we want. Holds the main folder + archive snapshot from
+// tg.listAllDialogs. Opening any of the three surfaces: cache hit →
+// render immediately + kick a background refresh; cache miss → show
+// a "Loading…" placeholder and fetch synchronously.
+//
+// Sized generously because every search/filter UI is now a local filter
+// over this list — anything missing from it is unreachable from the UI.
 let _dialogsCache = null;
 let _dialogsRefreshing = false;
+const _dialogsListeners = new Set(); // background-refresh subscribers (browse, share, coplay)
 
 async function _loadDialogsFirstPage() {
     if (_dialogsCache !== null) return _dialogsCache;
-    _dialogsCache = await tg.listChatsForShare(200);
+    _dialogsCache = await tg.listAllDialogs();
     return _dialogsCache;
 }
 
 function _refreshDialogsInBackground(onFresh) {
+    if (onFresh) _dialogsListeners.add(onFresh);
     if (_dialogsRefreshing) return;
     _dialogsRefreshing = true;
-    tg.listChatsForShare(200)
+    tg.listAllDialogs()
         .then(fresh => {
             _dialogsCache = fresh;
-            if (onFresh) onFresh(fresh);
+            for (const cb of _dialogsListeners) {
+                try { cb(fresh); } catch {}
+            }
         })
         .catch(e => console.warn('[dialogs cache] background refresh failed:', e))
-        .finally(() => { _dialogsRefreshing = false; });
+        .finally(() => {
+            _dialogsRefreshing = false;
+            _dialogsListeners.clear();
+        });
 }
 
 function _shareCaption() {
@@ -2570,10 +2592,7 @@ function _renderShareChats() {
 
     shareChatsEl.innerHTML = '';
     if (list.length === 0) {
-        const text = rawQ
-            ? (_share.searching ? 'Searching…' : 'No chats found')
-            : 'No chats found';
-        shareChatsEl.innerHTML = `<div class="share-chats-placeholder">${text}</div>`;
+        shareChatsEl.innerHTML = `<div class="share-chats-placeholder">No chats found</div>`;
         return;
     }
     for (const chat of list) {
@@ -2701,13 +2720,18 @@ btnShare.addEventListener('click', async () => {
     shareLinkRow.classList.remove('preparing', 'copied');
     shareModal.style.display = 'flex';
 
+    // Share is for private chats only — sending a track to a group or
+    // channel was almost always a misclick. Bots are kept because the
+    // user might have a personal "saved messages"-style bot they DM.
+    const pvOnly = (list) => list.filter(c => c.kind === 'user' || c.kind === 'bot');
+
     if (_dialogsCache !== null) {
         // Cache hit — render instantly, refresh in background.
-        _share.chatsCache = _dialogsCache;
+        _share.chatsCache = pvOnly(_dialogsCache);
         _renderShareChats();
         _refreshDialogsInBackground(fresh => {
             if (_shareCurrentTrack === track && shareModal.style.display === 'flex') {
-                _share.chatsCache = fresh;
+                _share.chatsCache = pvOnly(fresh);
                 _renderShareChats();
             }
         });
@@ -2717,7 +2741,8 @@ btnShare.addEventListener('click', async () => {
     // Cache miss — show loading placeholder, fetch synchronously.
     shareChatsEl.innerHTML = '<div class="share-chats-placeholder">Loading chats…</div>';
     try {
-        _share.chatsCache = await _loadDialogsFirstPage();
+        const all = await _loadDialogsFirstPage();
+        _share.chatsCache = pvOnly(all);
         if (_shareCurrentTrack === track) _renderShareChats();
     } catch (e) {
         console.error('List chats failed:', e);
@@ -2728,8 +2753,7 @@ btnShare.addEventListener('click', async () => {
 shareLinkRow.addEventListener('click', _copyShareLink);
 shareCancelBtn.addEventListener('click', _closeShareDialog);
 shareModal.querySelector('.modal-backdrop')?.addEventListener('click', _closeShareDialog);
-shareChatSearch.addEventListener('input', e =>
-    pickerOnSearchInput(_share, e.target.value, _SHARE_KINDS, _renderShareChats));
+shareChatSearch.addEventListener('input', _renderShareChats);
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && shareModal.style.display === 'flex') _closeShareDialog();
 });
@@ -3016,7 +3040,6 @@ function _coplayMakeDraggable(el, opts = {}) {
 let _coplaySession = null;        // { role, syncMsgId, channelId, hostUserId, hostName, lastFetchWallSec, pollHandle, broadcastInflight, broadcastQueued, invitees, lastTid }
 let _coplayInviteList = [];        // multi-select buffer, [{ id, title, _entity }]
 const _coplay = pickerState();    // shared search state for the picker
-const _COPLAY_KINDS = ['user'];    // co-play targets are people only
 const _pendingInvites = new Map(); // syncMsgId -> { hostId, hostName, channelId, addedAt }
 let _coplayMyUserId = null;        // logged-in user's id, used to hide self chip
 
@@ -3208,10 +3231,7 @@ function _coplayRenderChats() {
     coplayChatsEl.innerHTML = '';
 
     if (list.length === 0 && stickySelected.length === 0) {
-        const text = rawQ
-            ? (_coplay.searching ? 'Searching…' : 'No contacts found')
-            : 'No contacts found';
-        coplayChatsEl.innerHTML = `<div class="coplay-chats-placeholder">${text}</div>`;
+        coplayChatsEl.innerHTML = `<div class="coplay-chats-placeholder">No contacts found</div>`;
         return;
     }
 
@@ -3266,7 +3286,7 @@ async function _coplayStartHost() {
         const channelId = parseInt(localStorage.getItem('share_channel_id') || '0', 10) || (await tg.findOrCreateShareChannel()).id;
         if (!localStorage.getItem('share_channel_id')) localStorage.setItem('share_channel_id', String(channelId));
 
-        // Resolve each invitee's full User entity (cached by listChatsForShare)
+        // Resolve each invitee's full User entity (cached by listAllDialogs)
         // so we can pull a username for the cosmetic "@username" caption text.
         // No entity is required to invite someone now — the JSON `inv`
         // id-array is what discovery actually keys off.
@@ -3852,8 +3872,7 @@ audio.addEventListener('seeked', _coplayBroadcast);
 btnCoplay.addEventListener('click', _coplayOpenPicker);
 coplayCancelBtn.addEventListener('click', _coplayCloseModal);
 coplayModal.querySelector('.modal-backdrop')?.addEventListener('click', _coplayCloseModal);
-coplaySearchInput.addEventListener('input', e =>
-    pickerOnSearchInput(_coplay, e.target.value, _COPLAY_KINDS, _coplayRenderChats));
+coplaySearchInput.addEventListener('input', _coplayRenderChats);
 coplayStartBtn.addEventListener('click', _coplayStartHost);
 coplayEndBtn.addEventListener('click', () => _coplayEndHost());
 coplayLeaveBtn.addEventListener('click', () => _coplayLeaveFollower('left'));
