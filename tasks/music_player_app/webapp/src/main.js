@@ -842,15 +842,30 @@ async function checkPlaylistInvites() {
     let invites;
     try { invites = await tg.scanPlaylistInvites(); }
     catch (e) { console.warn('[invites] scan failed:', e?.message || e); return; }
+    console.info('[invites] scan returned', invites.length, 'invite(s):', invites);
     const dismissed = _loadDismissedInvites();
     const pinnedIds = new Set(externalPlaylists.map(p => String(p.id)));
-    _pendingPlaylistInvites = invites.filter(inv =>
+    const filtered = invites.filter(inv =>
         !pinnedIds.has(String(inv.chatId)) &&
         !dismissed.has(_inviteKey(inv))
     );
+    if (invites.length > 0 && filtered.length === 0) {
+        console.info('[invites] all filtered out (already pinned or dismissed)');
+    }
+    _pendingPlaylistInvites = filtered;
     _activeInviteIdx = 0;
     _renderPlaylistInviteFab();
 }
+
+// Re-check when the tab regains focus — covers the "Amir's app was
+// already open when Shima sent the invite" case without needing a
+// hard reload. Also re-check periodically as a backstop.
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        checkPlaylistInvites().catch(() => {});
+    }
+});
+setInterval(() => { checkPlaylistInvites().catch(() => {}); }, 60_000);
 
 function _renderPlaylistInviteFab() {
     const fab = $('playlist-invite-floating');
