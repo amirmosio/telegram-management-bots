@@ -612,10 +612,14 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         _applySourceSideEffects();
         const tid = getCurrentTrackId();
         const cached = _pianoCache.get(tid);
-        if (cached) {
+        // Cached notes carrying a `hand` field came from MIDI upload —
+        // don't reuse them after switching back to Auto, re-transcribe.
+        const isMidiCached = cached && cached.length && cached[0].hand !== undefined;
+        if (cached && !isMidiCached) {
             _pianoInstallNotes(tid, cached);
             return;
         }
+        if (isMidiCached) _pianoCache.delete(tid);
         const myToken = ++_pianoAnalysisToken;
         const notes = await _runTranscription(myToken);
         if (myToken !== _pianoAnalysisToken) return;
@@ -878,8 +882,11 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                 const k = layout.get(n.pitch);
                 if (!k) continue;
                 if (n.t0 <= t && t <= n.t1) {
-                    if (n.hand === 'left') activeLeftKeys.add(n.pitch);
-                    else activeKeys.add(n.pitch);
+                    if (_pianoSource === 'midi' && n.hand === 'left') {
+                        activeLeftKeys.add(n.pitch);
+                    } else {
+                        activeKeys.add(n.pitch);
+                    }
                 }
 
                 const yBottom = kbTop + (t - n.t0) * pps;
@@ -895,12 +902,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                 const ww = Math.max(1, k.w - inset * 2);
 
                 const gr = ctx.createLinearGradient(0, drawTop, 0, drawBottom);
-                // Hand-aware coloring (only when the notes came from an
-                // uploaded MIDI — auto-transcribed notes have no `hand`
-                // field and stay in the default blue palette).
-                //   right hand → blue gradient (existing palette)
-                //   left  hand → warm orange gradient
-                if (n.hand === 'left') {
+                // Hand-aware coloring is ONLY honoured when the source
+                // is 'midi' — Auto-transcribed notes inherit no hand
+                // info, but to keep the renderer safe against stale
+                // cache leaks we gate explicitly.
+                const useHandColor = _pianoSource === 'midi' && n.hand === 'left';
+                if (useHandColor) {
                     if (k.isWhite) {
                         gr.addColorStop(0, '#f5c89e'); gr.addColorStop(1, '#955f3a');
                     } else {
@@ -1048,12 +1055,16 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     let _sheetSvg = null;
     let _sheetLastHighlightIdx = -1;
 
-    const SHEET_STAVE_TOP = 60;      // y of top staff line
-    const SHEET_LINE_GAP = 10;       // pixels per staff line spacing (so half-step = 5)
+    // Grand staff geometry. Step 0 = E4 (treble bottom). Each step is
+    // a half-line (5px). Treble lines = steps 0/2/4/6/8. Bass lines =
+    // steps -12/-10/-8/-6/-4 (G2/B2/D3/F3/A3). Middle C (step -2) sits
+    // in the gap between staves.
+    const SHEET_LINE_GAP = 10;
     const SHEET_HALFSTEP = SHEET_LINE_GAP / 2;
-    const SHEET_LEFT_PAD = 60;       // space for clef
-    const SHEET_NOTE_GAP = 36;       // horizontal spacing per onset
-    const SHEET_NOTE_RADIUS = 5;     // notehead radius
+    const SHEET_LEFT_PAD = 60;
+    const SHEET_NOTE_GAP = 36;
+    const SHEET_NOTE_RADIUS = 5;
+    const SHEET_TREBLE_BOTTOM_Y = 60;  // y of E4 (step 0)
 
     function _svg(tag, attrs = {}, parent = null) {
         const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -1062,12 +1073,13 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         return el;
     }
     function _yForStaffStep(step) {
-        // step 0 = bottom line of staff (E4). Each step is one half-line.
-        // Staff lines: E4 (0), G4 (2), B4 (4), D5 (6), F5 (8).
-        // Bottom line y = SHEET_STAVE_TOP + 4 * SHEET_LINE_GAP (since top
-        // staff line is F5 = step 8).
-        const bottomY = SHEET_STAVE_TOP + 4 * SHEET_LINE_GAP;
-        return bottomY - step * SHEET_HALFSTEP;
+        return SHEET_TREBLE_BOTTOM_Y - step * SHEET_HALFSTEP;
+    }
+    // Decide whether to anchor ledger lines from the treble or bass
+    // staff for a given step. Treble owns steps >= -2 (middle C up),
+    // bass owns steps <= -2 (middle C down).
+    function _staffFor(step) {
+        return step >= -2 ? 'treble' : 'bass';
     }
 
     function _collectOnsets(notes, windowSec) {
@@ -1084,10 +1096,10 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         return out;
     }
     function _handColor(hand) {
-        if (hand === 'left') return '#b35a1f';     // warm orange
-        if (hand === 'right') return '#1f57b3';    // blue
-        return '#222';                              // auto / unknown
+        if (hand === 'left') return '#b35a1f';     // warm orange — left hand
+        return '#222';                              // right hand or auto → black
     }
+    const SHEET_HIGHLIGHT = '#1f7be0';              // current note glow
 
     async function _renderSheet(notes) {
         if (!pianoSheetStaff) return;
