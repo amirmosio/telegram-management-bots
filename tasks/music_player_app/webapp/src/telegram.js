@@ -265,6 +265,8 @@ export async function updateTrackPianoNotes(groupId, trackId, notes, context = {
     const ctx = _deriveTopicContext(groupId, trackId, context);
     const patch = { pianoNotes: notes };
     if (context.pianoNotesVersion != null) patch.pianoNotesVersion = context.pianoNotesVersion;
+    if (context.pianoSource != null) patch.pianoSource = context.pianoSource; // 'transcribed' | 'midi'
+    if (context.pianoView != null) patch.pianoView = context.pianoView;       // 'piano' | 'sheet'
     if (context.track) patch.track = context.track;
     if (ctx.topicId != null) patch.topicId = ctx.topicId;
     if (ctx.topicTitle != null) patch.topicTitle = ctx.topicTitle;

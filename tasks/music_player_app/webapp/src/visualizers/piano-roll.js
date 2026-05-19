@@ -16,8 +16,9 @@
 // notes/sec ratio is too low.
 
 import * as tg from '../telegram.js';
+import { parseMidiFile } from '../midi-parser.js';
 
-export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock, getMidiActiveNotes, subscribeMidiNoteOn }) {
+export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPlayerGroupId, requestWakeLock, getMidiActiveNotes, subscribeMidiNoteOn, midiKeyboard }) {
     const $ = id => document.getElementById(id);
 
     const pianoOverlay = $('piano-overlay');
@@ -27,7 +28,25 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     const pianoSeekbarFill = $('piano-seekbar-fill');
     const pianoSeekbarHandle = $('piano-seekbar-handle');
     const btnPiano = $('btn-piano');
+    const pianoSourcePicker = $('piano-source-picker');
+    const pianoSourceReset = $('piano-source-reset');
+    const pianoMidiFileInput = $('piano-midi-file');
+    const pianoSheet = $('piano-sheet');
+    const pianoSheetNow = $('piano-sheet-now');
+    const pianoSheetStaff = $('piano-sheet-staff');
     let _pianoSeeking = false;
+    // Per-track source/view choices. Persisted via tg.updateTrackPianoNotes.
+    //  source: 'transcribed' | 'midi'
+    //  view:   'piano'       | 'sheet'
+    let _pianoSource = 'transcribed';
+    let _pianoView = 'piano';
+    // Set true while the source picker overlay is open so the falling-bar
+    // RAF doesn't start drawing under a half-loaded transcription.
+    let _pianoAwaitingPick = false;
+    // MIDI playback scheduling — tracks which note indices have been
+    // started/stopped given the current audio.currentTime cursor.
+    let _midiActiveNotes = new Set();   // indices of notes currently sounding
+    let _midiSchedIdx = 0;              // next note (sorted by t0) to consider
 
     // Practice mode (Synthesia-style "wait for me"). When on, the song
     // pauses each time the playback cursor reaches a transcribed chord
@@ -281,6 +300,114 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         return tracks.find(t => t.id === id) || null;
     }
 
+    // Run a live audio-to-MIDI transcription through Magenta and persist
+    // the result. Factored out so both the source picker and the
+    // boot-from-cache path can call into it.
+    async function _runTranscription(myToken) {
+        const groupId = getPlayerGroupId();
+        const trackId = getCurrentTrackId();
+        try { await _pianoLoadEngines(); }
+        catch (e) {
+            if (myToken !== _pianoAnalysisToken) return null;
+            console.warn('[piano] engine load failed:', e);
+            _pianoSetLoading('Could not load piano engine. Check connection.');
+            return null;
+        }
+        if (myToken !== _pianoAnalysisToken) return null;
+
+        _pianoSetLoading('Decoding audio…');
+        const src = audio.currentSrc || audio.src;
+        if (!src) { _pianoSetLoading(null); return null; }
+        let ctx = null, audioBuffer = null;
+        try {
+            const res = await fetch(src);
+            if (!res.ok) throw new Error('fetch ' + res.status);
+            const buf = await res.arrayBuffer();
+            if (myToken !== _pianoAnalysisToken) return null;
+            ctx = new (window.AudioContext || window.webkitAudioContext)();
+            audioBuffer = await ctx.decodeAudioData(buf);
+        } catch (e) {
+            if (myToken !== _pianoAnalysisToken) return null;
+            console.warn('[piano] audio decode failed:', e);
+            _pianoSetLoading('Could not decode audio.');
+            return null;
+        } finally {
+            if (ctx && ctx.close) ctx.close().catch(() => {});
+        }
+        if (myToken !== _pianoAnalysisToken) return null;
+
+        let notes;
+        try {
+            _pianoSetLoading('Transcribing piano…');
+            notes = await _pianoTranscribe(audioBuffer, () => {
+                if (myToken !== _pianoAnalysisToken) return;
+            });
+        } catch (e) {
+            if (myToken !== _pianoAnalysisToken) return null;
+            console.warn('[piano] transcription failed:', e);
+            _pianoSetLoading('Transcription failed.');
+            return null;
+        }
+        if (myToken !== _pianoAnalysisToken) return null;
+
+        _pianoCache.set(trackId, notes);
+        try {
+            tg.updateTrackPianoNotes(groupId, trackId, notes, {
+                track: _pianoFindCurrentTrack(),
+                pianoNotesVersion: _PIANO_NOTES_VERSION,
+                pianoSource: 'transcribed',
+                pianoView: _pianoView,
+            });
+        } catch (_) {}
+        _pianoSetWarning(_pianoIsUnreliable(notes, audioBuffer.duration));
+        console.log('[piano] transcribed', trackId, '→', notes.length, 'notes');
+        return notes;
+    }
+
+    // Parse a user-uploaded MIDI File object into the notes schedule and
+    // persist alongside source='midi'. The schedule replaces both the
+    // falling-bars source AND the audio: when source='midi' we mute the
+    // audio element and let the smplr instrument play the notes.
+    async function _loadFromMidiFile(file) {
+        const groupId = getPlayerGroupId();
+        const trackId = getCurrentTrackId();
+        const myToken = ++_pianoAnalysisToken;
+        _pianoSetLoading('Parsing MIDI…');
+        let notes;
+        try {
+            const buf = await file.arrayBuffer();
+            notes = await parseMidiFile(buf);
+        } catch (e) {
+            if (myToken !== _pianoAnalysisToken) return;
+            console.warn('[piano] midi parse failed:', e);
+            _pianoSetLoading('Could not parse MIDI file.');
+            return;
+        }
+        if (myToken !== _pianoAnalysisToken) return;
+        if (!notes.length) { _pianoSetLoading('MIDI had no notes.'); return; }
+
+        // Load the soundfont so the playback scheduler can fire notes
+        // immediately on track start — otherwise the first few seconds
+        // would be silent while the sf2 download finishes.
+        _pianoSetLoading('Loading instrument…');
+        try { await midiKeyboard?.ensureLoaded?.(); } catch (_) {}
+
+        _pianoSource = 'midi';
+        _pianoCache.set(trackId, notes);
+        try {
+            tg.updateTrackPianoNotes(groupId, trackId, notes, {
+                track: _pianoFindCurrentTrack(),
+                pianoNotesVersion: _PIANO_NOTES_VERSION,
+                pianoSource: 'midi',
+                pianoView: _pianoView,
+            });
+        } catch (_) {}
+        _pianoInstallNotes(trackId, notes);
+        _activateMidiPlayback();
+        if (_pianoView === 'sheet') await _renderSheet(notes);
+        _pianoSetLoading(null);
+    }
+
     async function _pianoAnalyzeCurrentTrack() {
         const trackId = getCurrentTrackId();
         if (trackId == null) { _pianoSetLoading(null); return; }
@@ -290,6 +417,8 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         if (memHit) {
             _pianoInstallNotes(trackId, memHit);
             _pianoSetWarning(_pianoIsUnreliable(memHit));
+            _applySourceSideEffects();
+            if (_pianoView === 'sheet') await _renderSheet(memHit);
             _pianoSetLoading(null);
             return;
         }
@@ -297,80 +426,165 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         const myToken = ++_pianoAnalysisToken;
         const groupId = getPlayerGroupId();
 
-        // 2. IDB cache
+        // 2. IDB cache — restore notes + source + view so subsequent
+        // entries skip the picker entirely.
         try {
             const row = await tg.getCachedTrackRecord(groupId, trackId);
             if (myToken !== _pianoAnalysisToken) return;
-            if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0
-                && row.pianoNotesVersion === _PIANO_NOTES_VERSION) {
+            // For source='midi' we don't enforce pianoNotesVersion since
+            // the user-supplied notes don't depend on Magenta version.
+            const isMidi = row?.pianoSource === 'midi';
+            const versionOk = isMidi || row?.pianoNotesVersion === _PIANO_NOTES_VERSION;
+            if (row && Array.isArray(row.pianoNotes) && row.pianoNotes.length > 0 && versionOk) {
+                _pianoSource = row.pianoSource || 'transcribed';
+                _pianoView = row.pianoView || 'piano';
                 _pianoCache.set(trackId, row.pianoNotes);
                 _pianoInstallNotes(trackId, row.pianoNotes);
-                _pianoSetWarning(_pianoIsUnreliable(row.pianoNotes));
+                _pianoSetWarning(!isMidi && _pianoIsUnreliable(row.pianoNotes));
+                _applySourceSideEffects();
+                if (_pianoView === 'sheet') await _renderSheet(row.pianoNotes);
                 _pianoSetLoading(null);
                 return;
             }
-        } catch (_) { /* fall through to live transcription */ }
+        } catch (_) { /* fall through */ }
         if (myToken !== _pianoAnalysisToken) return;
 
-        // 3. Load engine
-        try {
-            await _pianoLoadEngines();
-        } catch (e) {
-            if (myToken !== _pianoAnalysisToken) return;
-            console.warn('[piano] engine load failed:', e);
-            _pianoSetLoading('Could not load piano engine. Check connection.');
-            return;
-        }
-        if (myToken !== _pianoAnalysisToken) return;
-
-        // 4. Decode audio
-        _pianoSetLoading('Decoding audio…');
-        const src = audio.currentSrc || audio.src;
-        if (!src) { _pianoSetLoading(null); return; }
-        let ctx = null, audioBuffer = null;
-        try {
-            const res = await fetch(src);
-            if (!res.ok) throw new Error('fetch ' + res.status);
-            const buf = await res.arrayBuffer();
-            if (myToken !== _pianoAnalysisToken) return;
-            ctx = new (window.AudioContext || window.webkitAudioContext)();
-            audioBuffer = await ctx.decodeAudioData(buf);
-        } catch (e) {
-            if (myToken !== _pianoAnalysisToken) return;
-            console.warn('[piano] audio decode failed:', e);
-            _pianoSetLoading('Could not decode audio.');
-            return;
-        } finally {
-            if (ctx && ctx.close) ctx.close().catch(() => {});
-        }
-        if (myToken !== _pianoAnalysisToken) return;
-
-        // 5. Transcribe
-        let notes;
-        try {
-            // Onsets & Frames doesn't expose granular progress; show an
-            // indeterminate label and warn that this step is the slow one.
-            _pianoSetLoading('Transcribing piano…');
-            notes = await _pianoTranscribe(audioBuffer, () => {
-                if (myToken !== _pianoAnalysisToken) return;
-            });
-        } catch (e) {
-            if (myToken !== _pianoAnalysisToken) return;
-            console.warn('[piano] transcription failed:', e);
-            _pianoSetLoading('Transcription failed.');
-            return;
-        }
-        if (myToken !== _pianoAnalysisToken) return;
-
-        // 6. Cache + install + warn-if-poor
-        _pianoCache.set(trackId, notes);
-        try { tg.updateTrackPianoNotes(groupId, trackId, notes, { track: _pianoFindCurrentTrack(), pianoNotesVersion: _PIANO_NOTES_VERSION }); } catch (_) {}
-        _pianoSetWarning(_pianoIsUnreliable(notes, audioBuffer.duration));
-        _pianoInstallNotes(trackId, notes);
-        _pianoSetLoading(null);
-        console.log('[piano] transcribed', trackId, '→', notes.length, 'notes (',
-            (notes.length / Math.max(1, audioBuffer.duration)).toFixed(2), '/s )');
+        // 3. No cached choice — show the source picker.
+        _showSourcePicker();
     }
+
+    // Switch view (piano-roll <-> sheet) and reset playback bookkeeping.
+    function _setView(view) {
+        _pianoView = (view === 'sheet') ? 'sheet' : 'piano';
+        pianoOverlay?.classList.toggle('piano-view-sheet', _pianoView === 'sheet');
+    }
+
+    // Apply audio-element side-effects of the current source. When source
+    // is 'midi' we silence the track audio and let the synth take over;
+    // back to 'transcribed' restores normal volume.
+    function _applySourceSideEffects() {
+        _setView(_pianoView);
+        if (_pianoSource === 'midi') _activateMidiPlayback();
+        else _deactivateMidiPlayback();
+    }
+
+    // === MIDI playback scheduler ============================================
+    // Runs from inside _pianoTick. Walks `_pianoNotes` (sorted by t0) and
+    // fires note-on/off through the smplr instrument as audio.currentTime
+    // crosses each boundary. The audio element keeps the master clock so
+    // seek/scrub via the existing seekbar still works.
+    let _savedAudioVolume = 1.0;
+    function _activateMidiPlayback() {
+        if (audio.volume > 0) _savedAudioVolume = audio.volume;
+        audio.volume = 0; // silence the track audio; synth takes over
+        _midiActiveNotes.clear();
+        _midiSchedIdx = 0;
+    }
+    function _deactivateMidiPlayback() {
+        audio.volume = _savedAudioVolume || 1;
+        try { midiKeyboard?.allNotesOff?.(); } catch (_) {}
+        _midiActiveNotes.clear();
+        _midiSchedIdx = 0;
+    }
+    function _midiTick() {
+        if (_pianoSource !== 'midi' || !_pianoNotes || !midiKeyboard?.playNote) return;
+        const t = audio.currentTime;
+        // Start notes whose t0 has been reached.
+        while (_midiSchedIdx < _pianoNotes.length && _pianoNotes[_midiSchedIdx].t0 <= t) {
+            const idx = _midiSchedIdx++;
+            const n = _pianoNotes[idx];
+            // Don't start notes that have already ended (e.g. after a seek
+            // that jumped past the note entirely).
+            if (n.t1 <= t) continue;
+            try { midiKeyboard.playNote(n.pitch, n.velocity || 90); } catch (_) {}
+            _midiActiveNotes.add(idx);
+        }
+        // Stop notes whose t1 has elapsed.
+        for (const idx of _midiActiveNotes) {
+            const n = _pianoNotes[idx];
+            if (!n || t >= n.t1) {
+                try { midiKeyboard.stopNote(n.pitch); } catch (_) {}
+                _midiActiveNotes.delete(idx);
+            }
+        }
+    }
+    // After a seek, rebuild the scheduler cursor + drop any voices that
+    // shouldn't be ringing at the new position.
+    function _midiResync() {
+        if (_pianoSource !== 'midi' || !_pianoNotes) return;
+        try { midiKeyboard?.allNotesOff?.(); } catch (_) {}
+        _midiActiveNotes.clear();
+        const t = audio.currentTime;
+        let i = 0;
+        while (i < _pianoNotes.length && _pianoNotes[i].t0 <= t) i++;
+        _midiSchedIdx = i;
+    }
+    audio.addEventListener('seeked', () => { _midiResync(); });
+
+    // === Source picker ======================================================
+    function _showSourcePicker() {
+        _pianoAwaitingPick = true;
+        pianoOverlay?.classList.add('piano-source-prompt');
+        pianoSourcePicker?.classList.add('open');
+        pianoSourcePicker?.setAttribute('aria-hidden', 'false');
+        _pianoSetLoading(null);
+    }
+    function _hideSourcePicker() {
+        _pianoAwaitingPick = false;
+        pianoOverlay?.classList.remove('piano-source-prompt');
+        pianoSourcePicker?.classList.remove('open');
+        pianoSourcePicker?.setAttribute('aria-hidden', 'true');
+    }
+    $('piano-source-transcribe')?.addEventListener('click', async () => {
+        _hideSourcePicker();
+        _pianoSource = 'transcribed';
+        _setView('piano');
+        const myToken = ++_pianoAnalysisToken;
+        const notes = await _runTranscription(myToken);
+        if (myToken !== _pianoAnalysisToken) return;
+        if (notes) {
+            _pianoInstallNotes(getCurrentTrackId(), notes);
+            _applySourceSideEffects();
+            _pianoSetLoading(null);
+        }
+    });
+    $('piano-source-sheet')?.addEventListener('click', async () => {
+        _hideSourcePicker();
+        _pianoSource = 'transcribed';
+        _setView('sheet');
+        const myToken = ++_pianoAnalysisToken;
+        const notes = await _runTranscription(myToken);
+        if (myToken !== _pianoAnalysisToken) return;
+        if (notes) {
+            _pianoInstallNotes(getCurrentTrackId(), notes);
+            _applySourceSideEffects();
+            await _renderSheet(notes);
+            _pianoSetLoading(null);
+        }
+    });
+    $('piano-source-upload')?.addEventListener('click', () => {
+        pianoMidiFileInput?.click();
+    });
+    pianoMidiFileInput?.addEventListener('change', async () => {
+        const file = pianoMidiFileInput.files?.[0];
+        pianoMidiFileInput.value = ''; // allow re-uploading the same file
+        if (!file) return;
+        _hideSourcePicker();
+        _setView('piano');
+        await _loadFromMidiFile(file);
+    });
+    $('piano-source-cancel')?.addEventListener('click', () => {
+        _hideSourcePicker();
+        exit();
+    });
+    pianoSourceReset?.addEventListener('click', () => {
+        // Clear the cached choice for this track + show the picker again.
+        const tid = getCurrentTrackId();
+        if (tid != null) _pianoCache.delete(tid);
+        _deactivateMidiPlayback();
+        _pianoNotes = null;
+        _showSourcePicker();
+    });
 
     function _pianoIsUnreliable(notes, dur) {
         if (!Array.isArray(notes)) return true;
@@ -531,6 +745,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
 
     function _pianoTick() {
         _pianoRafId = requestAnimationFrame(_pianoTick);
+        // MIDI playback scheduler runs every frame regardless of view —
+        // notes still need to fire when the user is on the sheet view.
+        _midiTick();
+        // In sheet view, update the "now playing" line; the staff itself
+        // is rendered statically (or once per measure boundary) below.
+        if (_pianoView === 'sheet') _sheetTick();
         if (!_pianoCtx || !_pianoKeyboardLayout) return;
         const w = pianoCanvas.clientWidth;
         const h = pianoCanvas.clientHeight;
@@ -686,11 +906,137 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         pianoOverlay.classList.remove('open');
         pianoOverlay.classList.remove('piano-loading');
         pianoOverlay.classList.remove('piano-warn');
+        pianoOverlay.classList.remove('piano-source-prompt');
+        pianoOverlay.classList.remove('piano-view-sheet');
         pianoOverlay.setAttribute('aria-hidden', 'true');
+        _hideSourcePicker();
+        _deactivateMidiPlayback();
 
         if (_pianoRafId != null) { cancelAnimationFrame(_pianoRafId); _pianoRafId = null; }
         _detachPianoGestures();
         _pianoClearHold();
+    }
+
+    // === Sheet-music renderer ===============================================
+    // Lazy-loads VexFlow from CDN. Renders a horizontally-scrolling
+    // treble-clef staff with quarter-note placeholders for every onset;
+    // pretty rough musically, but enough to follow along visually. The
+    // currently-playing note name (or chord) updates every frame.
+    const VEXFLOW_URL = 'https://cdn.jsdelivr.net/npm/vexflow@4.2.6/build/cjs/vexflow.js';
+    let _vexLoaded = false;
+    async function _ensureVex() {
+        if (_vexLoaded && window.Vex) return;
+        await _pianoLoadScript(VEXFLOW_URL);
+        if (!window.Vex) throw new Error('VexFlow did not register on window');
+        _vexLoaded = true;
+    }
+    const _MIDI_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    function _midiPitchToName(p) {
+        return _MIDI_NAMES[p % 12] + (Math.floor(p / 12) - 1);
+    }
+    // VexFlow note key (e.g. "c#/4"). Octave numbering matches MIDI.
+    function _midiPitchToKey(p) {
+        const pc = _MIDI_NAMES[p % 12].toLowerCase().replace('#', '#');
+        const oct = Math.floor(p / 12) - 1;
+        return pc + '/' + oct;
+    }
+    async function _renderSheet(notes) {
+        if (!pianoSheetStaff) return;
+        try { await _ensureVex(); }
+        catch (e) { console.warn('[piano] vexflow load failed:', e); return; }
+        const VF = window.Vex.Flow;
+        // Quantize onsets into bars. Pick a global beat ~ 1 onset/beat
+        // assuming 4/4 — for arbitrary tempos this is approximate but
+        // visually pleasant.
+        pianoSheetStaff.innerHTML = '';
+        const div = document.createElement('div');
+        pianoSheetStaff.appendChild(div);
+        const renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
+        // Compute the staff width — give every note ~32 px and pad.
+        const onsets = _collectOnsets(notes, 0.05);
+        const widthPerOnset = 32;
+        const totalWidth = Math.max(800, 200 + onsets.length * widthPerOnset);
+        renderer.resize(totalWidth, 200);
+        const context = renderer.getContext();
+        context.setFillStyle('#222');
+        context.setStrokeStyle('#222');
+
+        const stave = new VF.Stave(10, 30, totalWidth - 20);
+        stave.addClef('treble').setContext(context).draw();
+
+        if (onsets.length === 0) return;
+        const staveNotes = onsets.map(onset => {
+            const keys = onset.pitches.map(p => _midiPitchToKey(p));
+            const sn = new VF.StaveNote({ clef: 'treble', keys, duration: 'q' });
+            // Add sharps where needed (#).
+            onset.pitches.forEach((p, i) => {
+                const name = _MIDI_NAMES[p % 12];
+                if (name.endsWith('#')) sn.addModifier(new VF.Accidental('#'), i);
+            });
+            sn._tgmpOnsetT0 = onset.t0;
+            return sn;
+        });
+        // VexFlow needs a Voice; lay out enough beats for all notes (each
+        // quarter = 1 beat). Setting strict=false avoids overflow errors
+        // when our quarter-note approximation diverges from real tempo.
+        const voice = new VF.Voice({ num_beats: staveNotes.length, beat_value: 4 });
+        voice.setStrict(false);
+        voice.addTickables(staveNotes);
+        new VF.Formatter().joinVoices([voice]).format([voice], totalWidth - 80);
+        voice.draw(context, stave);
+        _sheetStaveNotes = staveNotes;
+    }
+    // Collect onset clusters within a small time window so a chord renders
+    // as a single VexFlow note with multiple keys.
+    function _collectOnsets(notes, windowSec) {
+        const sorted = [...notes].sort((a, b) => a.t0 - b.t0);
+        const out = [];
+        for (const n of sorted) {
+            const last = out[out.length - 1];
+            if (last && n.t0 - last.t0 < windowSec) {
+                last.pitches.push(n.pitch);
+            } else {
+                out.push({ t0: n.t0, pitches: [n.pitch] });
+            }
+        }
+        return out;
+    }
+    let _sheetStaveNotes = null;
+    let _sheetLastHighlightIdx = -1;
+    function _sheetTick() {
+        if (!_pianoNotes || !pianoSheetNow) return;
+        const t = audio.currentTime;
+        const playing = _pianoNotes
+            .filter(n => n.t0 <= t && t <= n.t1)
+            .map(n => _midiPitchToName(n.pitch));
+        pianoSheetNow.textContent = playing.length ? playing.join(' · ') : '—';
+        // Highlight & scroll-to the closest stave note past audio.currentTime.
+        if (!_sheetStaveNotes || !pianoSheetStaff) return;
+        let idx = -1;
+        for (let i = 0; i < _sheetStaveNotes.length; i++) {
+            if (_sheetStaveNotes[i]._tgmpOnsetT0 <= t + 0.05) idx = i;
+            else break;
+        }
+        if (idx === _sheetLastHighlightIdx) return;
+        _sheetLastHighlightIdx = idx;
+        const svg = pianoSheetStaff.querySelector('svg');
+        if (svg && idx >= 0) {
+            try {
+                const note = _sheetStaveNotes[idx];
+                const noteEls = svg.querySelectorAll('.vf-stavenote');
+                noteEls.forEach((el, i) => {
+                    el.style.fill = i === idx ? '#1f7be0' : '#222';
+                    el.style.stroke = i === idx ? '#1f7be0' : '#222';
+                });
+                // Auto-scroll so the highlighted note stays roughly centered.
+                const box = note.getBoundingBox?.();
+                if (box) {
+                    const cx = box.getX() + box.getW() / 2;
+                    const target = cx - pianoSheetStaff.clientWidth / 2;
+                    pianoSheetStaff.scrollTo({ left: target, behavior: 'smooth' });
+                }
+            } catch (_) { /* best effort */ }
+        }
     }
 
     function _pianoClearHold() {

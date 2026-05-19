@@ -475,10 +475,40 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         if (notify && onActiveNotesChange) onActiveNotesChange();
     }
 
+    // Headless playback support for piano mode's MIDI-file source. Boots
+    // the audio context + instrument WITHOUT requesting MIDI device
+    // access, so a track-from-MIDI plays even with no physical keyboard
+    // connected. Mirrors `enable()` but skips `navigator.requestMIDIAccess`.
+    async function ensureLoaded() {
+        if (instrumentLoaded) return { ok: true };
+        try {
+            await _loadInstrument(instrumentId);
+            return { ok: true };
+        } catch (e) {
+            return { ok: false, reason: 'load-failed', error: e };
+        }
+    }
+
+    // Programmatic note-on/off — same plumbing as the MIDI-device path,
+    // but the trigger comes from the playback scheduler in piano-roll.js.
+    // No-op when the instrument hasn't loaded; the caller is expected to
+    // await ensureLoaded() first.
+    function playNote(note, velocity = 90) {
+        if (!instrumentLoaded) return;
+        _noteOn(Number(note) | 0, Math.max(1, Math.min(127, Math.round(velocity))));
+    }
+    function stopNote(note) {
+        if (!instrumentLoaded) return;
+        _noteOff(Number(note) | 0);
+    }
+    function allNotesOff() {
+        _allNotesOff(true);
+    }
+
     return {
-        enable, disable, setInstrument,
+        enable, disable, setInstrument, ensureLoaded,
         setSustainHoldMs, setVelocitySensitivity, setReverbMix, setVelocityMode,
-        subscribeNoteOn,
+        subscribeNoteOn, playNote, stopNote, allNotesOff,
         isAvailable, isEnabled,
         getActiveNotes, getInstrumentId,
         getSustainHoldMs, getVelocitySensitivity, getReverbMix, getVelocityMode,

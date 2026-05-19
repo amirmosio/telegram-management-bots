@@ -5149,6 +5149,7 @@ const pianoMode = installPiano({
     requestWakeLock: _requestWakeLock,
     getMidiActiveNotes: () => midiKeyboard.getActiveNotes(),
     subscribeMidiNoteOn: midiKeyboard.subscribeNoteOn,
+    midiKeyboard, // expose ensureLoaded / playNote / stopNote for MIDI-file source
 });
 
 // Piano-overlay MIDI controls. Hidden when Web MIDI isn't available
