@@ -2951,23 +2951,41 @@ body.coplay-follower #progress-bar {
 }
 .piano-source-cancel:hover { color: #fff; }
 
-.piano-source-reset {
+/* Always-visible source tabs along the top of the piano overlay. */
+#piano-source-tabs {
     position: absolute;
-    left: 16px;
-    bottom: 16px;
-    width: 32px; height: 32px;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
     display: none;
-    align-items: center; justify-content: center;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.12);
-    color: rgba(255,255,255,0.7);
-    cursor: pointer;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    background: rgba(20,24,32,0.85);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px;
     z-index: 12;
-    transition: background 0.15s;
 }
-.piano-source-reset:hover { background: rgba(255,255,255,0.16); color: #fff; }
-#piano-overlay.open:not(.piano-loading):not(.piano-source-prompt) .piano-source-reset { display: inline-flex; }
+#piano-overlay.open:not(.piano-loading):not(.piano-source-prompt) #piano-source-tabs { display: inline-flex; }
+.piano-source-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.piano-source-tab:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.piano-source-tab.active {
+    background: var(--accent, #1f7be0);
+    color: #fff;
+}
 
 /* ── Sheet-music view ── */
 #piano-sheet {

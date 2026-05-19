@@ -5247,6 +5247,9 @@ const pianoMode = installPiano({
         else sustainValue.textContent = s.toFixed(1) + 's';
     }
     _renderSustainValue(sustainSlider.value);
+    // Push the HTML-default slider value into the synth at boot so the
+    // first note honours the chosen tail without needing a user input.
+    midiKeyboard.setSustainHoldMs(Number(sustainSlider.value) * 1000);
     sustainSlider.addEventListener('input', () => {
         const sec = Number(sustainSlider.value);
         midiKeyboard.setSustainHoldMs(sec * 1000);

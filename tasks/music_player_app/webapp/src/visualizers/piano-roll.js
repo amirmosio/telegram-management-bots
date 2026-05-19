@@ -29,8 +29,10 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     const pianoSeekbarHandle = $('piano-seekbar-handle');
     const btnPiano = $('btn-piano');
     const pianoSourcePicker = $('piano-source-picker');
-    const pianoSourceReset = $('piano-source-reset');
     const pianoMidiFileInput = $('piano-midi-file');
+    const pianoTabTranscribe = $('piano-tab-transcribe');
+    const pianoTabUpload = $('piano-tab-upload');
+    const pianoTabSheet = $('piano-tab-sheet');
     const pianoSheet = $('piano-sheet');
     const pianoSheetNow = $('piano-sheet-now');
     const pianoSheetStaff = $('piano-sheet-staff');
@@ -466,6 +468,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         _setView(_pianoView);
         if (_pianoSource === 'midi') _activateMidiPlayback();
         else _deactivateMidiPlayback();
+        _updateSourceTabs();
     }
 
     // === MIDI playback scheduler ============================================
@@ -577,13 +580,67 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         _hideSourcePicker();
         exit();
     });
-    pianoSourceReset?.addEventListener('click', () => {
-        // Clear the cached choice for this track + show the picker again.
-        const tid = getCurrentTrackId();
-        if (tid != null) _pianoCache.delete(tid);
+    // === Always-visible source tabs =========================================
+    // The tabs row sits at the top of the piano overlay and lets the user
+    // jump between Auto / MIDI / Sheet without re-entering. Cached source
+    // for a track is reflected in the "active" tab; tapping a non-active
+    // tab kicks off the corresponding flow (transcribe / file picker /
+    // sheet render).
+    function _updateSourceTabs() {
+        const transcribeActive = (_pianoSource === 'transcribed' && _pianoView === 'piano');
+        const uploadActive = (_pianoSource === 'midi');
+        const sheetActive = (_pianoView === 'sheet');
+        pianoTabTranscribe?.classList.toggle('active', transcribeActive);
+        pianoTabTranscribe?.setAttribute('aria-selected', String(transcribeActive));
+        pianoTabUpload?.classList.toggle('active', uploadActive);
+        pianoTabUpload?.setAttribute('aria-selected', String(uploadActive));
+        pianoTabSheet?.classList.toggle('active', sheetActive);
+        pianoTabSheet?.setAttribute('aria-selected', String(sheetActive));
+    }
+    pianoTabTranscribe?.addEventListener('click', async () => {
+        if (_pianoSource === 'transcribed' && _pianoView === 'piano') return;
+        _pianoSource = 'transcribed';
+        _setView('piano');
         _deactivateMidiPlayback();
-        _pianoNotes = null;
-        _showSourcePicker();
+        _applySourceSideEffects();
+        _updateSourceTabs();
+        // If notes already cached as transcribed, reuse them. Else run Magenta.
+        const tid = getCurrentTrackId();
+        const cached = _pianoCache.get(tid);
+        if (cached) {
+            _pianoInstallNotes(tid, cached);
+            return;
+        }
+        const myToken = ++_pianoAnalysisToken;
+        const notes = await _runTranscription(myToken);
+        if (myToken !== _pianoAnalysisToken) return;
+        if (notes) {
+            _pianoInstallNotes(getCurrentTrackId(), notes);
+            _pianoSetLoading(null);
+        }
+    });
+    pianoTabUpload?.addEventListener('click', () => {
+        pianoMidiFileInput?.click();
+    });
+    pianoTabSheet?.addEventListener('click', async () => {
+        if (_pianoView === 'sheet') return;
+        _setView('sheet');
+        _updateSourceTabs();
+        // Re-use whichever notes are loaded — both transcribed and midi
+        // are fine for sheet rendering.
+        const tid = getCurrentTrackId();
+        let notes = _pianoCache.get(tid);
+        if (!notes || !notes.length) {
+            // Nothing cached — transcribe to populate.
+            _pianoSource = 'transcribed';
+            const myToken = ++_pianoAnalysisToken;
+            notes = await _runTranscription(myToken);
+            if (myToken !== _pianoAnalysisToken) return;
+            if (!notes) return;
+            _pianoInstallNotes(tid, notes);
+        }
+        await _renderSheet(notes);
+        _pianoSetLoading(null);
     });
 
     function _pianoIsUnreliable(notes, dur) {
