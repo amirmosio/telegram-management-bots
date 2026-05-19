@@ -761,15 +761,38 @@ async function confirmAddAsPlaylist(g, { silent = false } = {}) {
     // Refresh the browse list so the row's + button switches to "added".
     try { _renderBrowseDialogs(); } catch {}
     switchTab('playlists');
-    // Sync to the other members of this chat. `silent` is set when the
-    // user is ACCEPTING someone else's invite — in that case the chat
-    // already has a marker message in it, so re-sending would just churn.
-    if (!silent) {
+    // Sync to the other members of this chat via the shared aggregator
+    // channel. `silent` is set when the user is ACCEPTING someone
+    // else's invite — re-broadcasting would just churn. Channels and
+    // bots have no actionable "other members" so skip them.
+    if (!silent && (g.kind === 'user' || g.kind === 'group')) {
         try {
-            const myName = await _getMyDisplayName();
-            tg.sendPlaylistInvite(g.id, myName).catch(() => {});
+            const inviteeIds = await _computeInviteeIds(g);
+            if (inviteeIds.length > 0) {
+                const myName = await _getMyDisplayName();
+                tg.sendPlaylistInvite({
+                    chatId: g.id,
+                    chatTitle: g.title,
+                    chatKind: g.kind,
+                    inviteeIds,
+                    fromName: myName,
+                }).catch(() => {});
+            }
         } catch { /* best effort */ }
     }
+}
+
+// Figure out which user IDs the invite should target.
+//   • DM (kind=user): the chat's id IS the other user's id.
+//   • Group: pull a few participants and exclude self.
+async function _computeInviteeIds(g) {
+    if (g.kind === 'user') return [Number(g.id)];
+    if (g.kind !== 'group') return [];
+    let me = 0;
+    try { me = Number(await tg.getMyUserId()) || 0; } catch {}
+    let parts = [];
+    try { parts = await tg.getChatParticipants(g.id, 50); } catch {}
+    return parts.map(p => Number(p.id)).filter(id => Number.isFinite(id) && id !== 0 && id !== me);
 }
 
 // Cached display name for the logged-in user. Used in invite payloads

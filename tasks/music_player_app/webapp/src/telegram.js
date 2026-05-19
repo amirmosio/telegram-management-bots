@@ -2256,115 +2256,129 @@ export async function listAllDialogs(limit = 500) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  SHARED PLAYLIST INVITES  —  one-message sync inside the chat
+//  SHARED PLAYLIST INVITES  —  routed through @tgmusicplayer_shared
 // ────────────────────────────────────────────────────────────
-// When user A pins a chat as a shared playlist, A's client sends a
-// single marker message INTO that chat. Other members' clients scan
-// recent dialog messages for the marker and surface a "join" floating
-// button. Accepting registers the chat locally with no additional
-// network round-trip — and explicitly does NOT re-send the invite so
-// the propagation doesn't ping-pong forever.
+// Mirrors the co-play pattern. When user A pins a chat as a shared
+// playlist, A's client posts a single marker message into the shared
+// aggregator channel. The payload carries the target chat's metadata
+// plus an explicit invitee id-array. Other members' clients catch the
+// message up at boot, filter by self-in-invitees, and surface a FAB
+// offering to pin the same chat on their side.
+//
+// Why the aggregator channel and not the chat itself:
+//   • The chat's history stays clean — no marker message users see.
+//   • One channel to poll, not "every dialog's latest message".
+//   • The recipient set is explicit (no relying on Telegram's read
+//     receipts / unread mention queues).
 // ════════════════════════════════════════════════════════════
 
 const PLAYLIST_INVITE_MARKER = '[telemusic-playlist-invite-v1] ';
 
-// Build the invite message text. Format mirrors COPLAY_MARKER:
-//   <marker> {json}\n<human-readable line>
-// Telegram displays the human-readable line; the webapp parses the JSON.
-function _playlistInviteBuildMessage(fromName) {
-    const json = JSON.stringify({ v: 1, fromName: String(fromName || '').slice(0, 64) });
-    const human = `🎵 added this chat to Music Player as a shared playlist.`;
+// Build the invite message text:
+//   <marker> {json}\n🎵 <FromName> added "<ChatTitle>" as a shared playlist.
+function _playlistInviteBuildMessage(payload) {
+    const json = JSON.stringify(payload);
+    const fromBit = payload.fromName ? `${payload.fromName} ` : '';
+    const human = `🎵 ${fromBit}added "${payload.chat?.title || 'a chat'}" as a shared playlist.`;
     return PLAYLIST_INVITE_MARKER + json + '\n' + human;
 }
 
-export async function sendPlaylistInvite(chatId, fromName) {
+// payload shape:
+//   { v: 1, fromName, chat: { id, title, kind }, inv: [userIds] }
+export async function sendPlaylistInvite({ chatId, chatTitle, chatKind, inviteeIds, fromName }) {
     await _ensureConnected();
-    const entity = await _getEntity(chatId);
-    const text = _playlistInviteBuildMessage(fromName);
+    const channel = await findOrCreateShareChannel();
+    const entity = await _getEntity(channel.id);
+    const ids = Array.isArray(inviteeIds)
+        ? inviteeIds.map(n => Number(n)).filter(n => Number.isFinite(n) && n !== 0)
+        : [];
+    const payload = {
+        v: 1,
+        fromName: String(fromName || '').slice(0, 64),
+        chat: {
+            id: Number(chatId),
+            title: String(chatTitle || '').slice(0, 128),
+            kind: String(chatKind || 'group'),
+        },
+        inv: ids,
+    };
+    const text = _playlistInviteBuildMessage(payload);
     try {
-        await client.sendMessage(entity, { message: text });
-        return true;
+        const sent = await client.sendMessage(entity, { message: text });
+        return { msgId: sent.id, channelId: channel.id };
     } catch (e) {
-        // Permission errors (can't post in this channel, write-restricted,
-        // etc.) are non-fatal — the local pinning still works.
         console.warn('[playlist-invite] send failed:', e?.message || e);
-        return false;
+        return null;
     }
 }
 
-// Pull the same dialogs result `listAllDialogs` uses and inspect each
-// dialog's latest message for the invite marker. Returns invites NOT
-// authored by the current user. Cheap: one call already in flight at
-// boot for the dialog cache.
+// Scan the recent tail of the share channel for invites that name me
+// in their `inv` array. Same shape as coplayCatchupMentions — a single
+// short range fetch, no per-dialog cost.
 //
-// Returns [{ chatId, chatTitle, chatKind, msgId, fromName, fromUserId, raw }]
+// Returns [{ chatId, chatTitle, chatKind, msgId, fromName, fromUserId }]
 export async function scanPlaylistInvites() {
     await _ensureConnected();
     if (!client.connected) return [];
+    let channel;
+    try { channel = await findOrCreateShareChannel(); }
+    catch (e) { console.warn('[invites] share channel resolve failed:', e?.message || e); return []; }
+    const entity = await _getEntity(channel.id);
     const me = await getMyUserId();
-    const [main, archived] = await Promise.all([
-        client.getDialogs({ limit: 500, archived: false }).catch(() => []),
-        client.getDialogs({ limit: 200, archived: true }).catch(() => []),
-    ]);
     const out = [];
-    const seen = new Set();
-    for (const d of [...main, ...archived]) {
-        const entity = d.entity;
-        const msg = d.message;
-        if (!entity || !msg || !msg.message) continue;
-        const text = String(msg.message);
-        if (!text.startsWith(PLAYLIST_INVITE_MARKER)) continue;
-        // Skip own messages — the sender already has it pinned locally.
-        if (msg.out) continue;
+    const seenChats = new Set();
+    try {
+        // 60 entries matches coplayCatchupMentions — covers a generous
+        // window of recent activity without paging.
+        const msgs = await client.getMessages(entity, { limit: 60 });
+        for (const msg of msgs) {
+            if (!msg || !msg.message) continue;
+            const text = String(msg.message);
+            if (!text.startsWith(PLAYLIST_INVITE_MARKER)) continue;
+            if (msg.out) continue; // skip own posts
 
-        // Parse the embedded JSON for fromName.
-        let data = {};
-        try {
-            const afterMarker = text.slice(PLAYLIST_INVITE_MARKER.length);
-            const nl = afterMarker.indexOf('\n');
-            const jsonStr = nl === -1 ? afterMarker : afterMarker.slice(0, nl);
-            data = JSON.parse(jsonStr) || {};
-        } catch { /* keep data = {} — name falls back below */ }
+            let payload = null;
+            try {
+                const afterMarker = text.slice(PLAYLIST_INVITE_MARKER.length);
+                const nl = afterMarker.indexOf('\n');
+                const jsonStr = nl === -1 ? afterMarker : afterMarker.slice(0, nl);
+                payload = JSON.parse(jsonStr);
+            } catch { continue; }
+            if (!payload || payload.v !== 1 || !payload.chat?.id) continue;
 
-        // Resolve sender user id (so the FAB can fetch the avatar).
-        let fromUserId = null;
-        const fromId = msg.fromId;
-        if (fromId) {
-            const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
-            if (raw != null) fromUserId = Number(typeof raw === 'bigint' ? raw : raw);
-        }
-        if (fromUserId && fromUserId === me) continue;
+            // Must be explicitly addressed to me.
+            const ids = Array.isArray(payload.inv) ? payload.inv.map(n => Number(n)) : [];
+            if (!me || !ids.includes(me)) continue;
 
-        // Resolve chat metadata.
-        let chatId, chatTitle, chatKind;
-        if (entity instanceof Api.User) {
-            const raw = entity.id?.value ?? entity.id;
-            chatId = Number(typeof raw === 'bigint' ? raw : raw);
-            const first = entity.firstName || '';
-            const last = entity.lastName || '';
-            chatTitle = (first + ' ' + last).trim() || entity.username || 'User';
-            chatKind = entity.bot ? 'bot' : 'user';
-        } else if (_isGroup(entity)) {
-            chatId = _entityId(entity);
-            chatTitle = entity.title || 'Group';
-            chatKind = _isChannel(entity) ? (entity.broadcast ? 'channel' : 'group') : 'group';
-        } else {
-            continue;
+            // De-dupe by chatId — if multiple people invited me to the
+            // same chat, only show the most recent one (loop is newest-
+            // first, so the first hit per chat wins).
+            const chatId = Number(payload.chat.id);
+            if (seenChats.has(chatId)) continue;
+            seenChats.add(chatId);
+
+            // Resolve sender user id (so the FAB can fetch the avatar).
+            let fromUserId = null;
+            const fromId = msg.fromId;
+            if (fromId) {
+                const raw = fromId.userId?.value ?? fromId.userId ?? fromId.value ?? fromId;
+                if (raw != null) fromUserId = Number(typeof raw === 'bigint' ? raw : raw);
+            }
+            if (msg.sender instanceof Api.User && fromUserId && !_groupsCache[fromUserId]) {
+                _groupsCache[fromUserId] = msg.sender;
+            }
+
+            out.push({
+                chatId,
+                chatTitle: payload.chat.title || '',
+                chatKind: payload.chat.kind || 'group',
+                msgId: msg.id,
+                fromName: payload.fromName || '',
+                fromUserId,
+            });
         }
-        if (seen.has(chatId)) continue;
-        seen.add(chatId);
-        _groupsCache[chatId] = entity;
-        if (msg.sender instanceof Api.User && fromUserId && !_groupsCache[fromUserId]) {
-            _groupsCache[fromUserId] = msg.sender;
-        }
-        out.push({
-            chatId,
-            chatTitle,
-            chatKind,
-            msgId: msg.id,
-            fromName: data.fromName || '',
-            fromUserId,
-        });
+    } catch (e) {
+        console.warn('[invites] scan failed:', e?.message || e);
     }
     return out;
 }
