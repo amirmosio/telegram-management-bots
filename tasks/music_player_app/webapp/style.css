@@ -2940,35 +2940,58 @@ body.coplay-follower #progress-bar {
     color: #fff;
 }
 
-/* ── Sheet-music view ── */
+/* ── Sheet-music view (top strip) ── */
+/* The sheet is a horizontal strip near the top of the overlay; the
+   waterfall canvas underneath remains visible so the user can read the
+   staff and watch the falling bars at the same time. Positioned below
+   the source-tabs row and left of the MIDI controls cluster (which
+   stays clickable via a higher z-index). */
 #piano-sheet {
     position: absolute;
-    inset: 0;
+    top: 56px;
+    left: 12px;
+    right: 12px;
+    /* Narrow strip — just enough for the treble staff + a bit of
+       padding for ledger lines. Waterfall stays visible below. */
+    height: 110px;
     display: none;
     flex-direction: column;
-    padding: 32px 24px 24px;
-    color: #fff;
-    background: linear-gradient(180deg, #070910 0%, #11151e 100%);
-    z-index: 5;
+    background: rgba(255, 255, 255, 0.96);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
     overflow: hidden;
+    z-index: 6;
 }
 #piano-overlay.piano-view-sheet #piano-sheet { display: flex; }
-#piano-overlay.piano-view-sheet #piano-canvas { display: none; }
-#piano-sheet-now {
-    font-size: 36px;
-    font-weight: 600;
-    text-align: center;
-    letter-spacing: 0.04em;
-    color: #9ec8f5;
-    margin-bottom: 24px;
-    min-height: 50px;
-}
+/* Lift the controls and source tabs above the sheet so they stay
+   tappable when sheet is open. */
+#piano-source-tabs, #piano-midi-controls { z-index: 12; }
+/* The "now playing" inline label is hidden — the highlighted notehead
+   on the staff is already a visual cue, and there's no vertical room
+   in the narrow strip. */
+#piano-sheet-now { display: none; }
 #piano-sheet-staff {
     flex: 1;
     overflow-x: auto;
     overflow-y: hidden;
-    background: #ffffff;
-    border-radius: 8px;
-    padding: 12px;
+    padding: 0 6px;
 }
 #piano-sheet-staff svg { display: block; }
+#piano-sheet-close {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.08);
+    color: #444;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.15s, color 0.15s;
+}
+#piano-sheet-close:hover { background: rgba(0, 0, 0, 0.2); color: #000; }

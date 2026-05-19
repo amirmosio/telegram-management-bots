@@ -544,6 +544,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     audio.addEventListener('seeked', () => { _midiResync(); });
 
     // MIDI file picker — triggered by the "MIDI" source tab.
+    // Explicit "×" on the sheet strip — same behaviour as toggling the
+    // Sheet pill at the top-right.
+    $('piano-sheet-close')?.addEventListener('click', () => {
+        if (_pianoView === 'sheet') pianoSheetToggle?.click();
+    });
+
     pianoMidiFileInput?.addEventListener('change', async () => {
         const file = pianoMidiFileInput.files?.[0];
         pianoMidiFileInput.value = ''; // allow re-uploading the same file
@@ -769,21 +775,26 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         ctx.closePath();
     }
 
-    function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys) {
+    function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys, activeLeftKeys) {
         const layout = _pianoKeyboardLayout.layout;
         const hasCorrect = correctKeys && correctKeys.size > 0;
+        const hasLeft = activeLeftKeys && activeLeftKeys.size > 0;
         // White keys first
         for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
             const k = layout.get(m);
             if (!k || !k.isWhite) continue;
             const isCorrect = hasCorrect && correctKeys.has(m);
-            const isActive = isCorrect || activeKeys.has(m);
-            ctx.fillStyle = isCorrect ? '#7ef0a8' : (isActive ? '#7eb6f0' : '#f0eee5');
+            const isLeft = hasLeft && activeLeftKeys.has(m);
+            const isActive = isCorrect || isLeft || activeKeys.has(m);
+            ctx.fillStyle = isCorrect
+                ? '#7ef0a8'
+                : isLeft
+                    ? '#f0c098'              // warm orange for left-hand
+                    : (isActive ? '#7eb6f0'  // blue for right-hand / generic
+                                : '#f0eee5');
             ctx.fillRect(k.x, kbTop, k.w, kbH);
-            // Right edge separator
             ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
             ctx.fillRect(k.x + k.w - 0.5, kbTop, 0.5, kbH);
-            // Bottom shadow
             ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
             ctx.fillRect(k.x, kbTop + kbH - 4, k.w, 4);
         }
@@ -793,11 +804,15 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             const k = layout.get(m);
             if (!k || k.isWhite) continue;
             const isCorrect = hasCorrect && correctKeys.has(m);
-            const isActive = isCorrect || activeKeys.has(m);
+            const isLeft = hasLeft && activeLeftKeys.has(m);
+            const isActive = isCorrect || isLeft || activeKeys.has(m);
             const grad = ctx.createLinearGradient(0, kbTop, 0, kbTop + blackH);
             if (isCorrect) {
                 grad.addColorStop(0, '#7ef0a8');
                 grad.addColorStop(1, '#2d8a52');
+            } else if (isLeft) {
+                grad.addColorStop(0, '#d8a06e');
+                grad.addColorStop(1, '#754727');
             } else if (isActive) {
                 grad.addColorStop(0, '#7eb6f0');
                 grad.addColorStop(1, '#3d6c9c');
@@ -807,7 +822,6 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             }
             ctx.fillStyle = grad;
             ctx.fillRect(k.x, kbTop, k.w, blackH);
-            // Top sheen
             ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
             ctx.fillRect(k.x, kbTop, k.w, 2);
         }
@@ -844,6 +858,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         ctx.fillRect(0, kbTop - 10, w, 10);
 
         const activeKeys = new Set();
+        const activeLeftKeys = new Set();
 
         if (_pianoNotes && _pianoNotes.length) {
             const t = audio.currentTime;
@@ -862,7 +877,10 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
 
                 const k = layout.get(n.pitch);
                 if (!k) continue;
-                if (n.t0 <= t && t <= n.t1) activeKeys.add(n.pitch);
+                if (n.t0 <= t && t <= n.t1) {
+                    if (n.hand === 'left') activeLeftKeys.add(n.pitch);
+                    else activeKeys.add(n.pitch);
+                }
 
                 const yBottom = kbTop + (t - n.t0) * pps;
                 const yTop = yBottom - (n.t1 - n.t0) * pps;
@@ -947,7 +965,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             } catch (_) {}
         }
 
-        _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys);
+        _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys, activeLeftKeys);
 
         // Update HTML seek-bar fill + handle position from current playback.
         if (audio.duration > 0 && pianoSeekbarFill) {
@@ -1058,12 +1076,17 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         for (const n of sorted) {
             const last = out[out.length - 1];
             if (last && n.t0 - last.t0 < windowSec) {
-                last.pitches.push(n.pitch);
+                last.notes.push({ pitch: n.pitch, hand: n.hand || null });
             } else {
-                out.push({ t0: n.t0, pitches: [n.pitch] });
+                out.push({ t0: n.t0, notes: [{ pitch: n.pitch, hand: n.hand || null }] });
             }
         }
         return out;
+    }
+    function _handColor(hand) {
+        if (hand === 'left') return '#b35a1f';     // warm orange
+        if (hand === 'right') return '#1f57b3';    // blue
+        return '#222';                              // auto / unknown
     }
 
     async function _renderSheet(notes) {
@@ -1106,31 +1129,33 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             // Render notehead(s) — every pitch in the onset becomes a small
             // ellipse at its diatonic position. Sharp glyph (♯) to the
             // left if needed. Ledger lines for steps outside [0, 8].
+            // Hand-aware colours when the note source supplies a `hand`
+            // field (i.e. MIDI uploads). Auto-transcribed notes have
+            // `hand: null` and stay in default black.
             const group = _svg('g', { 'data-onset-idx': String(i) }, svg);
             const noteheads = [];
-            for (const pitch of onset.pitches) {
+            for (const note of onset.notes) {
+                const pitch = note.pitch;
                 const step = _pitchToStaffStep(pitch);
                 const y = _yForStaffStep(step);
                 const pc = pitch % 12;
+                const color = _handColor(note.hand);
                 if (_PITCH_CLASS_IS_SHARP[pc]) {
                     const acc = _svg('text', {
                         x: xCenter - SHEET_NOTE_RADIUS - 10,
                         y: y + 4,
                         'font-family': 'serif',
                         'font-size': 16,
-                        fill: '#222',
+                        fill: color,
                     }, group);
                     acc.textContent = '♯'; // ♯
                 }
-                // Ledger lines for notes way above/below the staff.
                 if (step <= -2) {
                     for (let s = -2; s >= step; s -= 2) {
                         const ly = _yForStaffStep(s);
                         _svg('line', {
-                            x1: xCenter - SHEET_NOTE_RADIUS - 3,
-                            y1: ly,
-                            x2: xCenter + SHEET_NOTE_RADIUS + 3,
-                            y2: ly,
+                            x1: xCenter - SHEET_NOTE_RADIUS - 3, y1: ly,
+                            x2: xCenter + SHEET_NOTE_RADIUS + 3, y2: ly,
                             stroke: '#222', 'stroke-width': 1.2,
                         }, group);
                     }
@@ -1138,10 +1163,8 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                     for (let s = 10; s <= step; s += 2) {
                         const ly = _yForStaffStep(s);
                         _svg('line', {
-                            x1: xCenter - SHEET_NOTE_RADIUS - 3,
-                            y1: ly,
-                            x2: xCenter + SHEET_NOTE_RADIUS + 3,
-                            y2: ly,
+                            x1: xCenter - SHEET_NOTE_RADIUS - 3, y1: ly,
+                            x2: xCenter + SHEET_NOTE_RADIUS + 3, y2: ly,
                             stroke: '#222', 'stroke-width': 1.2,
                         }, group);
                     }
@@ -1150,21 +1173,29 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                     cx: xCenter, cy: y,
                     rx: SHEET_NOTE_RADIUS + 1,
                     ry: SHEET_NOTE_RADIUS,
-                    fill: '#222',
+                    fill: color,
+                    'data-base-color': color,
                     transform: `rotate(-18 ${xCenter} ${y})`,
                 }, group);
                 noteheads.push(head);
             }
-            // Stem on the lowest notehead going up.
-            const lowestStep = Math.min(...onset.pitches.map(p => _pitchToStaffStep(p)));
-            const highestStep = Math.max(...onset.pitches.map(p => _pitchToStaffStep(p)));
-            const stemDown = highestStep > 4; // upper-half: stem down
+            // Stem on the lowest notehead going up. Use the dominant
+            // hand's colour (whichever has more pitches in this onset).
+            const pitches = onset.notes.map(n => n.pitch);
+            const lowestStep = Math.min(...pitches.map(p => _pitchToStaffStep(p)));
+            const highestStep = Math.max(...pitches.map(p => _pitchToStaffStep(p)));
+            const handCounts = onset.notes.reduce((acc, n) => {
+                acc[n.hand || 'none'] = (acc[n.hand || 'none'] || 0) + 1; return acc;
+            }, {});
+            const dominantHand = Object.entries(handCounts).sort((a, b) => b[1] - a[1])[0][0];
+            const stemColor = _handColor(dominantHand === 'none' ? null : dominantHand);
+            const stemDown = highestStep > 4;
             const stemX = stemDown ? xCenter - SHEET_NOTE_RADIUS - 0.5 : xCenter + SHEET_NOTE_RADIUS + 0.5;
             const stemTop = _yForStaffStep(stemDown ? lowestStep : (lowestStep + 7));
             const stemBot = _yForStaffStep(stemDown ? (highestStep - 7) : highestStep);
             _svg('line', {
                 x1: stemX, y1: stemTop, x2: stemX, y2: stemBot,
-                stroke: '#222', 'stroke-width': 1.5,
+                stroke: stemColor, 'stroke-width': 1.5,
             }, group);
             onsetLayouts.push({ xCenter, group, noteheads });
         }
@@ -1189,15 +1220,18 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             else break;
         }
         if (idx === _sheetLastHighlightIdx) return;
-        // Reset previous highlight.
+        // Reset previous highlight — restore each notehead's hand colour.
         if (_sheetLastHighlightIdx >= 0) {
             const prev = _sheetLayout.onsets[_sheetLastHighlightIdx];
-            if (prev) for (const h of prev.noteheads) h.setAttribute('fill', '#222');
+            if (prev) for (const h of prev.noteheads) {
+                h.setAttribute('fill', h.getAttribute('data-base-color') || '#222');
+            }
         }
         _sheetLastHighlightIdx = idx;
         if (idx >= 0) {
             const cur = _sheetLayout.onsets[idx];
-            for (const h of cur.noteheads) h.setAttribute('fill', '#1f7be0');
+            // Highlight: bright pulse colour on top of the base hand tint.
+            for (const h of cur.noteheads) h.setAttribute('fill', '#1fb3e0');
             const target = cur.xCenter - pianoSheetStaff.clientWidth / 2;
             pianoSheetStaff.scrollTo({ left: target, behavior: 'smooth' });
         }
