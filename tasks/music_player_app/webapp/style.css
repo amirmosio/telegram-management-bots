@@ -2897,60 +2897,6 @@ body.coplay-follower #progress-bar {
 }
 .playlist-invite-dismiss:hover { background: rgba(0,0,0,0.7); }
 
-/* ── Piano source picker (Auto / MIDI / Sheet) ── */
-#piano-source-picker {
-    position: absolute;
-    inset: 0;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 30;
-    background: rgba(7,9,16,0.92);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-}
-#piano-source-picker.open { display: flex; }
-.piano-source-picker-card {
-    width: min(420px, 90vw);
-    display: flex; flex-direction: column; gap: 12px;
-    padding: 24px;
-    background: rgba(20,24,32,0.95);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px;
-    color: #fff;
-}
-.piano-source-picker-title {
-    font-size: 16px; font-weight: 600;
-    margin-bottom: 4px;
-    text-align: center;
-}
-.piano-source-btn {
-    display: flex; flex-direction: column; align-items: flex-start;
-    gap: 4px;
-    padding: 14px 18px;
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 12px;
-    background: rgba(255,255,255,0.04);
-    color: #fff;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.15s, border-color 0.15s, transform 0.1s;
-}
-.piano-source-btn:hover { background: rgba(255,255,255,0.08); border-color: var(--accent); }
-.piano-source-btn:active { transform: scale(0.98); }
-.piano-source-btn-title { font-weight: 600; font-size: 15px; }
-.piano-source-btn-sub { font-size: 12px; opacity: 0.7; }
-.piano-source-cancel {
-    margin-top: 6px;
-    padding: 10px;
-    background: transparent;
-    color: #aaa;
-    border: none;
-    cursor: pointer;
-    font-size: 13px;
-}
-.piano-source-cancel:hover { color: #fff; }
-
 /* Always-visible source tabs along the top of the piano overlay. */
 #piano-source-tabs {
     position: absolute;

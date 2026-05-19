@@ -28,11 +28,10 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     const pianoSeekbarFill = $('piano-seekbar-fill');
     const pianoSeekbarHandle = $('piano-seekbar-handle');
     const btnPiano = $('btn-piano');
-    const pianoSourcePicker = $('piano-source-picker');
     const pianoMidiFileInput = $('piano-midi-file');
     const pianoTabTranscribe = $('piano-tab-transcribe');
     const pianoTabUpload = $('piano-tab-upload');
-    const pianoTabSheet = $('piano-tab-sheet');
+    const pianoSheetToggle = $('piano-sheet-toggle');
     const pianoSheet = $('piano-sheet');
     const pianoSheetNow = $('piano-sheet-now');
     const pianoSheetStaff = $('piano-sheet-staff');
@@ -42,9 +41,6 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     //  view:   'piano'       | 'sheet'
     let _pianoSource = 'transcribed';
     let _pianoView = 'piano';
-    // Set true while the source picker overlay is open so the falling-bar
-    // RAF doesn't start drawing under a half-loaded transcription.
-    let _pianoAwaitingPick = false;
     // MIDI playback scheduling — tracks which note indices have been
     // started/stopped given the current audio.currentTime cursor.
     let _midiActiveNotes = new Set();   // indices of notes currently sounding
@@ -451,8 +447,17 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         } catch (_) { /* fall through */ }
         if (myToken !== _pianoAnalysisToken) return;
 
-        // 3. No cached choice — show the source picker.
-        _showSourcePicker();
+        // 3. No cached choice — default to Auto-Transcribe. The user can
+        // switch to MIDI from the tab bar at any time.
+        _pianoSource = 'transcribed';
+        _setView('piano');
+        const notes = await _runTranscription(myToken);
+        if (myToken !== _pianoAnalysisToken) return;
+        if (notes) {
+            _pianoInstallNotes(getCurrentTrackId(), notes);
+            _applySourceSideEffects();
+            _pianoSetLoading(null);
+        }
     }
 
     // Switch view (piano-roll <-> sheet) and reset playback bookkeeping.
@@ -524,61 +529,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     }
     audio.addEventListener('seeked', () => { _midiResync(); });
 
-    // === Source picker ======================================================
-    function _showSourcePicker() {
-        _pianoAwaitingPick = true;
-        pianoOverlay?.classList.add('piano-source-prompt');
-        pianoSourcePicker?.classList.add('open');
-        pianoSourcePicker?.setAttribute('aria-hidden', 'false');
-        _pianoSetLoading(null);
-    }
-    function _hideSourcePicker() {
-        _pianoAwaitingPick = false;
-        pianoOverlay?.classList.remove('piano-source-prompt');
-        pianoSourcePicker?.classList.remove('open');
-        pianoSourcePicker?.setAttribute('aria-hidden', 'true');
-    }
-    $('piano-source-transcribe')?.addEventListener('click', async () => {
-        _hideSourcePicker();
-        _pianoSource = 'transcribed';
-        _setView('piano');
-        const myToken = ++_pianoAnalysisToken;
-        const notes = await _runTranscription(myToken);
-        if (myToken !== _pianoAnalysisToken) return;
-        if (notes) {
-            _pianoInstallNotes(getCurrentTrackId(), notes);
-            _applySourceSideEffects();
-            _pianoSetLoading(null);
-        }
-    });
-    $('piano-source-sheet')?.addEventListener('click', async () => {
-        _hideSourcePicker();
-        _pianoSource = 'transcribed';
-        _setView('sheet');
-        const myToken = ++_pianoAnalysisToken;
-        const notes = await _runTranscription(myToken);
-        if (myToken !== _pianoAnalysisToken) return;
-        if (notes) {
-            _pianoInstallNotes(getCurrentTrackId(), notes);
-            _applySourceSideEffects();
-            await _renderSheet(notes);
-            _pianoSetLoading(null);
-        }
-    });
-    $('piano-source-upload')?.addEventListener('click', () => {
-        pianoMidiFileInput?.click();
-    });
+    // MIDI file picker — triggered by the "MIDI" source tab.
     pianoMidiFileInput?.addEventListener('change', async () => {
         const file = pianoMidiFileInput.files?.[0];
         pianoMidiFileInput.value = ''; // allow re-uploading the same file
         if (!file) return;
-        _hideSourcePicker();
-        _setView('piano');
         await _loadFromMidiFile(file);
-    });
-    $('piano-source-cancel')?.addEventListener('click', () => {
-        _hideSourcePicker();
-        exit();
     });
     // === Always-visible source tabs =========================================
     // The tabs row sits at the top of the piano overlay and lets the user
@@ -587,24 +543,21 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     // tab kicks off the corresponding flow (transcribe / file picker /
     // sheet render).
     function _updateSourceTabs() {
-        const transcribeActive = (_pianoSource === 'transcribed' && _pianoView === 'piano');
+        const transcribeActive = (_pianoSource === 'transcribed');
         const uploadActive = (_pianoSource === 'midi');
         const sheetActive = (_pianoView === 'sheet');
         pianoTabTranscribe?.classList.toggle('active', transcribeActive);
         pianoTabTranscribe?.setAttribute('aria-selected', String(transcribeActive));
         pianoTabUpload?.classList.toggle('active', uploadActive);
         pianoTabUpload?.setAttribute('aria-selected', String(uploadActive));
-        pianoTabSheet?.classList.toggle('active', sheetActive);
-        pianoTabSheet?.setAttribute('aria-selected', String(sheetActive));
+        pianoSheetToggle?.classList.toggle('active', sheetActive);
+        pianoSheetToggle?.setAttribute('aria-pressed', String(sheetActive));
     }
     pianoTabTranscribe?.addEventListener('click', async () => {
-        if (_pianoSource === 'transcribed' && _pianoView === 'piano') return;
+        if (_pianoSource === 'transcribed') return;
         _pianoSource = 'transcribed';
-        _setView('piano');
         _deactivateMidiPlayback();
         _applySourceSideEffects();
-        _updateSourceTabs();
-        // If notes already cached as transcribed, reuse them. Else run Magenta.
         const tid = getCurrentTrackId();
         const cached = _pianoCache.get(tid);
         if (cached) {
@@ -622,25 +575,39 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     pianoTabUpload?.addEventListener('click', () => {
         pianoMidiFileInput?.click();
     });
-    pianoTabSheet?.addEventListener('click', async () => {
-        if (_pianoView === 'sheet') return;
-        _setView('sheet');
+    pianoSheetToggle?.addEventListener('click', async () => {
+        // Plain view toggle — orthogonal to source. Auto-transcribes if
+        // there are no cached notes yet on the way INTO sheet view.
+        const nextView = _pianoView === 'sheet' ? 'piano' : 'sheet';
+        _setView(nextView);
         _updateSourceTabs();
-        // Re-use whichever notes are loaded — both transcribed and midi
-        // are fine for sheet rendering.
-        const tid = getCurrentTrackId();
-        let notes = _pianoCache.get(tid);
-        if (!notes || !notes.length) {
-            // Nothing cached — transcribe to populate.
-            _pianoSource = 'transcribed';
-            const myToken = ++_pianoAnalysisToken;
-            notes = await _runTranscription(myToken);
-            if (myToken !== _pianoAnalysisToken) return;
-            if (!notes) return;
-            _pianoInstallNotes(tid, notes);
+        // Persist the view choice alongside the source.
+        try {
+            const tid = getCurrentTrackId();
+            const groupId = getPlayerGroupId();
+            if (tid != null && _pianoNotes) {
+                tg.updateTrackPianoNotes(groupId, tid, _pianoNotes, {
+                    track: _pianoFindCurrentTrack(),
+                    pianoNotesVersion: _pianoSource === 'midi' ? undefined : _PIANO_NOTES_VERSION,
+                    pianoSource: _pianoSource,
+                    pianoView: nextView,
+                });
+            }
+        } catch (_) {}
+        if (nextView === 'sheet') {
+            const tid = getCurrentTrackId();
+            let notes = _pianoCache.get(tid);
+            if (!notes || !notes.length) {
+                _pianoSource = 'transcribed';
+                const myToken = ++_pianoAnalysisToken;
+                notes = await _runTranscription(myToken);
+                if (myToken !== _pianoAnalysisToken) return;
+                if (!notes) return;
+                _pianoInstallNotes(tid, notes);
+            }
+            await _renderSheet(notes);
+            _pianoSetLoading(null);
         }
-        await _renderSheet(notes);
-        _pianoSetLoading(null);
     });
 
     function _pianoIsUnreliable(notes, dur) {
@@ -864,7 +831,18 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                 const ww = Math.max(1, k.w - inset * 2);
 
                 const gr = ctx.createLinearGradient(0, drawTop, 0, drawBottom);
-                if (k.isWhite) {
+                // Hand-aware coloring (only when the notes came from an
+                // uploaded MIDI — auto-transcribed notes have no `hand`
+                // field and stay in the default blue palette).
+                //   right hand → blue gradient (existing palette)
+                //   left  hand → warm orange gradient
+                if (n.hand === 'left') {
+                    if (k.isWhite) {
+                        gr.addColorStop(0, '#f5c89e'); gr.addColorStop(1, '#955f3a');
+                    } else {
+                        gr.addColorStop(0, '#d8a06e'); gr.addColorStop(1, '#754727');
+                    }
+                } else if (k.isWhite) {
                     gr.addColorStop(0, '#9ec8f5');
                     gr.addColorStop(1, '#3a6595');
                 } else {
@@ -966,7 +944,6 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         pianoOverlay.classList.remove('piano-source-prompt');
         pianoOverlay.classList.remove('piano-view-sheet');
         pianoOverlay.setAttribute('aria-hidden', 'true');
-        _hideSourcePicker();
         _deactivateMidiPlayback();
 
         if (_pianoRafId != null) { cancelAnimationFrame(_pianoRafId); _pianoRafId = null; }
@@ -975,76 +952,60 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     }
 
     // === Sheet-music renderer ===============================================
-    // Lazy-loads VexFlow from CDN. Renders a horizontally-scrolling
-    // treble-clef staff with quarter-note placeholders for every onset;
-    // pretty rough musically, but enough to follow along visually. The
-    // currently-playing note name (or chord) updates every frame.
-    const VEXFLOW_URL = 'https://cdn.jsdelivr.net/npm/vexflow@4.2.6/build/cjs/vexflow.js';
-    let _vexLoaded = false;
-    async function _ensureVex() {
-        if (_vexLoaded && window.Vex) return;
-        await _pianoLoadScript(VEXFLOW_URL);
-        if (!window.Vex) throw new Error('VexFlow did not register on window');
-        _vexLoaded = true;
-    }
+    // Custom SVG staff. Renders a horizontally-scrolling treble-clef
+    // staff with one quarter-note glyph per onset cluster. Notes outside
+    // the staff get ledger lines; sharps render with a # to the left.
+    // No external library — VexFlow's CDN UMD bundle wasn't loading and
+    // hand-rolled SVG is plenty for the "follow along" use case.
     const _MIDI_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    // Diatonic step (0=C, 1=D, 2=E, 3=F, 4=G, 5=A, 6=B) and a sharp flag
+    // for every chromatic pitch class.
+    const _PITCH_CLASS_DIATONIC = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6];
+    const _PITCH_CLASS_IS_SHARP = [false, true, false, true, false, false, true, false, true, false, true, false];
     function _midiPitchToName(p) {
         return _MIDI_NAMES[p % 12] + (Math.floor(p / 12) - 1);
     }
-    // VexFlow note key (e.g. "c#/4"). Octave numbering matches MIDI.
-    function _midiPitchToKey(p) {
-        const pc = _MIDI_NAMES[p % 12].toLowerCase().replace('#', '#');
-        const oct = Math.floor(p / 12) - 1;
-        return pc + '/' + oct;
+    // Convert a MIDI pitch to a "diatonic line index", where each diatonic
+    // step is a half-step on the staff. Reference: E4 (MIDI 64) = 0 (the
+    // bottom line of the treble staff). Higher numbers go UP. Sharps are
+    // treated as the natural's diatonic position with a flag for the
+    // accidental glyph.
+    function _pitchToStaffStep(p) {
+        const octave = Math.floor(p / 12) - 1;
+        const pc = p % 12;
+        const diatonic = octave * 7 + _PITCH_CLASS_DIATONIC[pc];
+        // E4 diatonic = 4*7 + 2 = 30. Subtract so bottom staff line is 0.
+        const E4_DIATONIC = 30;
+        return diatonic - E4_DIATONIC;
     }
-    async function _renderSheet(notes) {
-        if (!pianoSheetStaff) return;
-        try { await _ensureVex(); }
-        catch (e) { console.warn('[piano] vexflow load failed:', e); return; }
-        const VF = window.Vex.Flow;
-        // Quantize onsets into bars. Pick a global beat ~ 1 onset/beat
-        // assuming 4/4 — for arbitrary tempos this is approximate but
-        // visually pleasant.
-        pianoSheetStaff.innerHTML = '';
-        const div = document.createElement('div');
-        pianoSheetStaff.appendChild(div);
-        const renderer = new VF.Renderer(div, VF.Renderer.Backends.SVG);
-        // Compute the staff width — give every note ~32 px and pad.
-        const onsets = _collectOnsets(notes, 0.05);
-        const widthPerOnset = 32;
-        const totalWidth = Math.max(800, 200 + onsets.length * widthPerOnset);
-        renderer.resize(totalWidth, 200);
-        const context = renderer.getContext();
-        context.setFillStyle('#222');
-        context.setStrokeStyle('#222');
 
-        const stave = new VF.Stave(10, 30, totalWidth - 20);
-        stave.addClef('treble').setContext(context).draw();
+    let _sheetOnsets = null;     // [{ t0, pitches: [...] }]
+    let _sheetLayout = null;     // { onsets:[{xCenter, step, accidental, ...}], width }
+    let _sheetSvg = null;
+    let _sheetLastHighlightIdx = -1;
 
-        if (onsets.length === 0) return;
-        const staveNotes = onsets.map(onset => {
-            const keys = onset.pitches.map(p => _midiPitchToKey(p));
-            const sn = new VF.StaveNote({ clef: 'treble', keys, duration: 'q' });
-            // Add sharps where needed (#).
-            onset.pitches.forEach((p, i) => {
-                const name = _MIDI_NAMES[p % 12];
-                if (name.endsWith('#')) sn.addModifier(new VF.Accidental('#'), i);
-            });
-            sn._tgmpOnsetT0 = onset.t0;
-            return sn;
-        });
-        // VexFlow needs a Voice; lay out enough beats for all notes (each
-        // quarter = 1 beat). Setting strict=false avoids overflow errors
-        // when our quarter-note approximation diverges from real tempo.
-        const voice = new VF.Voice({ num_beats: staveNotes.length, beat_value: 4 });
-        voice.setStrict(false);
-        voice.addTickables(staveNotes);
-        new VF.Formatter().joinVoices([voice]).format([voice], totalWidth - 80);
-        voice.draw(context, stave);
-        _sheetStaveNotes = staveNotes;
+    const SHEET_STAVE_TOP = 60;      // y of top staff line
+    const SHEET_LINE_GAP = 10;       // pixels per staff line spacing (so half-step = 5)
+    const SHEET_HALFSTEP = SHEET_LINE_GAP / 2;
+    const SHEET_LEFT_PAD = 60;       // space for clef
+    const SHEET_NOTE_GAP = 36;       // horizontal spacing per onset
+    const SHEET_NOTE_RADIUS = 5;     // notehead radius
+
+    function _svg(tag, attrs = {}, parent = null) {
+        const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+        for (const k in attrs) el.setAttribute(k, attrs[k]);
+        if (parent) parent.appendChild(el);
+        return el;
     }
-    // Collect onset clusters within a small time window so a chord renders
-    // as a single VexFlow note with multiple keys.
+    function _yForStaffStep(step) {
+        // step 0 = bottom line of staff (E4). Each step is one half-line.
+        // Staff lines: E4 (0), G4 (2), B4 (4), D5 (6), F5 (8).
+        // Bottom line y = SHEET_STAVE_TOP + 4 * SHEET_LINE_GAP (since top
+        // staff line is F5 = step 8).
+        const bottomY = SHEET_STAVE_TOP + 4 * SHEET_LINE_GAP;
+        return bottomY - step * SHEET_HALFSTEP;
+    }
+
     function _collectOnsets(notes, windowSec) {
         const sorted = [...notes].sort((a, b) => a.t0 - b.t0);
         const out = [];
@@ -1058,8 +1019,115 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         }
         return out;
     }
-    let _sheetStaveNotes = null;
-    let _sheetLastHighlightIdx = -1;
+
+    async function _renderSheet(notes) {
+        if (!pianoSheetStaff) return;
+        pianoSheetStaff.innerHTML = '';
+        if (!Array.isArray(notes) || notes.length === 0) return;
+        const onsets = _collectOnsets(notes, 0.05);
+        _sheetOnsets = onsets;
+
+        const totalWidth = Math.max(800, SHEET_LEFT_PAD + onsets.length * SHEET_NOTE_GAP + 60);
+        const totalHeight = 200;
+        const svg = _svg('svg', {
+            width: totalWidth,
+            height: totalHeight,
+            viewBox: `0 0 ${totalWidth} ${totalHeight}`,
+            xmlns: 'http://www.w3.org/2000/svg',
+        });
+        // Five staff lines: F5 (top, step 8), D5 (6), B4 (4), G4 (2), E4 (0, bottom).
+        for (let step = 0; step <= 8; step += 2) {
+            const y = _yForStaffStep(step);
+            _svg('line', {
+                x1: 10, y1: y, x2: totalWidth - 10, y2: y,
+                stroke: '#222', 'stroke-width': 1.2,
+            }, svg);
+        }
+        // Treble-clef glyph (unicode). Position the centre on the G4 line (step 2).
+        const trebleY = _yForStaffStep(2) + 18;
+        const clef = _svg('text', {
+            x: 16, y: trebleY,
+            'font-family': 'serif',
+            'font-size': 64,
+            fill: '#222',
+        }, svg);
+        clef.textContent = '𝄞'; // 𝄞
+
+        const onsetLayouts = [];
+        for (let i = 0; i < onsets.length; i++) {
+            const onset = onsets[i];
+            const xCenter = SHEET_LEFT_PAD + i * SHEET_NOTE_GAP + SHEET_NOTE_GAP / 2;
+            // Render notehead(s) — every pitch in the onset becomes a small
+            // ellipse at its diatonic position. Sharp glyph (♯) to the
+            // left if needed. Ledger lines for steps outside [0, 8].
+            const group = _svg('g', { 'data-onset-idx': String(i) }, svg);
+            const noteheads = [];
+            for (const pitch of onset.pitches) {
+                const step = _pitchToStaffStep(pitch);
+                const y = _yForStaffStep(step);
+                const pc = pitch % 12;
+                if (_PITCH_CLASS_IS_SHARP[pc]) {
+                    const acc = _svg('text', {
+                        x: xCenter - SHEET_NOTE_RADIUS - 10,
+                        y: y + 4,
+                        'font-family': 'serif',
+                        'font-size': 16,
+                        fill: '#222',
+                    }, group);
+                    acc.textContent = '♯'; // ♯
+                }
+                // Ledger lines for notes way above/below the staff.
+                if (step <= -2) {
+                    for (let s = -2; s >= step; s -= 2) {
+                        const ly = _yForStaffStep(s);
+                        _svg('line', {
+                            x1: xCenter - SHEET_NOTE_RADIUS - 3,
+                            y1: ly,
+                            x2: xCenter + SHEET_NOTE_RADIUS + 3,
+                            y2: ly,
+                            stroke: '#222', 'stroke-width': 1.2,
+                        }, group);
+                    }
+                } else if (step >= 10) {
+                    for (let s = 10; s <= step; s += 2) {
+                        const ly = _yForStaffStep(s);
+                        _svg('line', {
+                            x1: xCenter - SHEET_NOTE_RADIUS - 3,
+                            y1: ly,
+                            x2: xCenter + SHEET_NOTE_RADIUS + 3,
+                            y2: ly,
+                            stroke: '#222', 'stroke-width': 1.2,
+                        }, group);
+                    }
+                }
+                const head = _svg('ellipse', {
+                    cx: xCenter, cy: y,
+                    rx: SHEET_NOTE_RADIUS + 1,
+                    ry: SHEET_NOTE_RADIUS,
+                    fill: '#222',
+                    transform: `rotate(-18 ${xCenter} ${y})`,
+                }, group);
+                noteheads.push(head);
+            }
+            // Stem on the lowest notehead going up.
+            const lowestStep = Math.min(...onset.pitches.map(p => _pitchToStaffStep(p)));
+            const highestStep = Math.max(...onset.pitches.map(p => _pitchToStaffStep(p)));
+            const stemDown = highestStep > 4; // upper-half: stem down
+            const stemX = stemDown ? xCenter - SHEET_NOTE_RADIUS - 0.5 : xCenter + SHEET_NOTE_RADIUS + 0.5;
+            const stemTop = _yForStaffStep(stemDown ? lowestStep : (lowestStep + 7));
+            const stemBot = _yForStaffStep(stemDown ? (highestStep - 7) : highestStep);
+            _svg('line', {
+                x1: stemX, y1: stemTop, x2: stemX, y2: stemBot,
+                stroke: '#222', 'stroke-width': 1.5,
+            }, group);
+            onsetLayouts.push({ xCenter, group, noteheads });
+        }
+        pianoSheetStaff.appendChild(svg);
+        _sheetSvg = svg;
+        _sheetLayout = { onsets: onsetLayouts, width: totalWidth };
+        _sheetLastHighlightIdx = -1;
+    }
+
     function _sheetTick() {
         if (!_pianoNotes || !pianoSheetNow) return;
         const t = audio.currentTime;
@@ -1067,32 +1135,25 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             .filter(n => n.t0 <= t && t <= n.t1)
             .map(n => _midiPitchToName(n.pitch));
         pianoSheetNow.textContent = playing.length ? playing.join(' · ') : '—';
-        // Highlight & scroll-to the closest stave note past audio.currentTime.
-        if (!_sheetStaveNotes || !pianoSheetStaff) return;
+        if (!_sheetLayout || !_sheetOnsets || _sheetOnsets.length === 0) return;
+        // Find the last onset whose t0 <= currentTime.
         let idx = -1;
-        for (let i = 0; i < _sheetStaveNotes.length; i++) {
-            if (_sheetStaveNotes[i]._tgmpOnsetT0 <= t + 0.05) idx = i;
+        for (let i = 0; i < _sheetOnsets.length; i++) {
+            if (_sheetOnsets[i].t0 <= t + 0.05) idx = i;
             else break;
         }
         if (idx === _sheetLastHighlightIdx) return;
+        // Reset previous highlight.
+        if (_sheetLastHighlightIdx >= 0) {
+            const prev = _sheetLayout.onsets[_sheetLastHighlightIdx];
+            if (prev) for (const h of prev.noteheads) h.setAttribute('fill', '#222');
+        }
         _sheetLastHighlightIdx = idx;
-        const svg = pianoSheetStaff.querySelector('svg');
-        if (svg && idx >= 0) {
-            try {
-                const note = _sheetStaveNotes[idx];
-                const noteEls = svg.querySelectorAll('.vf-stavenote');
-                noteEls.forEach((el, i) => {
-                    el.style.fill = i === idx ? '#1f7be0' : '#222';
-                    el.style.stroke = i === idx ? '#1f7be0' : '#222';
-                });
-                // Auto-scroll so the highlighted note stays roughly centered.
-                const box = note.getBoundingBox?.();
-                if (box) {
-                    const cx = box.getX() + box.getW() / 2;
-                    const target = cx - pianoSheetStaff.clientWidth / 2;
-                    pianoSheetStaff.scrollTo({ left: target, behavior: 'smooth' });
-                }
-            } catch (_) { /* best effort */ }
+        if (idx >= 0) {
+            const cur = _sheetLayout.onsets[idx];
+            for (const h of cur.noteheads) h.setAttribute('fill', '#1f7be0');
+            const target = cur.xCenter - pianoSheetStaff.clientWidth / 2;
+            pianoSheetStaff.scrollTo({ left: target, behavior: 'smooth' });
         }
     }
 
