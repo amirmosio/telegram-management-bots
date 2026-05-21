@@ -13,6 +13,18 @@ import { idbGet, idbPut, idbGetAllKeys, idbCount, idbDelete } from './idb-cache.
 // Make Buffer available globally for GramJS browser compat
 if (typeof window !== 'undefined') {
     window.Buffer = Buffer;
+
+    // GramJS's TypeNotFoundError pops a browser alert() for unknown TL
+    // constructor IDs (most commonly ID 0 from a transient empty buffer).
+    // Useless to end users — redirect to console.
+    const _origAlert = window.alert.bind(window);
+    window.alert = (msg) => {
+        if (typeof msg === 'string' && msg.startsWith('Missing MTProto Entity')) {
+            console.warn('[gramjs]', msg);
+            return;
+        }
+        _origAlert(msg);
+    };
 }
 
 const API_ID = 1007688;
