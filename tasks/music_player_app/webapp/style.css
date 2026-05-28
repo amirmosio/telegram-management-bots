@@ -99,6 +99,10 @@ html, body {
 /* ══ APP ══ */
 #app { display: flex; height: 100%; position: relative; }
 
+/* Mobile-only mini-bar: hidden on desktop entirely. The mobile @media block
+   below re-enables it as display:flex when body.player-mini is set. */
+#mini-bar { display: none; }
+
 /* ── Side Panel ── */
 /* Dark glassy panel that picks up the artwork's halo color: a soft tint
    gradient at the top fades into a darkened backdrop, so the sidebar
@@ -1780,62 +1784,90 @@ html, body {
          slides in from the left when the burger button toggles back to
          mini. */
 
-    /* ─── Player-full (immersive) state ─── */
-    body.player-full #side-panel {
-        position: fixed; left: -320px; top: 0; bottom: 0;
-        transition: left 0.3s ease; z-index: 20;
-    }
-    body.player-full #btn-show-panel { display: flex; }
-    body.player-full #btn-close-panel { display: none; }
-    body.player-full #mini-bar { display: none; }
-    body.player-full #player {
-        padding: 0;
-        position: relative;
-        overflow: hidden;
-    }
-
-    /* ─── Player-mini (browser-first) state ─── */
-    body.player-mini #side-panel {
+    /* ─── Shared mobile layout ───
+       The sidebar is always behind the player. The player covers the full
+       viewport in player-full, and slides down to expose the sidebar with
+       a 72px bottom strip in player-mini. Switching states is a transform
+       transition, so the slide is GPU-composited and smooth. */
+    #side-panel {
         position: fixed;
         left: 0; right: 0;
-        top: 0;
-        bottom: 72px;
+        top: 0; bottom: 72px;
         width: 100%;
         min-width: 0;
         max-width: none;
-        z-index: 10;
+        z-index: 1;
         display: flex;
     }
-    body.player-mini #overlay { display: none !important; }
-    body.player-mini #btn-show-panel { display: none; }
-    /* Player collapses to a bottom strip; the artwork/lyrics/controls/etc
-       are hidden because the mini-bar replaces them at this size. */
-    body.player-mini #player {
+    #overlay { display: none !important; }
+
+    #player {
         position: fixed;
-        left: 0; right: 0; bottom: 0;
-        top: auto;
-        height: 72px;
-        z-index: 50;
+        inset: 0;
+        z-index: 5;
         padding: 0;
-        border-top: 1px solid var(--border);
-        background: var(--bg-elevated, #1a1a1a);
         overflow: hidden;
+        background: var(--bg-elevated, #1a1a1a);
+        will-change: transform;
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    body.player-mini #player > *:not(#mini-bar) { display: none !important; }
+    body.player-full #player { transform: translateY(0); }
+    body.player-mini #player {
+        transform: translateY(calc(100% - 72px));
+        border-top: 1px solid var(--border);
+    }
+
+    body.player-full #mini-bar { display: none; }
     body.player-mini #mini-bar { display: flex; }
+    body.player-full #btn-show-panel { display: flex; }
+    body.player-mini #btn-show-panel { display: none; }
+    body.player-full #btn-close-panel { display: none; }
+    body.player-mini #btn-close-panel { display: none; }
 
     /* ─── Mini-bar styling ─── */
+    /* Mini-bar is a fixed 72px tall regardless of the player's full height,
+       because in mini state the player is translated down so only this 72px
+       at the top of it is on-screen. Sizing the mini-bar explicitly keeps
+       its inner row vertically centered within those 72px. */
     #mini-bar {
-        align-items: center;
-        gap: 12px;
-        padding: 8px 12px;
-        height: 100%;
+        flex-direction: column;
+        height: 72px;
         cursor: pointer;
         user-select: none;
         -webkit-user-select: none;
     }
+    #mini-progress-bar {
+        position: relative;
+        height: 3px;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.12);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    /* Bigger touch target above/below the slim strip. */
+    #mini-progress-bar::before {
+        content: '';
+        position: absolute;
+        left: 0; right: 0;
+        top: -8px; bottom: -4px;
+    }
+    #mini-progress-fill {
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 0%;
+        background: var(--accent);
+        transition: width 0.05s linear;
+    }
+    #mini-bar-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 7px 12px;
+        flex: 1;
+        min-height: 0;
+    }
     #mini-artwork {
-        width: 56px; height: 56px;
+        width: 52px; height: 52px;
         flex-shrink: 0;
         border-radius: 6px;
         overflow: hidden;
@@ -1908,9 +1940,11 @@ html, body {
 
     #artwork-icon { opacity: 0.3; }
 
-    /* Overlay moves to bottom, above controls */
+    /* Overlay anchors to #artwork (its absolute parent), not the viewport.
+       This way it follows #player during the slide-down transition instead
+       of floating on top of the bottom bar in player-mini. */
     #artwork-overlay {
-        position: fixed;
+        position: absolute;
         bottom: 110px;
         left: 0; right: 0;
         top: auto;

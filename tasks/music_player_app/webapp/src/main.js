@@ -4490,11 +4490,13 @@ function _updateBadgeText() {
 //  PROGRESS BAR
 // ══════════════════════════════════════
 let _nearEndPrefetchedGen = -1;
+const miniProgressFill = $('mini-progress-fill');
 audio.addEventListener('timeupdate', () => {
     if (isSeeking || !audio.duration) return;
     const pct = (audio.currentTime / audio.duration) * 100;
     progressFill.style.width = pct + '%';
     progressHandle.style.left = pct + '%';
+    if (miniProgressFill) miniProgressFill.style.width = pct + '%';
     timeCurrent.textContent = formatTime(audio.currentTime);
     updateLyricsHighlight();
     updateMediaPositionState();
@@ -4522,26 +4524,49 @@ audio.addEventListener('progress', () => {
     }
 });
 
+// The mini-bar (mobile bottom strip) has its own slim seek bar that mirrors
+// the main progress fill. Track which element initiated a seek so coordinate
+// math uses the right rect.
+let _activeSeekBar = null;
+const miniProgressBar = $('mini-progress-bar');
+
 function seekFromEvent(e) {
-    const rect = progressBar.getBoundingClientRect();
+    const bar = _activeSeekBar || progressBar;
+    const rect = bar.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     let pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     progressFill.style.width = (pct * 100) + '%';
     progressHandle.style.left = (pct * 100) + '%';
+    if (miniProgressFill) miniProgressFill.style.width = (pct * 100) + '%';
     if (audio.duration) timeCurrent.textContent = formatTime(pct * audio.duration);
 }
-function startSeek(e) { if (!audio.duration) return; isSeeking = true; progressBar.classList.add('dragging'); seekFromEvent(e); }
+function startSeek(e) {
+    if (!audio.duration) return;
+    _activeSeekBar = e.currentTarget;
+    isSeeking = true;
+    progressBar.classList.add('dragging');
+    seekFromEvent(e);
+}
 function doSeek(e) { if (!isSeeking) return; e.preventDefault(); seekFromEvent(e); }
 function endSeek(e) {
     if (!isSeeking) return; isSeeking = false; progressBar.classList.remove('dragging');
-    const rect = progressBar.getBoundingClientRect();
+    const bar = _activeSeekBar || progressBar;
+    const rect = bar.getBoundingClientRect();
     const clientX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
     audio.currentTime = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * audio.duration;
+    _activeSeekBar = null;
 }
 progressBar.addEventListener('mousedown', startSeek);
+progressBar.addEventListener('touchstart', startSeek, { passive: true });
+if (miniProgressBar) {
+    // Block the parent #mini-bar click-to-expand when interacting with the
+    // seek bar — otherwise tapping to seek would also expand the player.
+    miniProgressBar.addEventListener('click', (e) => e.stopPropagation());
+    miniProgressBar.addEventListener('mousedown', startSeek);
+    miniProgressBar.addEventListener('touchstart', startSeek, { passive: true });
+}
 document.addEventListener('mousemove', doSeek);
 document.addEventListener('mouseup', endSeek);
-progressBar.addEventListener('touchstart', startSeek, { passive: true });
 document.addEventListener('touchmove', doSeek, { passive: false });
 document.addEventListener('touchend', endSeek);
 
