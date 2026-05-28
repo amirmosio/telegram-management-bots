@@ -4574,15 +4574,21 @@ document.addEventListener('touchend', endSeek);
 //  MOBILE LAYOUT TOGGLE
 // ══════════════════════════════════════
 // Two-state mobile model:
-//   body.player-full  → immersive now-playing (default; matches desktop)
+//   body.player-full  → immersive now-playing (desktop-equivalent)
 //   body.player-mini  → bottom-bar player + full-screen browser/playlist
 // On desktop (>700px) the CSS scopes both rules into the mobile media
 // query, so toggling these classes is a no-op above the breakpoint.
+// On mobile we default to player-mini so users land on the browser with
+// a bottom-bar player, matching the standard music-app pattern.
 function setPlayerMini(mini) {
     document.body.classList.toggle('player-mini', mini);
     document.body.classList.toggle('player-full', !mini);
 }
-setPlayerMini(false);
+const _mqMobile = window.matchMedia('(max-width: 700px)');
+setPlayerMini(_mqMobile.matches);
+// If the viewport crosses the breakpoint mid-session (e.g. desktop resize,
+// or device rotation crossing 700px), re-sync the default state.
+_mqMobile.addEventListener('change', (e) => setPlayerMini(e.matches));
 
 // closePanel kept as a stub so existing call sites (e.g. track-tap in
 // playlist) remain harmless without further refactoring.
