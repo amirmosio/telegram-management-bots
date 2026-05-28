@@ -1259,31 +1259,6 @@ async function _translateBatch(rawLines, toLang) {
     return rawLines.map((_, i) => result[i]?.text || '');
 }
 
-// Heuristic: lyrics are "already English" when the alphabetic characters
-// are overwhelmingly Latin. Counts ASCII letters vs other-script letters
-// across all lines and returns true when Latin >= 90% (with at least 30
-// alphabetic chars sampled, otherwise we don't know).
-//
-// Used by the translate button to no-op on English source instead of
-// burning an MTProto round-trip + showing a loader for nothing.
-export function isLikelyEnglish(lines) {
-    if (!Array.isArray(lines)) return false;
-    let latin = 0;
-    let other = 0;
-    for (const line of lines) {
-        if (!line) continue;
-        for (const ch of line) {
-            const code = ch.codePointAt(0);
-            if ((code >= 0x41 && code <= 0x5A) || (code >= 0x61 && code <= 0x7A)) latin++;
-            // Anything else that's a letter in another script: rough range
-            // covering Cyrillic, Greek, Arabic, Hebrew, CJK, Devanagari, etc.
-            else if (code >= 0x0370 && code !== 0x200B && code !== 0xFEFF && /\p{L}/u.test(ch)) other++;
-        }
-    }
-    if (latin + other < 30) return false;
-    return latin / (latin + other) >= 0.9;
-}
-
 export function getCachedTracks(groupId, topicId = null) {
     return _tracksCache[_trackCacheKey(groupId, topicId)] || [];
 }
