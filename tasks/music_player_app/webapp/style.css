@@ -1787,12 +1787,13 @@ html, body {
     /* ─── Shared mobile layout ───
        The sidebar is always behind the player. The player covers the full
        viewport in player-full, and slides down to expose the sidebar with
-       a 72px bottom strip in player-mini. Switching states is a transform
+       an 84px bottom strip in player-mini (72px content + 12px breathing
+       room above the home-indicator zone). Switching states is a transform
        transition, so the slide is GPU-composited and smooth. */
     #side-panel {
         position: fixed;
         left: 0; right: 0;
-        top: 0; bottom: 72px;
+        top: 0; bottom: 84px;
         width: 100%;
         min-width: 0;
         max-width: none;
@@ -1813,7 +1814,7 @@ html, body {
     }
     body.player-full #player { transform: translateY(0); }
     body.player-mini #player {
-        transform: translateY(calc(100% - 72px));
+        transform: translateY(calc(100% - 84px));
         border-top: 1px solid var(--border);
     }
 
@@ -1825,10 +1826,13 @@ html, body {
     body.player-mini #btn-close-panel { display: none; }
 
     /* ─── Mini-bar styling ─── */
-    /* Mini-bar is a fixed 72px tall regardless of the player's full height,
-       because in mini state the player is translated down so only this 72px
-       at the top of it is on-screen. Sizing the mini-bar explicitly keeps
-       its inner row vertically centered within those 72px.
+    /* Mini-bar is 84px tall (72px of content + 12px padding-bottom for
+       breathing room above the iOS home-indicator zone). In mini state the
+       player is translated down so only this 84px at the top of it is
+       on-screen.
+       width:100% is needed because the desktop #player rule sets
+       `align-items: center`, which would otherwise shrink the in-flow
+       mini-bar to its content width and centre it in the player.
        The opaque background + high z-index are required because the artwork
        (#artwork is `position: absolute; inset: 0; z-index: 0`) would
        otherwise paint over the mini-bar since absolutely-positioned
@@ -1837,7 +1841,9 @@ html, body {
         position: relative;
         z-index: 10;
         flex-direction: column;
-        height: 72px;
+        width: 100%;
+        height: 84px;
+        padding-bottom: 12px;
         cursor: pointer;
         user-select: none;
         -webkit-user-select: none;
