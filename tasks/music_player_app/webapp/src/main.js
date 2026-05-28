@@ -77,6 +77,23 @@ let repeatOn = false;
 let shuffleHistory = []; // stack of previously played indices for shuffle-back
 let _committedNextIndex = -1; // index of the track to play next (pre-picked for prefetch)
 let _wakeLock = null; // Screen Wake Lock to keep playback alive in background
+
+// Tiny silent MP3 used as a "session-keeper" when an `ended` event fires and
+// the next track isn't prefetched yet. iOS revokes the audio-session
+// privilege the moment we `await` between `ended` and the next `play()`, so
+// when the locked-screen path can't find a prefetched blob, we synchronously
+// play this silence and let nextTrack() resume asynchronously. ~550 bytes.
+const SILENCE_DATA_URL = 'data:audio/mpeg;base64,SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYyLjMuMTAwAAAAAAAAAAAAAAD/4zjAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAAB+ACSkpKSkpKSkpKSkpKSkpKSkpKSkpKSkpK2tra2tra2tra2tra2tra2tra2tra2tra229vb29vb29vb29vb29vb29vb29vb29vb2/////////////////////////////////8AAAAATGF2YzYyLjExAAAAAAAAAAAAAAAAJAOgAAAAAAAAAfhBGl3hAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4xjEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjEOwAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjEdgAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjEsQAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=';
+let _silenceBlobUrl = null;
+let _bridging = false; // true while we're keeping the iOS audio session alive
+                       // with looping silence, between an `ended` event and
+                       // the real next track's src landing in playTrack.
+(async () => {
+    try {
+        const blob = await (await fetch(SILENCE_DATA_URL)).blob();
+        _silenceBlobUrl = URL.createObjectURL(blob);
+    } catch {}
+})();
 let _pendingSeekTime = 0; // seek to this position when audio starts playing (from sync/share/restore)
 let _pendingSeekTrackId = null; // the track id the pending seek belongs to — applied only if the played track matches
 
@@ -1435,11 +1452,20 @@ async function playTrack(index) {
     const preloaded = _audioPreloaded;
     _audioPreloaded = false;
 
+    // Consume the silence-bridge flag. While bridging, the audio element is
+    // looping silence specifically to keep the iOS audio session alive across
+    // this await-heavy function. Pausing would defeat that.
+    const bridging = _bridging;
+    _bridging = false;
+
     // ── Stop previous track ──
     // IMPORTANT: Do NOT clear audio.src here. Clearing it destroys the browser
     // audio session, which prevents play() from working when the screen is locked
     // or the app is in the background. The new src assignment below replaces it.
-    if (!preloaded) audio.pause();
+    if (!preloaded && !bridging) audio.pause();
+    // Ensure looping is off before the real track src lands; only the silence
+    // bridge uses HTML loop=true.
+    if (audio.loop) audio.loop = false;
 
     // ── Instant UI reset ──
     updateSidebarHighlight();
@@ -1448,6 +1474,10 @@ async function playTrack(index) {
 
     trackTitleEl.textContent = track.title;
     trackArtistEl.textContent = track.artist || 'Unknown';
+    const miniTitle = $('mini-title');
+    const miniArtist = $('mini-artist');
+    if (miniTitle) miniTitle.textContent = track.title;
+    if (miniArtist) miniArtist.textContent = track.artist || 'Unknown';
     nowPlayingLabel.textContent = 'Now Playing';
     timeTotal.textContent = formatTime(track.duration);
     timeCurrent.textContent = '0:00';
@@ -1465,6 +1495,8 @@ async function playTrack(index) {
     artworkIcon.style.display = 'flex';
     artworkImg.style.display = 'none';
     artworkImg.src = '';
+    const miniArtworkImg = $('mini-artwork-img');
+    if (miniArtworkImg) miniArtworkImg.src = '';
     _resetHalo();
     // ── Show loading spinner on play button ──
     btnPlay.classList.add('loading-audio');
@@ -2072,6 +2104,19 @@ function onTrackEnded() {
     // pause/src-reset/play.
     if (_advanceToNextSync()) return;
 
+    // Fallback: prefetch wasn't ready. Without this branch the async work in
+    // nextTrack() → playTrack() loses the iOS audio-session privilege on a
+    // locked screen, and playback dies until the user reopens the app. Play
+    // a tiny looping silence blob synchronously to keep the session alive
+    // across the await; playTrack() clears `audio.loop` before swapping in
+    // the real src.
+    if (_silenceBlobUrl) {
+        audio.src = _silenceBlobUrl;
+        audio.loop = true;
+        _bridging = true;
+        const p = audio.play();
+        if (p && p.catch) p.catch(() => {});
+    }
     nextTrack();
 }
 
@@ -2181,6 +2226,10 @@ $('btn-prev').addEventListener('click', prevTrack);
 let _keepaliveStopTimer = null;
 audio.addEventListener('play', () => {
     iconPlay.style.display = 'none'; iconPause.style.display = 'block';
+    const mIconPlay = $('mini-icon-play');
+    const mIconPause = $('mini-icon-pause');
+    if (mIconPlay) mIconPlay.style.display = 'none';
+    if (mIconPause) mIconPause.style.display = 'block';
     updateMediaSession();
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
     updateMediaPositionState();
@@ -2190,6 +2239,10 @@ audio.addEventListener('play', () => {
 });
 audio.addEventListener('pause', () => {
     iconPlay.style.display = 'block'; iconPause.style.display = 'none';
+    const mIconPlay = $('mini-icon-play');
+    const mIconPause = $('mini-icon-pause');
+    if (mIconPlay) mIconPlay.style.display = 'block';
+    if (mIconPause) mIconPause.style.display = 'none';
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
     updateMediaPositionState();
     // Release wake lock only if user explicitly paused (not during track transitions)
@@ -2483,7 +2536,9 @@ function _scrollLyricIntoView(line) {
 function _showArtwork(src, gen) {
     const artworkIcon = $('artwork-icon');
     const artworkImg = $('artwork-img');
+    const miniArtworkImg = $('mini-artwork-img');
     artworkImg.src = src;
+    if (miniArtworkImg) miniArtworkImg.src = src;
     artworkImg.onload = () => {
         if (_playGeneration !== gen) return;
         artworkIcon.style.display = 'none';
@@ -4434,6 +4489,7 @@ function _updateBadgeText() {
 // ══════════════════════════════════════
 //  PROGRESS BAR
 // ══════════════════════════════════════
+let _nearEndPrefetchedGen = -1;
 audio.addEventListener('timeupdate', () => {
     if (isSeeking || !audio.duration) return;
     const pct = (audio.currentTime / audio.duration) * 100;
@@ -4442,6 +4498,22 @@ audio.addEventListener('timeupdate', () => {
     timeCurrent.textContent = formatTime(audio.currentTime);
     updateLyricsHighlight();
     updateMediaPositionState();
+
+    // Near-end fallback prefetch. The normal prefetch is gated by
+    // !_streamDownloadActive, so a long-streaming track may finish before its
+    // successor is cached — and then onTrackEnded's sync fast-path can't fire,
+    // and on a locked-screen iOS we lose the audio session. When <30s remain
+    // and nothing has been pre-picked yet, force a prefetch regardless of
+    // streaming state.
+    if (
+        _nearEndPrefetchedGen !== _playGeneration &&
+        _committedNextIndex < 0 &&
+        playerTracks.length >= 2 &&
+        audio.duration - audio.currentTime < 30
+    ) {
+        _nearEndPrefetchedGen = _playGeneration;
+        _prefetchNextTrack(_playGeneration);
+    }
 });
 audio.addEventListener('loadedmetadata', () => { timeTotal.textContent = formatTime(audio.duration); });
 audio.addEventListener('progress', () => {
@@ -4474,13 +4546,33 @@ document.addEventListener('touchmove', doSeek, { passive: false });
 document.addEventListener('touchend', endSeek);
 
 // ══════════════════════════════════════
-//  PANEL TOGGLE
+//  MOBILE LAYOUT TOGGLE
 // ══════════════════════════════════════
-function openPanel() { sidePanel.classList.add('open'); overlay.classList.add('visible'); }
-function closePanel() { sidePanel.classList.remove('open'); overlay.classList.remove('visible'); }
-btnShowPanel.addEventListener('click', openPanel);
-btnClosePanel.addEventListener('click', closePanel);
-overlay.addEventListener('click', closePanel);
+// Two-state mobile model:
+//   body.player-full  → immersive now-playing (default; matches desktop)
+//   body.player-mini  → bottom-bar player + full-screen browser/playlist
+// On desktop (>700px) the CSS scopes both rules into the mobile media
+// query, so toggling these classes is a no-op above the breakpoint.
+function setPlayerMini(mini) {
+    document.body.classList.toggle('player-mini', mini);
+    document.body.classList.toggle('player-full', !mini);
+}
+setPlayerMini(false);
+
+// closePanel kept as a stub so existing call sites (e.g. track-tap in
+// playlist) remain harmless without further refactoring.
+function closePanel() { /* no-op in new mobile model */ }
+
+btnShowPanel.addEventListener('click', () => setPlayerMini(true));
+const miniBar = $('mini-bar');
+if (miniBar) {
+    miniBar.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        setPlayerMini(false);
+    });
+}
+$('mini-btn-play').addEventListener('click', togglePlay);
+$('mini-btn-next').addEventListener('click', nextTrack);
 
 // ══════════════════════════════════════
 //  KEYBOARD

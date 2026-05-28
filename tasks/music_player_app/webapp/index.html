@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=234">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=234">
-    <link rel="stylesheet" href="style.css?v=234">
+    <link rel="manifest" href="/manifest.json?v=235">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=235">
+    <link rel="stylesheet" href="style.css?v=235">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -146,6 +146,33 @@
         <!-- Main Player -->
         <div id="player">
             <div id="player-halo" aria-hidden="true"></div>
+
+            <!-- Mobile mini-bar: visible only when body.player-mini is set
+                 on a narrow viewport. Tapping anywhere except the buttons
+                 expands the player back to full-screen. -->
+            <div id="mini-bar" role="button" tabindex="0" aria-label="Expand player">
+                <div id="mini-artwork">
+                    <img id="mini-artwork-img" alt="">
+                </div>
+                <div id="mini-info">
+                    <div id="mini-title">No track loaded</div>
+                    <div id="mini-artist">Browse a channel to start</div>
+                </div>
+                <button id="mini-btn-play" class="icon-btn" title="Play/Pause" aria-label="Play/Pause">
+                    <svg id="mini-icon-play" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    <svg id="mini-icon-pause" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style="display:none" aria-hidden="true">
+                        <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+                    </svg>
+                </button>
+                <button id="mini-btn-next" class="icon-btn" title="Next" aria-label="Next">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M6 6l8.5 6L6 18V6zM16 6h2v12h-2z"/>
+                    </svg>
+                </button>
+            </div>
+
             <div id="top-bar">
                 <button id="btn-show-panel" class="icon-btn" title="Browse">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -639,6 +666,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=234"></script>
+    <script src="app.bundle.js?v=235"></script>
 </body>
 </html>

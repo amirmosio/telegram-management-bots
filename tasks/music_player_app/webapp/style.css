@@ -1771,20 +1771,113 @@ html, body {
     }
     #search-overlay-close,
     #recognize-overlay-close { display: flex; }
-    #side-panel {
+
+    /* Mobile UX: two states, switched by a class on <body> driven from JS.
+       - body.player-mini (default on mobile): the browser/playlist sidebar
+         occupies the full viewport above a 72px bottom-bar player. This is
+         the standard mobile-music-app pattern.
+       - body.player-full: the immersive now-playing view; the sidebar
+         slides in from the left when the burger button toggles back to
+         mini. */
+
+    /* ─── Player-full (immersive) state ─── */
+    body.player-full #side-panel {
         position: fixed; left: -320px; top: 0; bottom: 0;
         transition: left 0.3s ease; z-index: 20;
     }
-    #side-panel.open { left: 0; }
-    #btn-show-panel { display: flex; }
-    #btn-close-panel { display: flex; }
-
-    /* Fullscreen immersive player */
-    #player {
+    body.player-full #btn-show-panel { display: flex; }
+    body.player-full #btn-close-panel { display: none; }
+    body.player-full #mini-bar { display: none; }
+    body.player-full #player {
         padding: 0;
         position: relative;
         overflow: hidden;
     }
+
+    /* ─── Player-mini (browser-first) state ─── */
+    body.player-mini #side-panel {
+        position: fixed;
+        left: 0; right: 0;
+        top: 0;
+        bottom: 72px;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        z-index: 10;
+        display: flex;
+    }
+    body.player-mini #overlay { display: none !important; }
+    body.player-mini #btn-show-panel { display: none; }
+    /* Player collapses to a bottom strip; the artwork/lyrics/controls/etc
+       are hidden because the mini-bar replaces them at this size. */
+    body.player-mini #player {
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        top: auto;
+        height: 72px;
+        z-index: 50;
+        padding: 0;
+        border-top: 1px solid var(--border);
+        background: var(--bg-elevated, #1a1a1a);
+        overflow: hidden;
+    }
+    body.player-mini #player > *:not(#mini-bar) { display: none !important; }
+    body.player-mini #mini-bar { display: flex; }
+
+    /* ─── Mini-bar styling ─── */
+    #mini-bar {
+        align-items: center;
+        gap: 12px;
+        padding: 8px 12px;
+        height: 100%;
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    #mini-artwork {
+        width: 56px; height: 56px;
+        flex-shrink: 0;
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--bg, #0f0f0f);
+    }
+    #mini-artwork-img {
+        width: 100%; height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    #mini-info {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    #mini-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text, #fff);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #mini-artist {
+        font-size: 12px;
+        color: var(--text-secondary, rgba(255,255,255,0.6));
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #mini-bar .icon-btn {
+        width: 40px; height: 40px;
+        flex-shrink: 0;
+        color: var(--text, #fff);
+    }
+
+    /* Desktop-style sub-rules that follow assume the immersive player. They
+       still apply because they target descendants of #player; under
+       .player-mini the player itself is hidden via the override above, so
+       these rules become no-ops. */
 
     /* Mobile already uses the artwork itself as a fullscreen blurred
        backdrop, so the desktop-only halo would just muddy it. */
