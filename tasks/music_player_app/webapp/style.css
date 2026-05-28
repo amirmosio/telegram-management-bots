@@ -1807,7 +1807,7 @@ html, body {
         z-index: 5;
         padding: 0;
         overflow: hidden;
-        background: var(--bg-elevated, #1a1a1a);
+        background: var(--bg-secondary, #141414);
         will-change: transform;
         transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
@@ -1828,13 +1828,20 @@ html, body {
     /* Mini-bar is a fixed 72px tall regardless of the player's full height,
        because in mini state the player is translated down so only this 72px
        at the top of it is on-screen. Sizing the mini-bar explicitly keeps
-       its inner row vertically centered within those 72px. */
+       its inner row vertically centered within those 72px.
+       The opaque background + high z-index are required because the artwork
+       (#artwork is `position: absolute; inset: 0; z-index: 0`) would
+       otherwise paint over the mini-bar since absolutely-positioned
+       descendants with z-index:0 stack above in-flow descendants. */
     #mini-bar {
+        position: relative;
+        z-index: 10;
         flex-direction: column;
         height: 72px;
         cursor: pointer;
         user-select: none;
         -webkit-user-select: none;
+        background: var(--bg-secondary, #141414);
     }
     #mini-progress-bar {
         position: relative;
@@ -1871,7 +1878,7 @@ html, body {
         flex-shrink: 0;
         border-radius: 6px;
         overflow: hidden;
-        background: var(--bg, #0f0f0f);
+        background: var(--bg-tertiary, #1c1c1c);
     }
     #mini-artwork-img {
         width: 100%; height: 100%;
@@ -1888,7 +1895,7 @@ html, body {
     #mini-title {
         font-size: 14px;
         font-weight: 600;
-        color: var(--text, #fff);
+        color: var(--text-primary, #fff);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -1903,7 +1910,7 @@ html, body {
     #mini-bar .icon-btn {
         width: 40px; height: 40px;
         flex-shrink: 0;
-        color: var(--text, #fff);
+        color: var(--text-primary, #fff);
     }
 
     /* Desktop-style sub-rules that follow assume the immersive player. They
