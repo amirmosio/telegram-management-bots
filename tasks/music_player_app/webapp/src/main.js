@@ -2783,7 +2783,9 @@ $('btn-delete-playing').addEventListener('click', async () => {
 // deletes the original message — same flow as save_metadata. Telegram
 // enforces the edit window via the delete permission; on a non-owned or
 // stale message the server returns saved:false and we show a toast.
-function showMetaEditModal({ title = '', artist = '' } = {}) {
+// Modal stays open while `onSave` runs so the OK button can show a
+// spinner. onSave returns truthy to close, falsy to keep open for retry.
+function showMetaEditModal({ title = '', artist = '', onSave } = {}) {
     return new Promise((resolve) => {
         const modal = $('meta-edit-modal');
         const titleInput = $('meta-edit-title');
@@ -2795,26 +2797,47 @@ function showMetaEditModal({ title = '', artist = '' } = {}) {
         titleInput.value = title;
         artistInput.value = artist;
         modal.style.display = 'flex';
-        setTimeout(() => {
-            const focusEl = titleInput;
-            focusEl.focus();
-            focusEl.select();
-        }, 0);
+        setTimeout(() => { titleInput.focus(); titleInput.select(); }, 0);
 
-        const finish = (result) => {
+        let saving = false;
+        const setSaving = (on) => {
+            saving = on;
+            okBtn.classList.toggle('saving', on);
+            okBtn.disabled = on;
+            cancelBtn.disabled = on;
+            titleInput.disabled = on;
+            artistInput.disabled = on;
+        };
+
+        const cleanup = () => {
             modal.style.display = 'none';
             okBtn.removeEventListener('click', onOk);
             cancelBtn.removeEventListener('click', onCancel);
             backdrop.removeEventListener('click', onCancel);
             titleInput.removeEventListener('keydown', onKey);
             artistInput.removeEventListener('keydown', onKey);
-            resolve(result);
+            setSaving(false);
         };
-        const onOk = () => finish({
-            title: titleInput.value.trim(),
-            artist: artistInput.value.trim(),
-        });
-        const onCancel = () => finish(null);
+
+        const onOk = async () => {
+            if (saving) return;
+            const payload = {
+                title: titleInput.value.trim(),
+                artist: artistInput.value.trim(),
+            };
+            if (!onSave) { cleanup(); resolve(payload); return; }
+            setSaving(true);
+            let ok = false;
+            try { ok = await onSave(payload); }
+            catch { ok = false; }
+            if (ok) { cleanup(); resolve(payload); }
+            else { setSaving(false); }
+        };
+        const onCancel = () => {
+            if (saving) return;
+            cleanup();
+            resolve(null);
+        };
         const onKey = (e) => {
             if (e.key === 'Enter') { e.preventDefault(); onOk(); }
             else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
@@ -2833,92 +2856,83 @@ async function openMetaEditor(focus /* 'title' | 'artist' */) {
     const groupId = playerGroupId;
     const topicId = playerTopicId;
     const oldId = track.id;
+    const oldTitle = track.title || '';
+    const oldArtist = track.artist || '';
 
-    const result = await showMetaEditModal({
-        title: track.title || '',
-        artist: track.artist || '',
+    await showMetaEditModal({
+        title: oldTitle,
+        artist: oldArtist,
+        onSave: async ({ title: newTitle, artist: newArtist }) => {
+            if (!newTitle && !newArtist) return false;
+            if (newTitle === oldTitle && newArtist === oldArtist) return true; // no-op close
+
+            trackTitleEl.classList.add('saving');
+            trackArtistEl.classList.add('saving');
+            try {
+                const data = await tg.editTrackMetadata(groupId, oldId, {
+                    title: newTitle,
+                    artist: newArtist,
+                    topicId,
+                });
+                if (!data.saved) {
+                    showToast('Telegram refused the edit (track may be too old)');
+                    return false;
+                }
+
+                const newId = data.new_id;
+                const savedTitle = data.title || newTitle;
+                const savedArtist = data.artist || newArtist;
+                if (!data.deletedOriginal) {
+                    showToast('Renamed, but the old copy could not be deleted');
+                }
+
+                const stillCurrent = playerTracks[currentTrackIndex]?.id === oldId;
+                if (stillCurrent) {
+                    playerTracks[currentTrackIndex] = {
+                        ...track,
+                        id: newId != null ? newId : track.id,
+                        msg_id: newId != null ? newId : track.msg_id,
+                        title: savedTitle,
+                        artist: savedArtist,
+                    };
+                }
+
+                trackTitleEl.textContent = savedTitle;
+                trackArtistEl.textContent = savedArtist || 'Unknown';
+                const miniTitle = $('mini-title');
+                const miniArtist = $('mini-artist');
+                if (miniTitle) miniTitle.textContent = savedTitle;
+                if (miniArtist) miniArtist.textContent = savedArtist || 'Unknown';
+
+                try { tg.invalidateCache(groupId, null); } catch {}
+
+                const rows = document.querySelectorAll(`.track-item[data-track-id="${oldId}"]`);
+                rows.forEach(el => {
+                    if (newId != null) el.setAttribute('data-track-id', String(newId));
+                    const titleEl = el.querySelector('.track-item-title');
+                    const artistEl = el.querySelector('.track-item-artist');
+                    if (titleEl) titleEl.textContent = savedTitle;
+                    if (artistEl) artistEl.textContent = savedArtist || 'Unknown';
+                });
+
+                if (stillCurrent) {
+                    const next = playerTracks[currentTrackIndex];
+                    try { fetchLyricsForTrack(next, _playGeneration); } catch {}
+                    try { fetchArtworkForTrack(next, _playGeneration); } catch {}
+                }
+
+                showToast('Updated');
+                return true;
+            } catch (e) {
+                console.error('edit-meta failed', e);
+                showToast('Failed to update');
+                return false;
+            } finally {
+                trackTitleEl.classList.remove('saving');
+                trackArtistEl.classList.remove('saving');
+            }
+        },
     });
-    if (!result) return;
-
-    const newTitle = result.title;
-    const newArtist = result.artist;
-    if (!newTitle && !newArtist) return;
-    if (newTitle === (track.title || '') && newArtist === (track.artist || '')) return;
-
-    trackTitleEl.classList.add('saving');
-    trackArtistEl.classList.add('saving');
-    try {
-        const data = await tg.editTrackMetadata(groupId, oldId, {
-            title: newTitle,
-            artist: newArtist,
-            topicId,
-        });
-        if (!data.saved) {
-            showToast('Telegram refused the edit (track may be too old)');
-            return;
-        }
-
-        const newId = data.new_id;
-        const savedTitle = data.title || newTitle;
-        const savedArtist = data.artist || newArtist;
-        if (!data.deletedOriginal) {
-            // Re-upload succeeded but the old message couldn't be deleted —
-            // the user gets a duplicate. Surface it so they can clean up.
-            showToast('Renamed, but the old copy could not be deleted');
-        }
-
-        // Track on the player queue gets a new msg_id and new metadata.
-        const stillCurrent = playerTracks[currentTrackIndex]?.id === oldId;
-        if (stillCurrent) {
-            playerTracks[currentTrackIndex] = {
-                ...track,
-                id: newId != null ? newId : track.id,
-                msg_id: newId != null ? newId : track.msg_id,
-                title: savedTitle,
-                artist: savedArtist,
-            };
-        }
-
-        // Reflect the new metadata in the now-playing card and the mini bar.
-        trackTitleEl.textContent = savedTitle;
-        trackArtistEl.textContent = savedArtist || 'Unknown';
-        const miniTitle = $('mini-title');
-        const miniArtist = $('mini-artist');
-        if (miniTitle) miniTitle.textContent = savedTitle;
-        if (miniArtist) miniArtist.textContent = savedArtist || 'Unknown';
-
-        // Force the next track-list fetch to hit Telegram so the new msg
-        // appears and the deleted one drops out.
-        try { tg.invalidateCache(groupId, null); } catch {}
-
-        // Update any sidebar rows for this track in place: swap the
-        // data-track-id to the new msg id and refresh the visible
-        // title/artist text. Saves us a full re-scan.
-        const rows = document.querySelectorAll(`.track-item[data-track-id="${oldId}"]`);
-        rows.forEach(el => {
-            if (newId != null) el.setAttribute('data-track-id', String(newId));
-            const titleEl = el.querySelector('.track-item-title');
-            const artistEl = el.querySelector('.track-item-artist');
-            if (titleEl) titleEl.textContent = savedTitle;
-            if (artistEl) artistEl.textContent = savedArtist || 'Unknown';
-        });
-
-        // Re-fetch lyrics and artwork against the new title+artist so the
-        // (title, artist)-keyed caches search fresh sources.
-        if (stillCurrent) {
-            const next = playerTracks[currentTrackIndex];
-            try { fetchLyricsForTrack(next, _playGeneration); } catch {}
-            try { fetchArtworkForTrack(next, _playGeneration); } catch {}
-        }
-
-        showToast('Updated');
-    } catch (e) {
-        console.error('edit-meta failed', e);
-        showToast('Failed to update');
-    } finally {
-        trackTitleEl.classList.remove('saving');
-        trackArtistEl.classList.remove('saving');
-    }
 }
 
 trackTitleEl.addEventListener('click', () => openMetaEditor('title'));
