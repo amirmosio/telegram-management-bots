@@ -6,6 +6,7 @@ import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { Api } from 'telegram/tl';
 import { NewMessage } from 'telegram/events';
+import { CustomFile } from 'telegram/client/uploads';
 import { Buffer } from 'buffer';
 import bigInt from 'big-integer';
 import { idbGet, idbPut, idbGetAllKeys, idbCount, idbDelete } from './idb-cache.js';
@@ -2008,7 +2009,12 @@ export async function editTrackMetadata(groupId, trackId, { title, artist, topic
         audioBlob = new Blob([buf], { type: mime });
     }
 
-    const file = new File([audioBlob], fileName, { type: mime });
+    // GramJS's browser File path is buggy in this version — _fileToMedia
+    // takes the wrong branch and throws "Cannot use [object File] as file."
+    // Wrap the bytes in CustomFile (Node-style) instead, which the upload
+    // pipeline detects via instanceof and processes correctly.
+    const bytes = Buffer.from(await audioBlob.arrayBuffer());
+    const file = new CustomFile(fileName, bytes.length, fileName, bytes);
 
     const attributes = [
         new Api.DocumentAttributeAudio({
