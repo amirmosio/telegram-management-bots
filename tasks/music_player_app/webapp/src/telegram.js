@@ -1974,6 +1974,116 @@ export async function moveTracksToPlaylist(destGroupId, topicId, sourceGroupId, 
     return { moved, forwarded, failed };
 }
 
+// Re-upload an audio track with new title/artist (DocumentAttributeAudio)
+// and delete the original. Used by the tap-to-rename affordance on the
+// now-playing card. Runs entirely client-side — production nginx only
+// proxies /api/recognize, /api/now-playing to a backend, not /api/groups,
+// so the rename has to go through GramJS like deleteTracks does.
+export async function editTrackMetadata(groupId, trackId, { title, artist, topicId = null } = {}) {
+    await _ensureConnected();
+    const entity = await _getEntity(groupId);
+
+    const oldKey = _trackKey(groupId, trackId);
+    const msg = _msgCache[oldKey];
+    if (!msg) throw new Error('Track not in cache');
+
+    const meta = _extractAudioMeta(msg);
+    if (!meta) throw new Error('Not an audio message');
+
+    const effectiveTitle = title != null ? title : (meta.title || '');
+    const effectiveArtist = artist != null ? artist : (meta.artist || '');
+    const duration = meta.duration;
+    const fileName = meta.file_name;
+    const mime = meta.mime_type || 'audio/mpeg';
+
+    // Audio bytes: prefer the offline cache, fall back to downloadMedia.
+    let audioBlob = null;
+    try {
+        const row = await idbGet(TRACKS_STORE, oldKey);
+        if (row?.audio) audioBlob = row.audio;
+    } catch {}
+    if (!audioBlob) {
+        const buf = await client.downloadMedia(msg);
+        if (!buf) throw new Error('Download failed');
+        audioBlob = new Blob([buf], { type: mime });
+    }
+
+    const file = new File([audioBlob], fileName, { type: mime });
+
+    const attributes = [
+        new Api.DocumentAttributeAudio({
+            duration,
+            title: effectiveTitle,
+            performer: effectiveArtist,
+        }),
+        new Api.DocumentAttributeFilename({ fileName }),
+    ];
+
+    const sendOpts = { file, attributes, forceDocument: false };
+    if (topicId != null) {
+        sendOpts.replyTo = new Api.InputReplyToMessage({
+            replyToMsgId: topicId,
+            topMsgId: topicId,
+        });
+    }
+
+    let newMsg = null;
+    try {
+        newMsg = await client.sendFile(entity, sendOpts);
+    } catch (e) {
+        // Older GramJS schemas reject the wrapped InputReplyToMessage —
+        // retry with the flat number that scanTracks already uses.
+        if (topicId != null) {
+            const retryOpts = { ...sendOpts, replyTo: topicId };
+            newMsg = await client.sendFile(entity, retryOpts);
+        } else {
+            throw e;
+        }
+    }
+
+    const newId = newMsg?.id;
+
+    let deletedOriginal = false;
+    try {
+        await client.deleteMessages(entity, [trackId], { revoke: true });
+        deletedOriginal = true;
+    } catch (e) {
+        console.warn('edit-meta: delete original failed', e?.message || e);
+    }
+
+    if (newId != null) {
+        const newKey = _trackKey(groupId, newId);
+        _msgCache[newKey] = newMsg;
+        // Re-seed the offline cache under the new key so the next replay
+        // hits IDB instead of re-downloading the same bytes.
+        try {
+            await cacheTrack(groupId, newId, {
+                blob: audioBlob,
+                topicId,
+                track: {
+                    ...meta,
+                    id: newId,
+                    msg_id: newId,
+                    title: effectiveTitle,
+                    artist: effectiveArtist,
+                },
+            });
+        } catch {}
+    }
+
+    delete _msgCache[oldKey];
+    _removeTrackFromSourceCaches(groupId, trackId);
+    invalidateCache(groupId, null);
+
+    return {
+        saved: !!newId,
+        new_id: newId != null ? newId : null,
+        title: effectiveTitle,
+        artist: effectiveArtist,
+        deletedOriginal,
+    };
+}
+
 // Delete messages from the source chat outright. Used by the delete button
 // on the now-playing overlay to drop the track from the current playlist.
 export async function deleteTracks(groupId, trackIds) {

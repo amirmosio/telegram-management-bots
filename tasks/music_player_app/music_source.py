@@ -485,6 +485,47 @@ class MusicSource:
         return {"added": added, "failed": failed}
 
     @staticmethod
+    def _embed_title_artist(audio_path: str, title: str | None, artist: str | None):
+        """Write title/artist into the audio file's tags so a future re-read
+        of the file (outside Telegram's DocumentAttributeAudio) reflects the
+        edit too."""
+        if title is None and artist is None:
+            return
+        import mutagen
+        from mutagen.id3 import ID3, TIT2, TPE1, Encoding
+        from mutagen.oggvorbis import OggVorbis
+        from mutagen.mp4 import MP4
+
+        audio = mutagen.File(audio_path)
+        if audio is None:
+            return
+
+        if isinstance(audio, mutagen.mp3.MP3) or (
+            hasattr(audio, 'tags') and isinstance(getattr(audio, 'tags', None), ID3)
+        ):
+            if audio.tags is None:
+                audio.add_tags()
+            if title is not None:
+                audio.tags.delall('TIT2')
+                audio.tags.add(TIT2(encoding=Encoding.UTF8, text=[title]))
+            if artist is not None:
+                audio.tags.delall('TPE1')
+                audio.tags.add(TPE1(encoding=Encoding.UTF8, text=[artist]))
+            audio.save()
+        elif isinstance(audio, OggVorbis):
+            if title is not None:
+                audio['TITLE'] = [title]
+            if artist is not None:
+                audio['ARTIST'] = [artist]
+            audio.save()
+        elif isinstance(audio, MP4):
+            if title is not None:
+                audio['\xa9nam'] = [title]
+            if artist is not None:
+                audio['\xa9ART'] = [artist]
+            audio.save()
+
+    @staticmethod
     def _embed_lyrics(audio_path: str, lyrics_lrc: str):
         """Embed synced lyrics into the audio file's metadata."""
         import mutagen
@@ -542,11 +583,15 @@ class MusicSource:
     async def save_metadata(self, group_id: int, track_id: int,
                             topic_id: int | None,
                             thumbnail_path: str | None = None,
-                            lyrics_lrc: str | None = None) -> dict:
-        """Re-send a track with updated metadata (thumbnail and/or lyrics).
+                            lyrics_lrc: str | None = None,
+                            new_title: str | None = None,
+                            new_artist: str | None = None) -> dict:
+        """Re-send a track with updated metadata (thumbnail, lyrics, and/or
+        title/artist).
 
         Deletes the original message and sends a new one.
-        Returns {"saved": bool, "new_id": int|None}.
+        Returns {"saved": bool, "new_id": int|None,
+                 "title": str, "artist": str}.
         """
         track = self.get_track(group_id, track_id, topic_id)
         if not track:
@@ -564,9 +609,20 @@ class MusicSource:
         if not msg or not msg.media:
             return {"saved": False, "new_id": None}
 
+        effective_title = new_title if new_title is not None else track["title"]
+        effective_artist = new_artist if new_artist is not None else track["artist"]
+
         try:
             # Download the audio file locally
             audio_path = await self.ensure_downloaded(group_id, track_id, topic_id)
+
+            # Embed new title/artist into file tags so the file itself reflects
+            # the edit (mirrors what Telegram's audio attributes will show).
+            if new_title is not None or new_artist is not None:
+                try:
+                    self._embed_title_artist(audio_path, new_title, new_artist)
+                except Exception as e:
+                    print(f"Failed to embed title/artist: {e}")
 
             # Embed lyrics into file metadata if provided
             if lyrics_lrc:
@@ -585,8 +641,8 @@ class MusicSource:
             attributes = [
                 DocumentAttributeAudio(
                     duration=track["duration"],
-                    title=track["title"],
-                    performer=track["artist"],
+                    title=effective_title,
+                    performer=effective_artist,
                 ),
                 DocumentAttributeFilename(file_name=track["file_name"]),
             ]
@@ -631,7 +687,12 @@ class MusicSource:
             cache_key = self._track_cache_key(group_id, topic_id)
             self._tracks_cache.pop(cache_key, None)
 
-            return {"saved": True, "new_id": new_msg_id}
+            return {
+                "saved": True,
+                "new_id": new_msg_id,
+                "title": effective_title,
+                "artist": effective_artist,
+            }
         except Exception as e:
             print(f"Failed to save metadata: {e}")
             return {"saved": False, "new_id": None}

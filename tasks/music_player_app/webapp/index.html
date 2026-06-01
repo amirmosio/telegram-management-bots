@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=239">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=239">
-    <link rel="stylesheet" href="style.css?v=239">
+    <link rel="manifest" href="/manifest.json?v=240">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=240">
+    <link rel="stylesheet" href="style.css?v=240">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -422,6 +422,25 @@
         </div>
     </div>
 
+    <!-- Edit title/artist modal. Re-uploads the track to Telegram with
+         new audio attributes; only works while Telegram still lets the
+         user delete the original message. -->
+    <div id="meta-edit-modal" style="display:none">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <h3>Edit track</h3>
+            <label class="meta-edit-label" for="meta-edit-title">Title</label>
+            <input id="meta-edit-title" type="text" autocomplete="off">
+            <label class="meta-edit-label" for="meta-edit-artist">Artist</label>
+            <input id="meta-edit-artist" type="text" autocomplete="off">
+            <div class="meta-edit-hint">The file on Telegram will be re-uploaded with the new title and artist. Old message will be deleted.</div>
+            <div id="meta-edit-actions">
+                <button id="meta-edit-cancel" class="text-btn">Cancel</button>
+                <button id="meta-edit-ok" class="text-btn accent">Save</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Watch setup modal: shows the per-account token to paste into the Amazfit app -->
     <div id="watch-modal" style="display:none">
         <div class="modal-backdrop"></div>
@@ -671,6 +690,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=239"></script>
+    <script src="app.bundle.js?v=240"></script>
 </body>
 </html>

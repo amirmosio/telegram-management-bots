@@ -2775,6 +2775,157 @@ $('btn-delete-playing').addEventListener('click', async () => {
     }
 });
 
+// ══════════════════════════════════════
+//  EDIT TITLE / ARTIST
+// ══════════════════════════════════════
+// Tap title or artist on the now-playing card to rename the track. The
+// server re-uploads the audio with the new DocumentAttributeAudio and
+// deletes the original message — same flow as save_metadata. Telegram
+// enforces the edit window via the delete permission; on a non-owned or
+// stale message the server returns saved:false and we show a toast.
+function showMetaEditModal({ title = '', artist = '' } = {}) {
+    return new Promise((resolve) => {
+        const modal = $('meta-edit-modal');
+        const titleInput = $('meta-edit-title');
+        const artistInput = $('meta-edit-artist');
+        const okBtn = $('meta-edit-ok');
+        const cancelBtn = $('meta-edit-cancel');
+        const backdrop = modal.querySelector('.modal-backdrop');
+
+        titleInput.value = title;
+        artistInput.value = artist;
+        modal.style.display = 'flex';
+        setTimeout(() => {
+            const focusEl = titleInput;
+            focusEl.focus();
+            focusEl.select();
+        }, 0);
+
+        const finish = (result) => {
+            modal.style.display = 'none';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            backdrop.removeEventListener('click', onCancel);
+            titleInput.removeEventListener('keydown', onKey);
+            artistInput.removeEventListener('keydown', onKey);
+            resolve(result);
+        };
+        const onOk = () => finish({
+            title: titleInput.value.trim(),
+            artist: artistInput.value.trim(),
+        });
+        const onCancel = () => finish(null);
+        const onKey = (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); onOk(); }
+            else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
+        };
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        backdrop.addEventListener('click', onCancel);
+        titleInput.addEventListener('keydown', onKey);
+        artistInput.addEventListener('keydown', onKey);
+    });
+}
+
+async function openMetaEditor(focus /* 'title' | 'artist' */) {
+    if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+    const track = playerTracks[currentTrackIndex];
+    const groupId = playerGroupId;
+    const topicId = playerTopicId;
+    const oldId = track.id;
+
+    const result = await showMetaEditModal({
+        title: track.title || '',
+        artist: track.artist || '',
+    });
+    if (!result) return;
+
+    const newTitle = result.title;
+    const newArtist = result.artist;
+    if (!newTitle && !newArtist) return;
+    if (newTitle === (track.title || '') && newArtist === (track.artist || '')) return;
+
+    trackTitleEl.classList.add('saving');
+    trackArtistEl.classList.add('saving');
+    try {
+        const data = await tg.editTrackMetadata(groupId, oldId, {
+            title: newTitle,
+            artist: newArtist,
+            topicId,
+        });
+        if (!data.saved) {
+            showToast('Telegram refused the edit (track may be too old)');
+            return;
+        }
+
+        const newId = data.new_id;
+        const savedTitle = data.title || newTitle;
+        const savedArtist = data.artist || newArtist;
+        if (!data.deletedOriginal) {
+            // Re-upload succeeded but the old message couldn't be deleted —
+            // the user gets a duplicate. Surface it so they can clean up.
+            showToast('Renamed, but the old copy could not be deleted');
+        }
+
+        // Track on the player queue gets a new msg_id and new metadata.
+        const stillCurrent = playerTracks[currentTrackIndex]?.id === oldId;
+        if (stillCurrent) {
+            playerTracks[currentTrackIndex] = {
+                ...track,
+                id: newId != null ? newId : track.id,
+                msg_id: newId != null ? newId : track.msg_id,
+                title: savedTitle,
+                artist: savedArtist,
+            };
+        }
+
+        // Reflect the new metadata in the now-playing card and the mini bar.
+        trackTitleEl.textContent = savedTitle;
+        trackArtistEl.textContent = savedArtist || 'Unknown';
+        const miniTitle = $('mini-title');
+        const miniArtist = $('mini-artist');
+        if (miniTitle) miniTitle.textContent = savedTitle;
+        if (miniArtist) miniArtist.textContent = savedArtist || 'Unknown';
+
+        // Force the next track-list fetch to hit Telegram so the new msg
+        // appears and the deleted one drops out.
+        try { tg.invalidateCache(groupId, null); } catch {}
+
+        // Update any sidebar rows for this track in place: swap the
+        // data-track-id to the new msg id and refresh the visible
+        // title/artist text. Saves us a full re-scan.
+        const rows = document.querySelectorAll(`.track-item[data-track-id="${oldId}"]`);
+        rows.forEach(el => {
+            if (newId != null) el.setAttribute('data-track-id', String(newId));
+            const titleEl = el.querySelector('.track-item-title');
+            const artistEl = el.querySelector('.track-item-artist');
+            if (titleEl) titleEl.textContent = savedTitle;
+            if (artistEl) artistEl.textContent = savedArtist || 'Unknown';
+        });
+
+        // Re-fetch lyrics and artwork against the new title+artist so the
+        // (title, artist)-keyed caches search fresh sources.
+        if (stillCurrent) {
+            const next = playerTracks[currentTrackIndex];
+            try { fetchLyricsForTrack(next, _playGeneration); } catch {}
+            try { fetchArtworkForTrack(next, _playGeneration); } catch {}
+        }
+
+        showToast('Updated');
+    } catch (e) {
+        console.error('edit-meta failed', e);
+        showToast('Failed to update');
+    } finally {
+        trackTitleEl.classList.remove('saving');
+        trackArtistEl.classList.remove('saving');
+    }
+}
+
+trackTitleEl.addEventListener('click', () => openMetaEditor('title'));
+trackArtistEl.addEventListener('click', () => openMetaEditor('artist'));
+trackTitleEl.title = 'Tap to rename';
+trackArtistEl.title = 'Tap to rename';
+
 async function showPlaylistPicker(mode) {
     pickerMode = mode === 'move' ? 'move' : 'add';
     // Exclude the synthetic "All" entry and the General/Search topic (id=1)

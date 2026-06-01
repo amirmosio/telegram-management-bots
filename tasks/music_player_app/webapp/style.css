@@ -662,11 +662,50 @@ html, body {
 #playlist-modal,
 #confirm-modal,
 #prompt-modal,
+#meta-edit-modal,
 #share-modal,
 #watch-modal,
 #about-modal {
     position: fixed; inset: 0; z-index: 100;
     display: flex; align-items: center; justify-content: center;
+}
+
+#meta-edit-modal .modal-content { max-width: 400px; }
+#meta-edit-modal .meta-edit-label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 4px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+#meta-edit-modal input[type=text] {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+    margin-bottom: 10px;
+    box-sizing: border-box;
+}
+#meta-edit-modal input[type=text]:focus { border-color: var(--accent); }
+#meta-edit-modal .meta-edit-hint {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 6px 0 14px;
+    line-height: 1.4;
+}
+#meta-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+#meta-edit-actions .text-btn.accent {
+    color: var(--accent);
+    font-weight: 600;
 }
 
 #prompt-modal-input {
@@ -1232,6 +1271,11 @@ html, body {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     color: #fff;
     text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 1px 4px;
+    margin-left: -4px;
+    transition: background 0.15s;
 }
 
 #track-artist {
@@ -1239,6 +1283,22 @@ html, body {
     margin-top: 2px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 1px 4px;
+    margin-left: -4px;
+    transition: background 0.15s;
+}
+
+#track-title:hover,
+#track-artist:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+#track-title.saving,
+#track-artist.saving {
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 /* ── Lyrics ── */
