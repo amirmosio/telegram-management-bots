@@ -2940,6 +2940,24 @@ trackArtistEl.addEventListener('click', () => openMetaEditor('artist'));
 trackTitleEl.title = 'Tap to rename';
 trackArtistEl.title = 'Tap to rename';
 
+// ══════════════════════════════════════
+//  WATCH ON YOUTUBE
+// ══════════════════════════════════════
+// Opens youtube.com's search results in a new tab (or the YouTube app on
+// mobile via universal link) with the cleaned title+artist preformatted
+// so the music video lands at or near the top. No API key needed — the
+// user picks the result. parseTrackInfo strips junk like "[MusicViral.in]"
+// or "official audio" suffixes that hurt the match.
+$('btn-youtube').addEventListener('click', () => {
+    if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+    const track = playerTracks[currentTrackIndex];
+    const { title, artist } = parseTrackInfo(track.title || '', track.artist || '');
+    const query = [artist, title, 'official music video'].filter(Boolean).join(' ').trim();
+    if (!query) return;
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    window.open(url, '_blank', 'noopener');
+});
+
 async function showPlaylistPicker(mode) {
     pickerMode = mode === 'move' ? 'move' : 'add';
     // Exclude the synthetic "All" entry and the General/Search topic (id=1)

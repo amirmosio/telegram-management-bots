@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=242">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=242">
-    <link rel="stylesheet" href="style.css?v=242">
+    <link rel="manifest" href="/manifest.json?v=243">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=243">
+    <link rel="stylesheet" href="style.css?v=243">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -255,6 +255,11 @@
                                 <circle cx="9" cy="8" r="3"/>
                                 <path d="M3 20c0-3 2.5-5 6-5s6 2 6 5"/>
                                 <path d="M16.5 9.5l4-2v8a2 2 0 1 1-2-2"/>
+                            </svg>
+                        </button>
+                        <button id="btn-youtube" class="overlay-youtube-btn" title="Watch music video on YouTube" aria-label="Watch on YouTube">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M21.6 7.2a2.5 2.5 0 0 0-1.76-1.77C18.26 5 12 5 12 5s-6.26 0-7.84.43A2.5 2.5 0 0 0 2.4 7.2 26.1 26.1 0 0 0 2 12a26.1 26.1 0 0 0 .4 4.8 2.5 2.5 0 0 0 1.76 1.77C5.74 19 12 19 12 19s6.26 0 7.84-.43a2.5 2.5 0 0 0 1.76-1.77A26.1 26.1 0 0 0 22 12a26.1 26.1 0 0 0-.4-4.8zM10 15V9l5.2 3-5.2 3z"/>
                             </svg>
                         </button>
                         <button id="btn-add-playing" class="overlay-add-btn" title="Add to playlist">
@@ -690,6 +695,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=242"></script>
+    <script src="app.bundle.js?v=243"></script>
 </body>
 </html>

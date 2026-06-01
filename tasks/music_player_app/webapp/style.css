@@ -1224,6 +1224,26 @@ html, body {
     pointer-events: none;
 }
 
+.overlay-youtube-btn {
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.85);
+    cursor: pointer;
+    width: 34px; height: 34px;
+    min-width: 34px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+.overlay-youtube-btn:hover {
+    background: rgba(229, 65, 65, 0.7);
+    border-color: rgba(229, 65, 65, 0.85);
+    color: #fff;
+}
+
 .overlay-move-btn {
     display: flex; align-items: center; justify-content: center;
     background: rgba(255,255,255,0.15);
@@ -2144,7 +2164,7 @@ html, body {
     .play-btn { background: var(--accent); color: #fff; }
 
     /* Bigger touch targets for overlay buttons on mobile */
-    .overlay-add-btn, .overlay-share-btn, .overlay-coplay-btn, .overlay-move-btn, .overlay-delete-btn {
+    .overlay-add-btn, .overlay-share-btn, .overlay-coplay-btn, .overlay-move-btn, .overlay-delete-btn, .overlay-youtube-btn {
         width: 40px; height: 40px; min-width: 40px;
     }
     #artwork-overlay { gap: 12px; }
