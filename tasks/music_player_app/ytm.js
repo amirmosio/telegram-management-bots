@@ -31,6 +31,44 @@ const SONGS_FILTER_PARAMS = 'EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D';
 const REQUEST_TIMEOUT_MS = 10000;
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 
+// In-memory result caches for the two YT POST endpoints. Re-tapping the
+// radio button for the same playlist (or any playlist sharing seeds with
+// a prior one) becomes effectively free — no upstream calls, no
+// /ytm-radio fan-out cost. Lost on process restart, which is fine: the
+// service only restarts on deploy or crash, and the per-playlist cache
+// in the webapp absorbs most repeat taps anyway.
+//
+// We cache negative results too (search returning null, empty radio) so
+// a misspelled track name doesn't get re-queried every radio tap.
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const CACHE_MAX_ENTRIES = 5000;               // bound memory under abuse
+const searchCache = new Map(); // queryKey -> { ts, videoId }
+const radioCache  = new Map(); // videoId  -> { ts, tracks }
+
+function cacheGet(cache, key) {
+    const entry = cache.get(key);
+    if (!entry) return undefined;
+    if (Date.now() - entry.ts > CACHE_TTL_MS) {
+        cache.delete(key);
+        return undefined;
+    }
+    return entry;
+}
+
+function cacheSet(cache, key, payload) {
+    // Map preserves insertion order, so iterating .keys() yields oldest
+    // first. When full, drop the oldest 10% in one pass.
+    if (cache.size >= CACHE_MAX_ENTRIES) {
+        const toEvict = Math.ceil(CACHE_MAX_ENTRIES / 10);
+        let i = 0;
+        for (const k of cache.keys()) {
+            cache.delete(k);
+            if (++i >= toEvict) break;
+        }
+    }
+    cache.set(key, { ts: Date.now(), ...payload });
+}
+
 function ytmPost(path, body, lookup) {
     const payload = Buffer.from(JSON.stringify(body), 'utf8');
     return new Promise((resolve, reject) => {
@@ -108,29 +146,42 @@ function firstRunText(field) {
 }
 
 async function searchSongVideoId(query, lookup) {
+    const key = String(query || '').toLowerCase().trim();
+    if (!key) return null;
+    const cached = cacheGet(searchCache, key);
+    if (cached) return cached.videoId;
+
     const body = {
         context: { client: YTM_CLIENT },
         query,
         params: SONGS_FILTER_PARAMS,
     };
     const data = await ytmPost('/youtubei/v1/search?prettyPrint=false', body, lookup);
+    let videoId = null;
     // Songs filter yields musicResponsiveListItemRenderer entries; each has a
     // playlistItemData.videoId. Take the first one whose videoId is present.
     for (const node of findAll(data, 'playlistItemData')) {
         const vid = node.playlistItemData && node.playlistItemData.videoId;
-        if (vid && typeof vid === 'string') return vid;
+        if (vid && typeof vid === 'string') { videoId = vid; break; }
     }
     // Fallback: any node with watchEndpoint.videoId.
-    for (const node of findAll(data, 'watchEndpoint')) {
-        const vid = node.watchEndpoint && node.watchEndpoint.videoId;
-        if (vid && typeof vid === 'string') return vid;
+    if (!videoId) {
+        for (const node of findAll(data, 'watchEndpoint')) {
+            const vid = node.watchEndpoint && node.watchEndpoint.videoId;
+            if (vid && typeof vid === 'string') { videoId = vid; break; }
+        }
     }
-    return null;
+    cacheSet(searchCache, key, { videoId });
+    return videoId;
 }
 
 // "Watch playlist" = the autoplay queue YouTube Music seeds when you start
 // playing a track. Functionally a per-track radio.
 async function getRadioTracks(videoId, lookup) {
+    if (!videoId) return [];
+    const cached = cacheGet(radioCache, videoId);
+    if (cached) return cached.tracks;
+
     // playlistId "RDAMVM<videoId>" is the magic prefix that turns the /next
     // call into a per-track autoplay queue (i.e. a radio). Without it YTM
     // returns only the seed itself. The watchEndpointMusicSupportedConfigs
@@ -163,6 +214,7 @@ async function getRadioTracks(videoId, lookup) {
         const artist = firstRunText(r.longBylineText).split('•')[0].trim();
         out.push({ videoId: vid, title, artist });
     }
+    cacheSet(radioCache, videoId, { tracks: out });
     return out;
 }
 
