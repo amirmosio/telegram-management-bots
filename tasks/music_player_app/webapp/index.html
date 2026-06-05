@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=245">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=245">
-    <link rel="stylesheet" href="style.css?v=245">
+    <link rel="manifest" href="/manifest.json?v=246">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=246">
+    <link rel="stylesheet" href="style.css?v=246">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -127,10 +127,10 @@
             <!-- PLAYLIST TRACKS (sub-view of Playlists) -->
             <div id="tab-playlist-tracks" class="tab-content">
                 <div id="playlist-tracks-toolbar">
-                    <span id="storage-usage" title="Browser storage used by cached tracks"></span>
                     <button id="btn-radio" class="icon-btn" title="Generate a radio from this playlist">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M3.24 6.15C2.51 6.43 2 7.17 2 8v12c0 1.1.9 2 2 2h16c1.11 0 2-.9 2-2V8c0-1.1-.9-2-2-2H8.3l8.26-3.34L15.88 1 3.24 6.15zM7 20c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm13-8h-2v-2h-2v2H4V8h16v4z"/></svg>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 12c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm-2-6c-3.31 0-6 2.69-6 6 0 1.74.75 3.31 1.94 4.4l1.42-1.42C8.53 14.25 8 13.19 8 12c0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.19-.53 2.25-1.36 2.98l1.42 1.42C17.25 15.31 18 13.74 18 12c0-3.31-2.69-6-6-6zm0-4C6.48 2 2 6.48 2 12c0 3.05 1.37 5.78 3.51 7.62l1.41-1.41C5.13 16.67 4 14.47 4 12c0-4.42 3.58-8 8-8s8 3.58 8 8c0 2.47-1.13 4.67-2.92 6.21l1.41 1.41C20.63 17.78 22 15.05 22 12c0-5.52-4.48-10-10-10z"/></svg>
                     </button>
+                    <span id="storage-usage" title="Browser storage used by cached tracks"></span>
                     <button id="btn-download-all" class="icon-btn" title="Download all tracks in this playlist">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                     </button>
@@ -698,6 +698,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=245"></script>
+    <script src="app.bundle.js?v=246"></script>
 </body>
 </html>
