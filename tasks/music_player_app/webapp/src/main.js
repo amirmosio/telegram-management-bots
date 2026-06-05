@@ -733,11 +733,10 @@ btnRadio.addEventListener('click', async () => {
         '<div class="lyrics-placeholder"><div class="loading"></div></div>';
 
     try {
-        // Sample a slice of the playlist to keep latency reasonable; the
-        // server also caps at 20 seeds. Tracks without title/artist are
-        // dropped server-side.
-        const seeds = playlistTracks.slice(0, 20);
-        const results = await generateRadio(seeds);
+        // generateRadio internally samples up to 30 random tracks as seeds
+        // (server caps at 30 too) and post-filters results against the
+        // full playlist to drop tracks the user already has.
+        const results = await generateRadio(playlistTracks);
         _radioMode = true;
         btnRadio.classList.add('active');
         btnRadio.title = 'Show playlist tracks';

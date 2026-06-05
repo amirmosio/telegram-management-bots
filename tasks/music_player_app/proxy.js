@@ -71,7 +71,7 @@ const ytm = require('./ytm');
 // short strings, never anywhere near 1 KB in practice) and the seed count
 // bounded so a single caller can't fan out to hundreds of upstream YT calls.
 const YTM_RADIO_MAX_BODY_BYTES = 64 * 1024;
-const YTM_RADIO_MAX_SEEDS = 20;
+const YTM_RADIO_MAX_SEEDS = 30;
 
 const PORT = 3001;
 const HOST = '127.0.0.1';
@@ -348,7 +348,6 @@ async function handleYtmRadio(req, res) {
     try {
         const tracks = await ytm.buildRadio({
             seeds: cleanSeeds,
-            topN: 20,
             seedLimit: YTM_RADIO_MAX_SEEDS,
             concurrency: 4,
             lookup: safeLookup,

@@ -168,12 +168,14 @@ async function getRadioTracks(videoId, lookup) {
 
 // Orchestrator: given a list of seed tracks (title + artist strings), build
 // a merged radio. Resolves each seed to a videoId, fetches its radio, and
-// returns the top N entries by rank-weighted score.
+// returns all unique entries sorted by rank-weighted score (descending).
+// The caller is responsible for any further filtering (e.g. removing
+// tracks already in the user's playlist) and presentation cap.
 //
-// Concurrency is bounded so we don't fire 30 simultaneous POSTs at YT and
-// trip its bot detection. seedLimit caps how many seeds we'll honor — long
-// playlists get sampled, not fully expanded.
-async function buildRadio({ seeds, topN = 20, seedLimit = 20, concurrency = 4, lookup }) {
+// Concurrency is bounded so we don't fire many simultaneous POSTs at YT
+// and trip its bot detection. seedLimit caps how many seeds we'll honor;
+// the caller should pre-sample if it has more tracks than that.
+async function buildRadio({ seeds, topN = Infinity, seedLimit = 30, concurrency = 4, lookup }) {
     const useSeeds = seeds.slice(0, seedLimit);
     const seedKey = (t) => `${(t.title || '').toLowerCase().trim()}|${(t.artist || '').toLowerCase().trim()}`;
     const seedKeys = new Set(useSeeds.map(seedKey));
