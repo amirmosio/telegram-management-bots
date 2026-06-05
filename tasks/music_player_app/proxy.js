@@ -34,7 +34,11 @@
 //                                    memory; resets on process restart.
 //   8. Response-size cap           — upstream responses larger than 5 MB
 //                                    are truncated to prevent abuse.
-//   9. Method allowlist            — GET (and OPTIONS preflight) only.
+//   9. Method allowlist            — GET on /proxy, POST on /ytm-radio
+//                                    (a narrow endpoint with a fixed
+//                                    JSON-array input shape), plus
+//                                    OPTIONS preflight. No generic POST
+//                                    forwarding through /proxy.
 //
 // Environment variables (set in the systemd unit):
 //   ALLOWED_ORIGIN          required. Exact origin string of the webapp,
@@ -60,6 +64,14 @@ const dns = require('dns');
 const net = require('net');
 const crypto = require('crypto');
 const { URL } = require('url');
+const ytm = require('./ytm');
+
+// /ytm-radio request limits. The endpoint is POST + JSON body, in contrast
+// to the GET-only /proxy fence; we keep the body cap very small (lots of
+// short strings, never anywhere near 1 KB in practice) and the seed count
+// bounded so a single caller can't fan out to hundreds of upstream YT calls.
+const YTM_RADIO_MAX_BODY_BYTES = 64 * 1024;
+const YTM_RADIO_MAX_SEEDS = 20;
 
 const PORT = 3001;
 const HOST = '127.0.0.1';
@@ -262,6 +274,93 @@ function isValidAppToken(headerValue) {
     return crypto.timingSafeEqual(got, APP_TOKEN_BUF);
 }
 
+// ── /ytm-radio handler ────────────────────────────────────────────────
+// Generates a merged "radio" playlist from a list of seed tracks the
+// webapp already has (title + artist strings from the user's own
+// playlist). Internally calls music.youtube.com's youtubei/v1 endpoints
+// via ytm.js — that's the only host this endpoint reaches, and it's
+// hardcoded there, NOT subject to the generic /proxy ALLOWED_HOSTS set.
+//
+// Why a dedicated endpoint instead of widening /proxy to allow POSTs to
+// music.youtube.com: keeps generic POST forwarding (and arbitrary JSON
+// body forwarding) out of the perimeter. This endpoint's input shape is
+// narrow — a small JSON array of {title, artist} strings — and its
+// output is filtered/normalized server-side.
+function readJsonBody(req, maxBytes) {
+    return new Promise((resolve, reject) => {
+        let received = 0;
+        const chunks = [];
+        req.on('data', (chunk) => {
+            received += chunk.length;
+            if (received > maxBytes) {
+                req.destroy();
+                reject(new Error('Body too large'));
+                return;
+            }
+            chunks.push(chunk);
+        });
+        req.on('end', () => {
+            try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8'))); }
+            catch { reject(new Error('Invalid JSON')); }
+        });
+        req.on('error', reject);
+    });
+}
+
+async function handleYtmRadio(req, res) {
+    const ip = clientIp(req);
+    if (!rateLimit(ip)) {
+        res.setHeader('Retry-After', '5');
+        res.writeHead(429); res.end('Too many requests');
+        return;
+    }
+    if (!globalQuota()) {
+        const retryAfterSec = Math.max(1, Math.ceil((dailyResetAt - Date.now()) / 1000));
+        res.setHeader('Retry-After', String(retryAfterSec));
+        console.warn(`[proxy] denied (daily quota exhausted) ip=${ip}`);
+        res.writeHead(429); res.end('Daily quota exhausted');
+        return;
+    }
+
+    let body;
+    try { body = await readJsonBody(req, YTM_RADIO_MAX_BODY_BYTES); }
+    catch (e) { res.writeHead(400); res.end(e.message); return; }
+
+    const seeds = Array.isArray(body && body.seeds) ? body.seeds : null;
+    if (!seeds || seeds.length === 0) {
+        res.writeHead(400); res.end('seeds[] required');
+        return;
+    }
+    // Normalize + reject anything non-string-y to keep the YT query safe.
+    const cleanSeeds = seeds
+        .filter((s) => s && typeof s === 'object')
+        .map((s) => ({
+            title: typeof s.title === 'string' ? s.title.slice(0, 200) : '',
+            artist: typeof s.artist === 'string' ? s.artist.slice(0, 200) : '',
+        }))
+        .filter((s) => s.title || s.artist)
+        .slice(0, YTM_RADIO_MAX_SEEDS);
+    if (cleanSeeds.length === 0) {
+        res.writeHead(400); res.end('No usable seeds');
+        return;
+    }
+
+    try {
+        const tracks = await ytm.buildRadio({
+            seeds: cleanSeeds,
+            topN: 20,
+            seedLimit: YTM_RADIO_MAX_SEEDS,
+            concurrency: 4,
+            lookup: safeLookup,
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ tracks }));
+    } catch (err) {
+        console.warn(`[proxy] ytm-radio failed ip=${ip} err=${err.message}`);
+        res.writeHead(502); res.end('Upstream error');
+    }
+}
+
 const server = http.createServer((req, res) => {
     // CORS — echo the request's Origin only if it matches the allowlist.
     // Never use the wildcard '*' here; that would defeat caller auth.
@@ -270,18 +369,25 @@ const server = http.createServer((req, res) => {
         res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
         res.setHeader('Vary', 'Origin');
     }
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-App-Token');
 
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-    if (req.method !== 'GET') { res.writeHead(405); res.end('Method Not Allowed'); return; }
 
     let reqUrl;
     try { reqUrl = new URL(req.url, 'http://localhost'); }
     catch { res.writeHead(400); res.end('Bad request'); return; }
 
-    if (reqUrl.pathname !== '/' && reqUrl.pathname !== '/proxy') {
-        res.writeHead(404); res.end('Not Found'); return;
+    // /ytm-radio is the only POST path. Generic /proxy stays GET-only.
+    const isYtmRadio = reqUrl.pathname === '/ytm-radio';
+
+    if (isYtmRadio) {
+        if (req.method !== 'POST') { res.writeHead(405); res.end('Method Not Allowed'); return; }
+    } else {
+        if (req.method !== 'GET') { res.writeHead(405); res.end('Method Not Allowed'); return; }
+        if (reqUrl.pathname !== '/' && reqUrl.pathname !== '/proxy') {
+            res.writeHead(404); res.end('Not Found'); return;
+        }
     }
 
     // Caller-auth fence: reject early so unauthorized hits don't consume
@@ -297,6 +403,8 @@ const server = http.createServer((req, res) => {
         res.writeHead(403); res.end('Forbidden');
         return;
     }
+
+    if (isYtmRadio) { return handleYtmRadio(req, res); }
 
     const target = reqUrl.searchParams.get('url');
     if (!target) { res.writeHead(400); res.end('Missing url parameter'); return; }

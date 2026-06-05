@@ -12,6 +12,7 @@ import { installHypnotise } from './visualizers/hypnotise.js';
 import { installButterchurn } from './visualizers/butterchurn.js';
 import { installPiano } from './visualizers/piano-roll.js';
 import { installMidiKeyboard } from './midi-keyboard.js';
+import { generateRadio } from './radio.js';
 
 // ══════════════════════════════════════
 //  STATE
@@ -372,6 +373,7 @@ async function openExternalPlaylist(ext) {
     currentPlaylistKind = 'shared';
     currentPlaylistTopicId = ext.id;
     showPlaylistTracks();
+    exitRadioMode();
     panelTitle.textContent = ext.title;
     playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
     try {
@@ -402,6 +404,7 @@ async function openPlaylist(p) {
     currentPlaylistTopicId = p.isAll ? '__all__' : p.id;
     const topicIdForApi = p.isAll ? null : p.id;
     showPlaylistTracks();
+    exitRadioMode();
     panelTitle.textContent = p.title;
     playlistTracksContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
     try {
@@ -651,6 +654,94 @@ btnDownloadAll.addEventListener('click', async () => {
         console.groupEnd();
     }
     updateStorageUsage();
+});
+
+// ── Radio mode: generate suggestions from the current playlist ──
+// Click → swap playlist-tracks-container for a list of YouTube Music
+// recommendations seeded from the current playlist's tracks. Clicking a
+// suggestion launches the existing search flow with the title+artist as
+// the query, which finds the track via the search bots and plays it.
+const btnRadio = $('btn-radio');
+let _radioInFlight = false;
+let _radioMode = false;
+
+function exitRadioMode() {
+    _radioMode = false;
+    btnRadio.classList.remove('active');
+    btnRadio.title = 'Generate a radio from this playlist';
+}
+
+function renderRadioInto(container, tracks) {
+    container.innerHTML = '';
+    if (tracks.length === 0) {
+        container.innerHTML = '<div class="radio-empty">No recommendations found.</div>';
+        return;
+    }
+    for (let i = 0; i < tracks.length; i++) {
+        const t = tracks[i];
+        const el = document.createElement('div');
+        el.className = 'radio-item';
+        el.innerHTML = `
+            <div class="radio-rank">${i + 1}</div>
+            <div class="radio-info">
+                <div class="radio-title">${escapeHtml(t.title || '?')}</div>
+                <div class="radio-artist">${escapeHtml(t.artist || '')}</div>
+            </div>
+            <svg class="radio-go" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        `;
+        el.addEventListener('click', () => {
+            // Hand off to the existing search-and-play flow. Setting the
+            // query + opening the overlay + invoking performSearch is what
+            // a user would do manually; reusing it avoids re-implementing
+            // the bot pipeline that resolves a query to a playable track.
+            const query = [t.title, t.artist].filter(Boolean).join(' ').trim();
+            if (!query) return;
+            searchQuery.value = query;
+            openSearch();
+            performSearch();
+        });
+        container.appendChild(el);
+    }
+}
+
+btnRadio.addEventListener('click', async () => {
+    if (_radioInFlight) return;
+    // Toggle off: re-render the original track list.
+    if (_radioMode) {
+        exitRadioMode();
+        const { groupId, topicId } = currentScanContext();
+        renderTracksInto(playlistTracksContainer, playlistTracks, '',
+            { groupId, topicId, showAddBtn: false });
+        return;
+    }
+    if (currentPlaylistTopicId === null) { showToast('Open a playlist first'); return; }
+    if (!playlistTracks || playlistTracks.length === 0) {
+        showToast('This playlist has no tracks to seed from');
+        return;
+    }
+
+    _radioInFlight = true;
+    btnRadio.setAttribute('disabled', 'true');
+    playlistTracksContainer.innerHTML =
+        '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+
+    try {
+        // Sample a slice of the playlist to keep latency reasonable; the
+        // server also caps at 20 seeds. Tracks without title/artist are
+        // dropped server-side.
+        const seeds = playlistTracks.slice(0, 20);
+        const results = await generateRadio(seeds);
+        _radioMode = true;
+        btnRadio.classList.add('active');
+        btnRadio.title = 'Show playlist tracks';
+        renderRadioInto(playlistTracksContainer, results);
+    } catch (e) {
+        playlistTracksContainer.innerHTML =
+            '<div class="radio-empty">Failed to generate radio</div>';
+    } finally {
+        _radioInFlight = false;
+        btnRadio.removeAttribute('disabled');
+    }
 });
 
 btnNewPlaylist.addEventListener('click', async () => {

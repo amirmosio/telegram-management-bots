@@ -291,6 +291,64 @@ html, body {
 #btn-download-all.downloading svg { position: relative; z-index: 1; }
 #btn-download-all[disabled] { opacity: 0.9; pointer-events: none; cursor: default; }
 
+#btn-radio {
+    flex-shrink: 0;
+    color: var(--text-secondary);
+    transition: color 0.15s;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#btn-radio:hover { color: var(--accent); }
+#btn-radio.active { color: var(--accent); }
+#btn-radio[disabled] { opacity: 0.6; pointer-events: none; cursor: default; }
+
+/* Radio-mode list — slightly distinct from regular track items so it's
+   obvious you're looking at suggestions, not tracks already in the
+   playlist. Click anywhere on the row to launch a search for that title. */
+.radio-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+}
+.radio-item:hover { background: var(--bg-hover); }
+.radio-item .radio-rank {
+    width: 24px;
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-size: 13px;
+}
+.radio-item .radio-info { flex: 1; min-width: 0; }
+.radio-item .radio-title {
+    color: var(--text-primary);
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.radio-item .radio-artist {
+    color: var(--text-secondary);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.radio-item .radio-go {
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+.radio-empty {
+    color: var(--text-secondary);
+    padding: 20px;
+    text-align: center;
+}
+
 .search-bar input {
     width: 100%;
     padding: 8px 12px;

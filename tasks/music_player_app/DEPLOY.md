@@ -183,6 +183,22 @@ location = /proxy {
     proxy_set_header Referer $http_referer;
     proxy_set_header X-App-Token $http_x_app_token;
 }
+
+# Radio-from-playlist endpoint. Same upstream + same edge fence as /proxy,
+# but POST + JSON body so we have to allow that explicitly. The Node side
+# (proxy.js → handleYtmRadio) does the YouTube Music fan-out internally.
+location = /ytm-radio {
+    if ($allow_origin = 0) { if ($allow_referer = 0) { return 403; } }
+    proxy_pass http://127.0.0.1:3001;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Origin $http_origin;
+    proxy_set_header Referer $http_referer;
+    proxy_set_header X-App-Token $http_x_app_token;
+    # Fan-out to YouTube Music can take ~5–15s for a 20-seed playlist.
+    proxy_read_timeout 60s;
+}
 ```
 
 ### 2. corsproxy systemd unit `/etc/systemd/system/corsproxy.service`
