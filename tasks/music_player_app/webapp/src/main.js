@@ -735,8 +735,12 @@ btnRadio.addEventListener('click', async () => {
     try {
         // generateRadio internally samples up to 30 random tracks as seeds
         // (server caps at 30 too) and post-filters results against the
-        // full playlist to drop tracks the user already has.
-        const results = await generateRadio(playlistTracks);
+        // full playlist to drop tracks the user already has. Results are
+        // cached client-side for 3 days, keyed by the playlist's identity
+        // so re-tapping in that window returns instantly without hitting
+        // the proxy's daily quota.
+        const cacheKey = `${currentPlaylistKind}:${playlistGroupId}:${currentPlaylistTopicId}`;
+        const results = await generateRadio(playlistTracks, cacheKey);
         _radioMode = true;
         btnRadio.classList.add('active');
         btnRadio.title = 'Show playlist tracks';

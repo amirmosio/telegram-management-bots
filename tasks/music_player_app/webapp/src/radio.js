@@ -12,6 +12,37 @@ const APP_TOKEN = typeof __APP_TOKEN__ === 'string' ? __APP_TOKEN__ : '';
 
 const RADIO_TIMEOUT_MS = 60000; // upstream fans out N×2 YT calls; allow time
 const SEED_SAMPLE_SIZE = 30;    // server caps at 30 too — keep in sync
+const CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+// Versioned namespace so a future schema change can be invalidated by
+// bumping the prefix instead of asking users to clear storage.
+const CACHE_PREFIX = 'radio_cache:v1:';
+
+function cacheGet(key) {
+    if (!key) return null;
+    try {
+        const raw = localStorage.getItem(CACHE_PREFIX + key);
+        if (!raw) return null;
+        const entry = JSON.parse(raw);
+        if (!entry || typeof entry.ts !== 'number' || !Array.isArray(entry.tracks)) return null;
+        if (Date.now() - entry.ts > CACHE_TTL_MS) {
+            localStorage.removeItem(CACHE_PREFIX + key);
+            return null;
+        }
+        return entry.tracks;
+    } catch {
+        return null;
+    }
+}
+
+function cacheSet(key, tracks) {
+    if (!key || !Array.isArray(tracks)) return;
+    try {
+        localStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ ts: Date.now(), tracks }));
+    } catch {
+        // Quota exceeded or storage disabled — silently drop the cache.
+        // The next request will just hit the network again.
+    }
+}
 
 // Lowercase-trim key for matching tracks across YT-Music results and
 // Telegram-side playlist entries. Loose by design (no album/year), so a
@@ -32,13 +63,25 @@ function sampleRandom(arr, k) {
     return copy.slice(0, k);
 }
 
-export async function generateRadio(tracks) {
+export async function generateRadio(tracks, cacheKey = null) {
     const usable = (tracks || []).filter((t) => t && (t.title || t.artist));
     if (usable.length === 0) return [];
 
+    // Apply the playlist-exclude filter at the end (whether from cache
+    // or fresh) so tracks added to the playlist since the cache was set
+    // are still excluded from the recommendations.
+    const exclude = new Set(usable.map(trackKey));
+    const applyExclude = (list) => list.filter((s) => !exclude.has(trackKey(s)));
+
+    // Cache check: within TTL, return the previously-generated list for
+    // this playlist. Avoids fanning out 30+ upstream YT calls (and
+    // burning the proxy's daily quota) every time the user taps radio.
+    const cached = cacheGet(cacheKey);
+    if (cached) return applyExclude(cached);
+
     // Sample seeds: long playlists shouldn't burn 100 upstream calls per
-    // request. Random pick instead of first-N so re-tapping the radio
-    // button gives different recommendations from the same playlist.
+    // request. Random pick instead of first-N so the cached suggestions
+    // for a given playlist vary across cache windows.
     const seedTracks = sampleRandom(usable, SEED_SAMPLE_SIZE);
     const seeds = seedTracks.map((t) => ({
         title: t.title || '',
@@ -67,9 +110,8 @@ export async function generateRadio(tracks) {
         clearTimeout(timer);
     }
 
-    // Post-filter: drop anything already in the user's playlist. Server
-    // only excludes the seed subset; it doesn't know about the rest of
-    // the playlist.
-    const exclude = new Set(usable.map(trackKey));
-    return suggestions.filter((s) => !exclude.has(trackKey(s)));
+    // Cache the raw (unfiltered) server response so the playlist-exclude
+    // filter is re-applied on every cache hit, not frozen at cache time.
+    cacheSet(cacheKey, suggestions);
+    return applyExclude(suggestions);
 }
