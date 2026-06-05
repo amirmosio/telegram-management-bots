@@ -200,7 +200,14 @@ function rateLimit(ip) {
 // exposure across every client. In-memory only — a process restart resets
 // the counter, which is acceptable (corsproxy.service only restarts on
 // deploy or crash). UTC midnight rollover.
-const GLOBAL_DAILY_LIMIT = 200;
+//
+// 200 was the original limit, set when this only served lyrics/artwork
+// lookups. With /ytm-radio added and one active user doing normal
+// playback (every track triggers a lyrics+artwork fetch), 200 was being
+// burned through in a few hours of use. 1000 still bounds runaway abuse
+// — at one request per second it would take ~17 minutes to deplete,
+// long enough that the per-IP rate limit (60/min) catches it first.
+const GLOBAL_DAILY_LIMIT = 1000;
 let dailyCount = 0;
 let dailyResetAt = nextUtcMidnight();
 
