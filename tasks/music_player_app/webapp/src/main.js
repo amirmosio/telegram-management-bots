@@ -664,11 +664,17 @@ btnDownloadAll.addEventListener('click', async () => {
 const btnRadio = $('btn-radio');
 let _radioInFlight = false;
 let _radioMode = false;
+let _radioSavedTitle = '';
 
 function exitRadioMode() {
     _radioMode = false;
     btnRadio.classList.remove('active');
     btnRadio.title = 'Generate a radio from this playlist';
+    document.body.classList.remove('radio-mode');
+    if (_radioSavedTitle) {
+        panelTitle.textContent = _radioSavedTitle;
+        _radioSavedTitle = '';
+    }
 }
 
 function renderRadioInto(container, tracks) {
@@ -689,11 +695,12 @@ function renderRadioInto(container, tracks) {
             </div>
             <svg class="radio-go" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
         `;
-        el.addEventListener('click', () => {
-            // Hand off to the existing search-and-play flow. Setting the
-            // query + opening the overlay + invoking performSearch is what
-            // a user would do manually; reusing it avoids re-implementing
-            // the bot pipeline that resolves a query to a playable track.
+        el.addEventListener('click', (ev) => {
+            // stopPropagation: a document-level outside-click handler
+            // closes the search overlay on any click outside it. Without
+            // this, our click bubbles up after openSearch() ran and the
+            // handler closes the overlay we just opened.
+            ev.stopPropagation();
             const query = [t.title, t.artist].filter(Boolean).join(' ').trim();
             if (!query) return;
             searchQuery.value = query;
@@ -734,6 +741,9 @@ btnRadio.addEventListener('click', async () => {
         _radioMode = true;
         btnRadio.classList.add('active');
         btnRadio.title = 'Show playlist tracks';
+        document.body.classList.add('radio-mode');
+        _radioSavedTitle = panelTitle.textContent;
+        panelTitle.textContent = `📻 Radio · ${_radioSavedTitle}`;
         renderRadioInto(playlistTracksContainer, results);
     } catch (e) {
         playlistTracksContainer.innerHTML =

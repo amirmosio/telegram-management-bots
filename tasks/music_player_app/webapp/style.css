@@ -349,6 +349,24 @@ html, body {
     text-align: center;
 }
 
+/* Radio-mode banner — visible only while body.radio-mode is set. Sits at
+   the top of the playlist-tracks panel so it's obvious you're looking at
+   suggestions, not the playlist itself. */
+body.radio-mode #playlist-tracks-toolbar {
+    box-shadow: inset 0 -2px 0 var(--accent);
+}
+body.radio-mode #playlist-tracks-container::before {
+    content: '📻 Tap a suggestion to search and play';
+    display: block;
+    padding: 10px 12px;
+    margin: 0 0 6px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-left: 3px solid var(--accent);
+    color: var(--text-secondary);
+    font-size: 12px;
+    border-radius: 4px;
+}
+
 .search-bar input {
     width: 100%;
     padding: 8px 12px;
