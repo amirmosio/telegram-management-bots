@@ -373,8 +373,8 @@ body.radio-mode #storage-usage { display: none; }
 /* Replace the per-row magnifier with a spinner while a radio suggestion
    is auto-searching + auto-playing. Pure CSS so the JS path doesn't have
    to swap SVGs. */
-.radio-item.loading .radio-go { display: none; }
-.radio-item.loading::after {
+.radio-item.is-searching .radio-go { display: none; }
+.radio-item.is-searching::after {
     content: '';
     width: 16px;
     height: 16px;
@@ -385,7 +385,7 @@ body.radio-mode #storage-usage { display: none; }
     flex-shrink: 0;
 }
 @keyframes radio-item-spin { to { transform: rotate(360deg); } }
-.radio-item.loading { pointer-events: none; opacity: 0.85; }
+.radio-item.is-searching { pointer-events: none; opacity: 0.85; }
 body.radio-mode #playlist-tracks-container::before {
     content: '📻 Tap a suggestion to search and play';
     display: block;

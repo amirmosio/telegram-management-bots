@@ -1239,10 +1239,10 @@ async function radioPickAndPlay(query, radioEl) {
     _searchAbort = thisSearch;
 
     if (_radioLoadingEl && _radioLoadingEl !== radioEl) {
-        _radioLoadingEl.classList.remove('loading');
+        _radioLoadingEl.classList.remove('is-searching');
     }
     _radioLoadingEl = radioEl;
-    radioEl.classList.add('loading');
+    radioEl.classList.add('is-searching');
 
     // Prefill the overlay so manually opening it later shows this query
     // and the resulting list (rather than a stale prior search).
@@ -1252,7 +1252,7 @@ async function radioPickAndPlay(query, radioEl) {
     const releaseLoading = () => {
         if (_radioLoadingEl === radioEl) {
             _radioLoadingEl = null;
-            radioEl.classList.remove('loading');
+            radioEl.classList.remove('is-searching');
         }
     };
 
