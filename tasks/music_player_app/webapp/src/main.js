@@ -731,9 +731,7 @@ function renderRadioInto(container, tracks) {
             ev.stopPropagation();
             const query = [t.title, t.artist].filter(Boolean).join(' ').trim();
             if (!query) return;
-            searchQuery.value = query;
-            openSearch();
-            performSearch();
+            radioPickAndPlay(query, el);
         });
         container.appendChild(el);
     }
@@ -1157,6 +1155,41 @@ searchQuery.addEventListener('keydown', (e) => {
 });
 $('btn-search-go').addEventListener('click', performSearch);
 
+// Runs the bot-side search (invite check + Search-topic rename + watermark
+// + searchMusic + result filtering + fire-and-forget topic cleanup) and
+// returns { results, rawResults }. Used by both the interactive search
+// overlay and the radio-suggestion auto-play path so the two flows stay
+// in sync (same filtering, same history-cleanup behavior).
+async function _runSearchPipeline(query, abortRef) {
+    if (!localStorage.getItem('bots_invited_v2')) {
+        await tg.ensureBotInGroup(playlistGroupId);
+        localStorage.setItem('bots_invited_v2', '1');
+    }
+    if (abortRef.cancelled) return null;
+
+    await tg.renameGeneralToSearch(playlistGroupId);
+    if (abortRef.cancelled) return null;
+
+    let cleanupWatermark = null;
+    try { cleanupWatermark = await tg.captureSearchTopicWatermark(playlistGroupId); } catch {}
+
+    const rawResults = await tg.searchMusic(playlistGroupId, query);
+    if (abortRef.cancelled) return null;
+
+    // moozikestan emits a line per track with a file size (💾 X MB) —
+    // entries without a size aren't downloadable, so drop those. The
+    // MusicArmenian bot doesn't expose size at all (its results all come
+    // as inline-keyboard buttons), so let those through unfiltered.
+    const results = rawResults.filter(r =>
+        r.source === 'music-armenian' || (r.sizeMB && r.sizeMB > 0)
+    );
+
+    if (cleanupWatermark) {
+        tg.clearSearchTopicBefore(playlistGroupId, cleanupWatermark).catch(() => {});
+    }
+    return { results, rawResults };
+}
+
 async function performSearch() {
     const query = searchQuery.value.trim();
     if (!query || !playlistGroupId) return;
@@ -1169,57 +1202,82 @@ async function performSearch() {
     searchResultsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
 
     try {
-        // Ensure search bots are in the group. The localStorage key is
-        // versioned so existing installs (which only added moozikestan_bot)
-        // re-run the invite to pull in MusicArmenian_Bot too.
-        if (!localStorage.getItem('bots_invited_v2')) {
-            await tg.ensureBotInGroup(playlistGroupId);
-            localStorage.setItem('bots_invited_v2', '1');
+        const out = await _runSearchPipeline(query, thisSearch);
+        if (thisSearch.cancelled) return;
+        if (!out) {
+            searchResultsContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
+            return;
         }
-        if (thisSearch.cancelled) return;
-
-        await tg.renameGeneralToSearch(playlistGroupId);
-        if (thisSearch.cancelled) return;
-
-        // Snapshot the topmost message id in the Search topic BEFORE the
-        // search runs. We use it as a watermark to clear out prior search
-        // history once this search has settled — the Search topic should
-        // never accumulate stale queries / bot replies / dl_ commands.
-        let cleanupWatermark = null;
-        try { cleanupWatermark = await tg.captureSearchTopicWatermark(playlistGroupId); } catch {}
-
-        // Search and get the parsed result list
-        const rawResults = await tg.searchMusic(playlistGroupId, query);
-        if (thisSearch.cancelled) return;
-
-        // moozikestan emits a line per track with a file size (💾 X MB) —
-        // entries without a size aren't downloadable, so drop those. The
-        // MusicArmenian bot doesn't expose size at all (its results all
-        // come as inline-keyboard buttons), so let those through unfiltered.
-        const results = rawResults.filter(r =>
-            r.source === 'music-armenian' || (r.sizeMB && r.sizeMB > 0)
-        );
-
-        if (results.length === 0) {
-            const msg = rawResults.length > 0
+        if (out.results.length === 0) {
+            const msg = out.rawResults.length > 0
                 ? 'No results with a listed size'
                 : 'No results found';
             searchResultsContainer.innerHTML = `<div class="lyrics-placeholder">${msg}</div>`;
             return;
         }
-
-        // Render the result list for user to pick from
-        renderSearchResults(results, thisSearch);
-
-        // Background cleanup of prior search history. Fire-and-forget so
-        // it doesn't slow the visible response; failures are silent.
-        if (cleanupWatermark) {
-            tg.clearSearchTopicBefore(playlistGroupId, cleanupWatermark).catch(() => {});
-        }
+        renderSearchResults(out.results, thisSearch);
     } catch (e) {
         if (thisSearch.cancelled) return;
         console.error('Search failed:', e);
         searchResultsContainer.innerHTML = '<div class="lyrics-placeholder">Search failed</div>';
+    }
+}
+
+// Tracks the radio suggestion currently in its loading state so we can
+// clear it if the user taps a different suggestion before the first
+// search completes.
+let _radioLoadingEl = null;
+
+// Radio-suggestion auto-play. Runs the same search pipeline as the
+// overlay, but instead of showing the results to the user, picks the
+// first one and downloads/plays it directly. The overlay's contents are
+// populated as a side-effect so a manual search-button tap afterward
+// shows the same results.
+async function radioPickAndPlay(query, radioEl) {
+    if (_searchAbort) _searchAbort.cancelled = true;
+    const thisSearch = { cancelled: false };
+    _searchAbort = thisSearch;
+
+    if (_radioLoadingEl && _radioLoadingEl !== radioEl) {
+        _radioLoadingEl.classList.remove('loading');
+    }
+    _radioLoadingEl = radioEl;
+    radioEl.classList.add('loading');
+
+    // Prefill the overlay so manually opening it later shows this query
+    // and the resulting list (rather than a stale prior search).
+    searchQuery.value = query;
+    searchResultsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
+
+    const releaseLoading = () => {
+        if (_radioLoadingEl === radioEl) {
+            _radioLoadingEl = null;
+            radioEl.classList.remove('loading');
+        }
+    };
+
+    try {
+        const out = await _runSearchPipeline(query, thisSearch);
+        if (thisSearch.cancelled) { releaseLoading(); return; }
+        if (!out || out.results.length === 0) {
+            const msg = out && out.rawResults.length > 0
+                ? 'No downloadable results'
+                : 'No results found';
+            searchResultsContainer.innerHTML = `<div class="lyrics-placeholder">${msg}</div>`;
+            showToast(msg);
+            releaseLoading();
+            return;
+        }
+        renderSearchResults(out.results, thisSearch);
+        // First result is the auto-pick. downloadAndPlay handles startPlayback
+        // and (no-op) closeSearch; passing null for clickedEl skips the
+        // per-row spinner inside the (closed) overlay.
+        await downloadAndPlay(out.results[0], thisSearch, null);
+    } catch (e) {
+        console.error('Radio search-and-play failed:', e);
+        showToast('Search failed');
+    } finally {
+        releaseLoading();
     }
 }
 
