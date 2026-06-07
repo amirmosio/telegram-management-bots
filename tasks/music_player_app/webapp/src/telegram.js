@@ -2699,48 +2699,33 @@ export async function ensureBotInGroup(groupId) {
     }
 }
 
-// Snapshot the id of the topmost message currently in the Search/General
-// topic (id=1). Used as a watermark before a new search: anything with an
-// id ≤ this watermark is from before the search and is safe to delete
-// once the search has finished. Returns null if the topic is empty or
-// we couldn't read it.
-export async function captureSearchTopicWatermark(groupId) {
-    await _ensureConnected();
-    if (!client.connected) return null;
-    try {
-        const entity = await _getEntity(groupId);
-        for await (const msg of client.iterMessages(entity, { limit: 1, replyTo: 1 })) {
-            return msg.id;
-        }
-    } catch (_) { /* fall through */ }
-    return null;
-}
-
-// Wipe every message in the Search/General topic with id ≤ watermarkId,
-// except sync-state messages (those start with "🎵" and persist
-// per-account watch/now-playing state — deleting them breaks sync).
-// Paginates so playlists with hundreds of stale messages still drain.
-export async function clearSearchTopicBefore(groupId, watermarkId) {
-    if (!watermarkId) return;
+// Delete every message in the Search/General topic whose timestamp is
+// before today's local midnight, except sync-state messages (🎵-prefixed,
+// hold per-account watch/now-playing state). Today's messages — search
+// queries / bot replies / dl_ commands — are kept until the next day's
+// search runs the cleanup again. Paginates so playlists with hundreds
+// of stale messages still drain in one call.
+export async function clearSearchTopicOlderThanToday(groupId) {
     await _ensureConnected();
     if (!client.connected) return;
     let entity;
     try { entity = await _getEntity(groupId); } catch { return; }
 
+    // Local-midnight cutoff in Unix seconds (Telegram's msg.date format).
+    const now = new Date();
+    const cutoffSec = Math.floor(
+        new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000
+    );
+
     const toDelete = [];
     try {
-        for await (const msg of client.iterMessages(entity, {
-            limit: 500,
-            replyTo: 1,
-            offsetId: watermarkId + 1, // start strictly newer than the watermark, walking backwards
-        })) {
-            if (msg.id > watermarkId) continue;
+        for await (const msg of client.iterMessages(entity, { limit: 500, replyTo: 1 })) {
+            if (!msg.date || msg.date >= cutoffSec) continue;
             if (msg.message && msg.message.startsWith('🎵')) continue;
             toDelete.push(msg.id);
         }
     } catch (_) { return; }
     if (!toDelete.length) return;
-    // GramJS chunks deletes internally; one call is fine for typical sizes.
     try { await client.deleteMessages(entity, toDelete, { revoke: true }); } catch (_) {}
 }
 

@@ -680,6 +680,7 @@ let _radioTracks = [];
 function exitRadioMode() {
     _radioMode = false;
     _radioTracks = [];
+    _radioPlayState = null;  // also stop the player from advancing through radio
     btnRadio.classList.remove('active');
     btnRadio.title = 'Generate a radio from this playlist';
     document.body.classList.remove('radio-mode');
@@ -715,6 +716,10 @@ function renderRadioInto(container, tracks) {
         const t = tracks[i];
         const el = document.createElement('div');
         el.className = 'radio-item';
+        // Original index in _radioTracks (not affected by the search-box
+        // filter that re-renders a subset). Read back by _advanceRadio
+        // to locate the right row for the loading spinner.
+        el.dataset.radioIndex = String(i);
         el.innerHTML = `
             <div class="radio-rank">${i + 1}</div>
             <div class="radio-info">
@@ -731,7 +736,7 @@ function renderRadioInto(container, tracks) {
             ev.stopPropagation();
             const query = [t.title, t.artist].filter(Boolean).join(' ').trim();
             if (!query) return;
-            radioPickAndPlay(query, el);
+            radioPickAndPlay(query, el, i);
         });
         container.appendChild(el);
     }
@@ -1155,8 +1160,8 @@ searchQuery.addEventListener('keydown', (e) => {
 });
 $('btn-search-go').addEventListener('click', performSearch);
 
-// Runs the bot-side search (invite check + Search-topic rename + watermark
-// + searchMusic + result filtering + fire-and-forget topic cleanup) and
+// Runs the bot-side search (invite check + Search-topic rename +
+// searchMusic + result filtering + fire-and-forget topic cleanup) and
 // returns { results, rawResults }. Used by both the interactive search
 // overlay and the radio-suggestion auto-play path so the two flows stay
 // in sync (same filtering, same history-cleanup behavior).
@@ -1170,9 +1175,6 @@ async function _runSearchPipeline(query, abortRef) {
     await tg.renameGeneralToSearch(playlistGroupId);
     if (abortRef.cancelled) return null;
 
-    let cleanupWatermark = null;
-    try { cleanupWatermark = await tg.captureSearchTopicWatermark(playlistGroupId); } catch {}
-
     const rawResults = await tg.searchMusic(playlistGroupId, query);
     if (abortRef.cancelled) return null;
 
@@ -1184,9 +1186,9 @@ async function _runSearchPipeline(query, abortRef) {
         r.source === 'music-armenian' || (r.sizeMB && r.sizeMB > 0)
     );
 
-    if (cleanupWatermark) {
-        tg.clearSearchTopicBefore(playlistGroupId, cleanupWatermark).catch(() => {});
-    }
+    // Background cleanup: delete Search-topic messages older than today's
+    // local midnight. Today's messages stay until tomorrow's first search.
+    tg.clearSearchTopicOlderThanToday(playlistGroupId).catch(() => {});
     return { results, rawResults };
 }
 
@@ -1228,21 +1230,67 @@ async function performSearch() {
 // search completes.
 let _radioLoadingEl = null;
 
+// Tracks "radio playback" — the queue of suggestions the user is moving
+// through via the player's next/prev. Set after a successful auto-play
+// (from radioPickAndPlay or from advanceRadio). Cleared in exitRadioMode
+// and on playlist switches, so a regular playlist playback below it
+// returns next/prev to its normal behavior.
+let _radioPlayState = null; // { tracks: SuggestionRow[], index: number, active: true }
+
+// Move forward / backward through the radio suggestion list. Called from
+// the player's nextTrack / prevTrack when _radioPlayState.active. The
+// sidebar row's spinner UI is best-effort: we look it up via
+// data-radio-index but skip the loading state if the user has scrolled
+// past it or filtered it out via the search box.
+async function _advanceRadio(direction) {
+    if (!_radioPlayState || !_radioPlayState.active) return;
+    const next = _radioPlayState.index + direction;
+    if (next < 0) {
+        showToast('No previous suggestion');
+        return;
+    }
+    if (next >= _radioPlayState.tracks.length) {
+        showToast('End of radio');
+        return;
+    }
+    const target = _radioPlayState.tracks[next];
+    if (!target) return;
+    _radioPlayState.index = next;
+    const query = [target.title, target.artist].filter(Boolean).join(' ').trim();
+    if (!query) return;
+    let el = null;
+    if (playlistTracksContainer) {
+        const candidates = playlistTracksContainer.querySelectorAll('.radio-item');
+        for (const c of candidates) {
+            if (parseInt(c.dataset.radioIndex, 10) === next) { el = c; break; }
+        }
+    }
+    await radioPickAndPlay(query, el, next);
+}
+
 // Radio-suggestion auto-play. Runs the same search pipeline as the
 // overlay, but instead of showing the results to the user, picks the
 // first one and downloads/plays it directly. The overlay's contents are
 // populated as a side-effect so a manual search-button tap afterward
 // shows the same results.
-async function radioPickAndPlay(query, radioEl) {
+//
+// radioEl may be null when invoked from the player's next/prev path,
+// in which case the per-row spinner UI is skipped (the now-playing pane
+// is showing — the audio swapping to the new track is the user's
+// feedback). radioIndex updates _radioPlayState so subsequent next/prev
+// keep walking the suggestion list from the right position.
+async function radioPickAndPlay(query, radioEl, radioIndex = null) {
     if (_searchAbort) _searchAbort.cancelled = true;
     const thisSearch = { cancelled: false };
     _searchAbort = thisSearch;
 
-    if (_radioLoadingEl && _radioLoadingEl !== radioEl) {
-        _radioLoadingEl.classList.remove('is-searching');
+    if (radioEl) {
+        if (_radioLoadingEl && _radioLoadingEl !== radioEl) {
+            _radioLoadingEl.classList.remove('is-searching');
+        }
+        _radioLoadingEl = radioEl;
+        radioEl.classList.add('is-searching');
     }
-    _radioLoadingEl = radioEl;
-    radioEl.classList.add('is-searching');
 
     // Prefill the overlay so manually opening it later shows this query
     // and the resulting list (rather than a stale prior search).
@@ -1250,7 +1298,7 @@ async function radioPickAndPlay(query, radioEl) {
     searchResultsContainer.innerHTML = '<div class="lyrics-placeholder"><div class="loading"></div></div>';
 
     const releaseLoading = () => {
-        if (_radioLoadingEl === radioEl) {
+        if (radioEl && _radioLoadingEl === radioEl) {
             _radioLoadingEl = null;
             radioEl.classList.remove('is-searching');
         }
@@ -1273,6 +1321,16 @@ async function radioPickAndPlay(query, radioEl) {
         // and (no-op) closeSearch; passing null for clickedEl skips the
         // per-row spinner inside the (closed) overlay.
         await downloadAndPlay(out.results[0], thisSearch, null);
+
+        // Mark this as a radio-driven play so the player's next/prev
+        // walks the suggestion list (see nextTrack/prevTrack at top).
+        if (radioIndex != null && radioIndex >= 0 && _radioTracks.length > 0) {
+            _radioPlayState = {
+                tracks: _radioTracks.slice(),
+                index: radioIndex,
+                active: true,
+            };
+        }
     } catch (e) {
         console.error('Radio search-and-play failed:', e);
         showToast('Search failed');
@@ -2177,6 +2235,12 @@ function _resetShuffleState() {
 }
 
 async function nextTrack() {
+    // Radio playback hijacks next: walk the suggestion list and trigger
+    // the auto-search+play for the next entry instead of advancing
+    // within playerTracks (which only holds the one downloaded track).
+    if (_radioPlayState && _radioPlayState.active) {
+        return _advanceRadio(+1);
+    }
     if (playerTracks.length === 0) return;
 
     // Consume the pre-picked next index so playback uses the prefetched blob.
@@ -2273,6 +2337,13 @@ async function _prefetchNextTrack(gen) {
 }
 
 function prevTrack() {
+    // Radio playback: rewind through the suggestion list, mirroring next.
+    // Skip the "currentTime > 3 → seek to 0" shortcut here so prev is
+    // unambiguously "go to prior suggestion" when in radio mode.
+    if (_radioPlayState && _radioPlayState.active) {
+        _advanceRadio(-1);
+        return;
+    }
     if (playerTracks.length === 0) return;
     if (audio.currentTime > 3) { audio.currentTime = 0; return; }
     if (shuffleOn && shuffleHistory.length > 0) {
