@@ -370,22 +370,33 @@ body.radio-mode #playlist-tracks-toolbar {
    past the middle flex slot (it has white-space: nowrap). */
 body.radio-mode #storage-usage { display: none; }
 
-/* Replace the per-row magnifier with a spinner while a radio suggestion
-   is auto-searching + auto-playing. Pure CSS so the JS path doesn't have
-   to swap SVGs. */
-.radio-item.is-searching .radio-go { display: none; }
-.radio-item.is-searching::after {
+/* While a radio suggestion is auto-searching + auto-playing, replace its
+   rank number with a spinner. The leftmost cell is the most visible
+   place — far more legible than swapping the small right-side magnifier
+   — and the cell width is fixed (24px) so the row doesn't reflow. */
+.radio-item.is-searching {
+    pointer-events: none;
+    /* Keep title/artist at full strength — only the rank slot animates,
+       which is enough of a "working" signal without dimming the row. */
+}
+.radio-item.is-searching .radio-rank {
+    position: relative;
+    color: transparent;       /* hide the number, keep the slot's width */
+}
+.radio-item.is-searching .radio-rank::after {
     content: '';
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--text-tertiary);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border: 2px solid var(--border);
     border-top-color: var(--accent);
     border-radius: 50%;
     animation: radio-item-spin 0.8s linear infinite;
-    flex-shrink: 0;
 }
 @keyframes radio-item-spin { to { transform: rotate(360deg); } }
-.radio-item.is-searching { pointer-events: none; opacity: 0.85; }
 body.radio-mode #playlist-tracks-container::before {
     content: '📻 Tap a suggestion to search and play';
     display: block;
