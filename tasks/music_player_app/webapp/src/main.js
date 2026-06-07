@@ -538,6 +538,14 @@ async function updateStorageUsage() {
 }
 
 playlistTracksSearch.addEventListener('input', () => {
+    // In radio mode, the same input filters the local suggestion list
+    // instead of searching Telegram. Runs synchronously (local data) so
+    // no debounce timer is needed — feels instant while typing.
+    if (_radioMode) {
+        clearTimeout(browseSearchTimeout);
+        filterRadioSuggestions(playlistTracksSearch.value);
+        return;
+    }
     clearTimeout(browseSearchTimeout);
     browseSearchTimeout = setTimeout(async () => {
         const q = playlistTracksSearch.value.trim();
@@ -665,9 +673,13 @@ const btnRadio = $('btn-radio');
 let _radioInFlight = false;
 let _radioMode = false;
 let _radioSavedTitle = '';
+// Held while in radio mode so the search input can filter the
+// suggestions client-side (filterRadioSuggestions below).
+let _radioTracks = [];
 
 function exitRadioMode() {
     _radioMode = false;
+    _radioTracks = [];
     btnRadio.classList.remove('active');
     btnRadio.title = 'Generate a radio from this playlist';
     document.body.classList.remove('radio-mode');
@@ -675,6 +687,22 @@ function exitRadioMode() {
         panelTitle.textContent = _radioSavedTitle;
         _radioSavedTitle = '';
     }
+    // Reset the search input so reopening the playlist doesn't carry a
+    // stale filter into the next view.
+    if (playlistTracksSearch) playlistTracksSearch.value = '';
+}
+
+function filterRadioSuggestions(query) {
+    const q = (query || '').toLowerCase().trim();
+    if (!q) {
+        renderRadioInto(playlistTracksContainer, _radioTracks);
+        return;
+    }
+    const filtered = _radioTracks.filter((t) => {
+        const hay = `${t.title || ''} ${t.artist || ''}`.toLowerCase();
+        return hay.includes(q);
+    });
+    renderRadioInto(playlistTracksContainer, filtered);
 }
 
 function renderRadioInto(container, tracks) {
@@ -742,11 +770,13 @@ btnRadio.addEventListener('click', async () => {
         const cacheKey = `${currentPlaylistKind}:${playlistGroupId}:${currentPlaylistTopicId}`;
         const results = await generateRadio(playlistTracks, cacheKey);
         _radioMode = true;
+        _radioTracks = results;
         btnRadio.classList.add('active');
         btnRadio.title = 'Show playlist tracks';
         document.body.classList.add('radio-mode');
         _radioSavedTitle = panelTitle.textContent;
         panelTitle.textContent = `📻 Radio · ${_radioSavedTitle}`;
+        if (playlistTracksSearch) playlistTracksSearch.value = '';
         renderRadioInto(playlistTracksContainer, results);
     } catch (e) {
         playlistTracksContainer.innerHTML =
@@ -1151,6 +1181,13 @@ async function performSearch() {
         await tg.renameGeneralToSearch(playlistGroupId);
         if (thisSearch.cancelled) return;
 
+        // Snapshot the topmost message id in the Search topic BEFORE the
+        // search runs. We use it as a watermark to clear out prior search
+        // history once this search has settled — the Search topic should
+        // never accumulate stale queries / bot replies / dl_ commands.
+        let cleanupWatermark = null;
+        try { cleanupWatermark = await tg.captureSearchTopicWatermark(playlistGroupId); } catch {}
+
         // Search and get the parsed result list
         const rawResults = await tg.searchMusic(playlistGroupId, query);
         if (thisSearch.cancelled) return;
@@ -1173,6 +1210,12 @@ async function performSearch() {
 
         // Render the result list for user to pick from
         renderSearchResults(results, thisSearch);
+
+        // Background cleanup of prior search history. Fire-and-forget so
+        // it doesn't slow the visible response; failures are silent.
+        if (cleanupWatermark) {
+            tg.clearSearchTopicBefore(playlistGroupId, cleanupWatermark).catch(() => {});
+        }
     } catch (e) {
         if (thisSearch.cancelled) return;
         console.error('Search failed:', e);
@@ -1206,20 +1249,32 @@ function renderSearchResults(results, searchRef) {
             </div>
             <span class="track-duration">${item.bitrate ? item.bitrate + 'k' : ''}</span>`;
 
-        el.addEventListener('click', () => downloadAndPlay(item, searchRef));
+        el.addEventListener('click', () => downloadAndPlay(item, searchRef, el));
         searchResultsContainer.appendChild(el);
     }
 }
 
-async function downloadAndPlay(item, searchRef) {
-    // Show loading on the clicked item
-    const items = searchResultsContainer.querySelectorAll('.track-item');
-    items.forEach(el => el.classList.remove('active'));
-    const idx = [...items].findIndex(el => el.querySelector('.track-name')?.textContent === item.title);
-    if (idx >= 0) {
-        items[idx].classList.add('active');
-        items[idx].querySelector('.track-placeholder').innerHTML = '<div class="loading"></div>';
+// SVG path used in both the initial render and as the "restore" content
+// when downloading finishes. Kept inline (rather than a separate file) to
+// match the surrounding render code.
+const MUSIC_NOTE_PLACEHOLDER_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+
+async function downloadAndPlay(item, searchRef, clickedEl) {
+    // Loading-state UI on the clicked row. Previously we looked the
+    // element up by matching .track-name's textContent against item.title
+    // — but the name node contains an appended source badge whose text
+    // gets concatenated by textContent, so the match never succeeded and
+    // the spinner never appeared. Use the captured element directly.
+    searchResultsContainer.querySelectorAll('.track-item').forEach(el => el.classList.remove('active'));
+    const placeholder = clickedEl ? clickedEl.querySelector('.track-placeholder') : null;
+    if (clickedEl) {
+        clickedEl.classList.add('active');
+        if (placeholder) placeholder.innerHTML = '<div class="loading"></div>';
     }
+
+    const restorePlaceholder = () => {
+        if (placeholder) placeholder.innerHTML = MUSIC_NOTE_PLACEHOLDER_SVG;
+    };
 
     try {
         const track = await tg.downloadSearchResult(playlistGroupId, item);
@@ -1227,19 +1282,18 @@ async function downloadAndPlay(item, searchRef) {
 
         if (!track) {
             showToast('Download failed');
-            if (idx >= 0) items[idx].querySelector('.track-placeholder').innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+            restorePlaceholder();
             return;
         }
 
-        // Restore icon on the item
-        if (idx >= 0) items[idx].querySelector('.track-placeholder').innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55C7.79 13 6 14.79 6 17s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
-
+        restorePlaceholder();
         // Play the downloaded track (fromPlaylist=false so + button shows)
         startPlayback([track], playlistGroupId, 1, 0, false);
         closeSearch();
     } catch (e) {
         console.error('Download failed:', e);
         showToast('Download failed');
+        restorePlaceholder();
     }
 }
 
