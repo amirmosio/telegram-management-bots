@@ -794,23 +794,27 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         ctx.closePath();
     }
 
-    function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys, activeLeftKeys) {
+    function _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys, activeLeftKeys, pressedKeys) {
         const layout = _pianoKeyboardLayout.layout;
         const hasCorrect = correctKeys && correctKeys.size > 0;
         const hasLeft = activeLeftKeys && activeLeftKeys.size > 0;
+        const hasPressed = pressedKeys && pressedKeys.size > 0;
         // White keys first
         for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
             const k = layout.get(m);
             if (!k || !k.isWhite) continue;
+            const isPressed = hasPressed && pressedKeys.has(m);
             const isCorrect = hasCorrect && correctKeys.has(m);
             const isLeft = hasLeft && activeLeftKeys.has(m);
-            const isActive = isCorrect || isLeft || activeKeys.has(m);
-            ctx.fillStyle = isCorrect
-                ? '#7ef0a8'
-                : isLeft
-                    ? '#f0c098'              // warm orange for left-hand
-                    : (isActive ? '#7eb6f0'  // blue for right-hand / generic
-                                : '#f0eee5');
+            const isActive = isPressed || isCorrect || isLeft || activeKeys.has(m);
+            ctx.fillStyle = isPressed
+                ? '#e8505b'                  // red — key you're physically pressing
+                : isCorrect
+                    ? '#7ef0a8'
+                    : isLeft
+                        ? '#f0c098'              // warm orange for left-hand
+                        : (isActive ? '#7eb6f0'  // blue for right-hand / generic
+                                    : '#f0eee5');
             ctx.fillRect(k.x, kbTop, k.w, kbH);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
             ctx.fillRect(k.x + k.w - 0.5, kbTop, 0.5, kbH);
@@ -822,11 +826,15 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         for (let m = _PIANO_MIDI_LOW; m <= _PIANO_MIDI_HIGH; m++) {
             const k = layout.get(m);
             if (!k || k.isWhite) continue;
+            const isPressed = hasPressed && pressedKeys.has(m);
             const isCorrect = hasCorrect && correctKeys.has(m);
             const isLeft = hasLeft && activeLeftKeys.has(m);
-            const isActive = isCorrect || isLeft || activeKeys.has(m);
+            const isActive = isPressed || isCorrect || isLeft || activeKeys.has(m);
             const grad = ctx.createLinearGradient(0, kbTop, 0, kbTop + blackH);
-            if (isCorrect) {
+            if (isPressed) {
+                grad.addColorStop(0, '#f0555e');
+                grad.addColorStop(1, '#9a1f27');
+            } else if (isCorrect) {
                 grad.addColorStop(0, '#7ef0a8');
                 grad.addColorStop(1, '#2d8a52');
             } else if (isLeft) {
@@ -878,6 +886,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
 
         const activeKeys = new Set();
         const activeLeftKeys = new Set();
+        const pressedKeys = new Set();   // live MIDI keys the user is holding
 
         if (_pianoNotes && _pianoNotes.length) {
             const t = audio.currentTime;
@@ -969,6 +978,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         if (getMidiActiveNotes) {
             try {
                 const liveMidi = getMidiActiveNotes();
+                for (const p of liveMidi) pressedKeys.add(p);
                 if (_practiceMode) {
                     correctKeys = new Set();
                     // Drop stale "correct" marks for pitches the user has
@@ -987,7 +997,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             } catch (_) {}
         }
 
-        _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys, activeLeftKeys);
+        _pianoDrawKeyboard(ctx, w, kbTop, kbH, activeKeys, correctKeys, activeLeftKeys, pressedKeys);
 
         // Update HTML seek-bar fill + handle position from current playback.
         if (audio.duration > 0 && pianoSeekbarFill) {
@@ -1082,6 +1092,9 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     // runs off the right edge we set a new target one page over and the
     // per-frame lerp in _sheetTick slides there.
     let _sheetScrollTarget = null;
+    // True on the previous frame if any MIDI key was held — lets us repaint
+    // one more frame after release to clear the red press tint.
+    let _sheetHadPressed = false;
 
     // Grand staff geometry. Step 0 = E4 (treble bottom). Each step is
     // a half-line (5px). Treble lines = steps 0/2/4/6/8. Bass lines =
@@ -1179,6 +1192,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     // key is pressed correctly.
     const SHEET_TOHIT = '#1f7be0';                  // chord note still to play
     const SHEET_HIT = '#1fa84f';                     // chord note played correctly
+    const SHEET_PRESSED = '#e8505b';                 // note whose key you're pressing
 
     async function _renderSheet(notes) {
         if (!pianoSheetStaff) return;
@@ -1324,10 +1338,18 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             }
         }
 
-        // Practice highlights must repaint every frame: the per-note
-        // blue→green split changes as the user plays each key of the chord
-        // without the onset index moving, so only short-circuit otherwise.
-        if (idx === _sheetLastHighlightIdx && !practiceActive) return;
+        // Live MIDI keys the user is holding — their matching noteheads in
+        // the current onset glow red.
+        let pressed = null;
+        if (getMidiActiveNotes) { try { pressed = getMidiActiveNotes(); } catch (_) {} }
+        const hasPressed = !!(pressed && pressed.size);
+
+        // Repaint every frame when something dynamic is in play: the practice
+        // blue→green split, or the red press tint (incl. one extra frame after
+        // release to clear it). Otherwise short-circuit on an unchanged onset.
+        const dynamic = practiceActive || hasPressed || _sheetHadPressed;
+        if (idx === _sheetLastHighlightIdx && !dynamic) { _sheetHadPressed = hasPressed; return; }
+        _sheetHadPressed = hasPressed;
 
         // Reset the previously-highlighted onset back to its base colour.
         if (_sheetLastHighlightIdx >= 0 && _sheetLastHighlightIdx !== idx) {
@@ -1341,11 +1363,14 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         if (idx < 0) return;
         const cur = _sheetLayout.onsets[idx];
         for (const h of cur.noteheads) {
-            if (practiceActive) {
+            const pitch = Number(h.getAttribute('data-pitch'));
+            if (hasPressed && pressed.has(pitch)) {
+                // Highest priority: this is a key you're physically pressing.
+                h.setAttribute('fill', SHEET_PRESSED);
+            } else if (practiceActive) {
                 // A pitch leaves _practicePending the moment it's played; it
                 // also lands in _correctNotes while the key is held. Either
                 // way it counts as "hit" → green; the rest stay blue.
-                const pitch = Number(h.getAttribute('data-pitch'));
                 const hit = !_practicePending.has(pitch) || _correctNotes.has(pitch);
                 h.setAttribute('fill', hit ? SHEET_HIT : SHEET_TOHIT);
             } else {
