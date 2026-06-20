@@ -1100,6 +1100,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         return '#222';                              // right hand or auto → black
     }
     const SHEET_HIGHLIGHT = '#1f7be0';              // current note glow
+    const SHEET_NOW = '#1fb3e0';                    // passive "now playing" tint
+    // Practice-mode colours mirror the on-screen keyboard: the note(s) you
+    // still have to play glow blue, and each turns green the instant its
+    // key is pressed correctly.
+    const SHEET_TOHIT = '#1f7be0';                  // chord note still to play
+    const SHEET_HIT = '#1fa84f';                     // chord note played correctly
 
     async function _renderSheet(notes) {
         if (!pianoSheetStaff) return;
@@ -1187,6 +1193,9 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                     ry: SHEET_NOTE_RADIUS,
                     fill: color,
                     'data-base-color': color,
+                    // Pitch tag so the practice highlighter can colour each
+                    // notehead by whether its key has been played yet.
+                    'data-pitch': String(pitch),
                     transform: `rotate(-18 ${xCenter} ${y})`,
                 }, group);
                 noteheads.push(head);
@@ -1225,25 +1234,62 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             .map(n => _midiPitchToName(n.pitch));
         pianoSheetNow.textContent = playing.length ? playing.join(' · ') : '—';
         if (!_sheetLayout || !_sheetOnsets || _sheetOnsets.length === 0) return;
-        // Find the last onset whose t0 <= currentTime.
+
+        // When the practice game is waiting on a chord the song is paused,
+        // so pin the sheet highlight to that chord (rather than to the
+        // playback clock) and colour each notehead by whether its key has
+        // been played yet — the staff mirrors the keyboard's "hit this".
+        const practiceActive = _practiceMode && _practiceWaiting
+            && _practiceCursor < _practiceChords.length;
+
+        // Pick the onset to highlight: the pending chord while practising,
+        // otherwise the last onset whose start time has been reached.
         let idx = -1;
-        for (let i = 0; i < _sheetOnsets.length; i++) {
-            if (_sheetOnsets[i].t0 <= t + 0.05) idx = i;
-            else break;
+        if (practiceActive) {
+            const target = _practiceChords[_practiceCursor].t0;
+            let bestDelta = Infinity;
+            for (let i = 0; i < _sheetOnsets.length; i++) {
+                const d = Math.abs(_sheetOnsets[i].t0 - target);
+                if (d < bestDelta) { bestDelta = d; idx = i; }
+            }
+        } else {
+            for (let i = 0; i < _sheetOnsets.length; i++) {
+                if (_sheetOnsets[i].t0 <= t + 0.05) idx = i;
+                else break;
+            }
         }
-        if (idx === _sheetLastHighlightIdx) return;
-        // Reset previous highlight — restore each notehead's hand colour.
-        if (_sheetLastHighlightIdx >= 0) {
+
+        // Practice highlights must repaint every frame: the per-note
+        // blue→green split changes as the user plays each key of the chord
+        // without the onset index moving, so only short-circuit otherwise.
+        if (idx === _sheetLastHighlightIdx && !practiceActive) return;
+
+        // Reset the previously-highlighted onset back to its base colour.
+        if (_sheetLastHighlightIdx >= 0 && _sheetLastHighlightIdx !== idx) {
             const prev = _sheetLayout.onsets[_sheetLastHighlightIdx];
             if (prev) for (const h of prev.noteheads) {
                 h.setAttribute('fill', h.getAttribute('data-base-color') || '#222');
             }
         }
+        const onsetChanged = idx !== _sheetLastHighlightIdx;
         _sheetLastHighlightIdx = idx;
-        if (idx >= 0) {
-            const cur = _sheetLayout.onsets[idx];
-            // Highlight: bright pulse colour on top of the base hand tint.
-            for (const h of cur.noteheads) h.setAttribute('fill', '#1fb3e0');
+        if (idx < 0) return;
+        const cur = _sheetLayout.onsets[idx];
+        for (const h of cur.noteheads) {
+            if (practiceActive) {
+                // A pitch leaves _practicePending the moment it's played; it
+                // also lands in _correctNotes while the key is held. Either
+                // way it counts as "hit" → green; the rest stay blue.
+                const pitch = Number(h.getAttribute('data-pitch'));
+                const hit = !_practicePending.has(pitch) || _correctNotes.has(pitch);
+                h.setAttribute('fill', hit ? SHEET_HIT : SHEET_TOHIT);
+            } else {
+                h.setAttribute('fill', SHEET_NOW);
+            }
+        }
+        // Only re-scroll when the highlighted onset actually moves, so the
+        // staff doesn't jitter every frame while waiting on a chord.
+        if (onsetChanged) {
             const target = cur.xCenter - pianoSheetStaff.clientWidth / 2;
             pianoSheetStaff.scrollTo({ left: target, behavior: 'smooth' });
         }
