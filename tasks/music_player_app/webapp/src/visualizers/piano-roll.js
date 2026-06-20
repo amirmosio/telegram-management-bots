@@ -1098,6 +1098,11 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     // Serialised set of MIDI pitches reddened last frame; diffed to update the
     // press tint only when keys actually go down or up.
     let _sheetPressedKey = '';
+    // SVG layer (drawn on top) for transient red noteheads representing held
+    // keys that aren't part of the current beat — incl. pitches the score
+    // never plays. _sheetGhostKey diffs (pitches @ playhead) to avoid rebuilds.
+    let _sheetGhostLayer = null;
+    let _sheetGhostKey = '';
 
     // Grand staff geometry. Step 0 = E4 (treble bottom). Each step is
     // a half-line (5px). Treble lines = steps 0/2/4/6/8. Bass lines =
@@ -1169,6 +1174,25 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         const y1 = down ? _yForStaffStep(hi) : _yForStaffStep(lo);
         const y2 = down ? _yForStaffStep(lo - STEM) : _yForStaffStep(hi + STEM);
         _svg('line', { x1: x, y1, x2: x, y2, stroke: color, 'stroke-width': 1.5 }, parent);
+    }
+
+    // A transient red notehead (with ledger lines + sharp) for a held key
+    // shown at the playhead column — used for pitches not on the current beat.
+    function _drawGhostNote(parent, xCenter, pitch) {
+        const step = _pitchToStaffStep(pitch);
+        const y = _yForStaffStep(step);
+        if (_PITCH_CLASS_IS_SHARP[pitch % 12]) {
+            const acc = _svg('text', {
+                x: xCenter - SHEET_NOTE_RADIUS - 10, y: y + 4,
+                'font-family': 'serif', 'font-size': 16, fill: SHEET_PRESSED,
+            }, parent);
+            acc.textContent = '♯';
+        }
+        _drawLedgers(parent, xCenter, step, _staffFor(step));
+        _svg('ellipse', {
+            cx: xCenter, cy: y, rx: SHEET_NOTE_RADIUS + 1, ry: SHEET_NOTE_RADIUS,
+            fill: SHEET_PRESSED, transform: `rotate(-18 ${xCenter} ${y})`,
+        }, parent);
     }
 
     function _collectOnsets(notes, windowSec) {
@@ -1300,6 +1324,9 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             }
         }
         _sheetPressedKey = '';
+        // Ghost layer for held keys, on top of every onset group.
+        _sheetGhostLayer = _svg('g', { 'data-ghost-layer': '1' }, svg);
+        _sheetGhostKey = '';
         // Reset the page-turn animation for the freshly-rendered staff.
         _sheetScrollTarget = null;
         pianoSheetStaff.scrollLeft = 0;
@@ -1428,6 +1455,29 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                 if (arr) for (const { head } of arr) head.setAttribute('fill', SHEET_PRESSED);
             }
             _sheetPressedKey = key;
+        }
+
+        // === Ghost notes at the playhead =================================
+        // Every held key that isn't part of the current beat gets a red
+        // notehead drawn at the current column — so pitches the score never
+        // plays still show what you're pressing, at the current time. The
+        // ghosts follow the playhead while held and clear on release.
+        if (_sheetGhostLayer) {
+            const curHas = p => idx >= 0 && _sheetLayout.onsets[idx].noteheads
+                .some(h => Number(h.getAttribute('data-pitch')) === p);
+            const ghosts = [];
+            if (pressed) for (const p of pressed) if (!curHas(p)) ghosts.push(p);
+            const gkey = ghosts.join(',') + '@' + idx;
+            if (gkey !== _sheetGhostKey) {
+                _sheetGhostKey = gkey;
+                while (_sheetGhostLayer.firstChild) {
+                    _sheetGhostLayer.removeChild(_sheetGhostLayer.firstChild);
+                }
+                const gx = idx >= 0
+                    ? _sheetLayout.onsets[idx].xCenter
+                    : pianoSheetStaff.scrollLeft + SHEET_LEFT_PAD + SHEET_NOTE_GAP;
+                for (const p of ghosts) _drawGhostNote(_sheetGhostLayer, gx, p);
+            }
         }
     }
 
