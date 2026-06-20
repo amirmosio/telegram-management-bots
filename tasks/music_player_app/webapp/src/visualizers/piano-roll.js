@@ -1092,9 +1092,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     // runs off the right edge we set a new target one page over and the
     // per-frame lerp in _sheetTick slides there.
     let _sheetScrollTarget = null;
-    // True on the previous frame if any MIDI key was held — lets us repaint
-    // one more frame after release to clear the red press tint.
-    let _sheetHadPressed = false;
+    // pitch → [{ head, onsetIdx }] index, so a pressed key can redden every
+    // matching notehead on the staff in O(occurrences) instead of scanning.
+    let _sheetHeadsByPitch = null;
+    // Serialised set of MIDI pitches reddened last frame; diffed to update the
+    // press tint only when keys actually go down or up.
+    let _sheetPressedKey = '';
 
     // Grand staff geometry. Step 0 = E4 (treble bottom). Each step is
     // a half-line (5px). Treble lines = steps 0/2/4/6/8. Bass lines =
@@ -1286,6 +1289,17 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         _sheetSvg = svg;
         _sheetLayout = { onsets: onsetLayouts, width: totalWidth };
         _sheetLastHighlightIdx = -1;
+        // Build the pitch → noteheads index for the pressed-red layer.
+        _sheetHeadsByPitch = new Map();
+        for (let i = 0; i < onsetLayouts.length; i++) {
+            for (const h of onsetLayouts[i].noteheads) {
+                const p = Number(h.getAttribute('data-pitch'));
+                let arr = _sheetHeadsByPitch.get(p);
+                if (!arr) { arr = []; _sheetHeadsByPitch.set(p, arr); }
+                arr.push({ head: h, onsetIdx: i });
+            }
+        }
+        _sheetPressedKey = '';
         // Reset the page-turn animation for the freshly-rendered staff.
         _sheetScrollTarget = null;
         pianoSheetStaff.scrollLeft = 0;
@@ -1338,60 +1352,82 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             }
         }
 
-        // Live MIDI keys the user is holding — their matching noteheads in
-        // the current onset glow red.
+        // Live MIDI keys the user is holding right now.
         let pressed = null;
         if (getMidiActiveNotes) { try { pressed = getMidiActiveNotes(); } catch (_) {} }
-        const hasPressed = !!(pressed && pressed.size);
-
-        // Repaint every frame when something dynamic is in play: the practice
-        // blue→green split, or the red press tint (incl. one extra frame after
-        // release to clear it). Otherwise short-circuit on an unchanged onset.
-        const dynamic = practiceActive || hasPressed || _sheetHadPressed;
-        if (idx === _sheetLastHighlightIdx && !dynamic) { _sheetHadPressed = hasPressed; return; }
-        _sheetHadPressed = hasPressed;
-
-        // Reset the previously-highlighted onset back to its base colour.
-        if (_sheetLastHighlightIdx >= 0 && _sheetLastHighlightIdx !== idx) {
-            const prev = _sheetLayout.onsets[_sheetLastHighlightIdx];
-            if (prev) for (const h of prev.noteheads) {
-                h.setAttribute('fill', h.getAttribute('data-base-color') || '#222');
-            }
-        }
-        const onsetChanged = idx !== _sheetLastHighlightIdx;
-        _sheetLastHighlightIdx = idx;
-        if (idx < 0) return;
-        const cur = _sheetLayout.onsets[idx];
-        for (const h of cur.noteheads) {
-            const pitch = Number(h.getAttribute('data-pitch'));
-            if (hasPressed && pressed.has(pitch)) {
-                // Highest priority: this is a key you're physically pressing.
-                h.setAttribute('fill', SHEET_PRESSED);
-            } else if (practiceActive) {
-                // A pitch leaves _practicePending the moment it's played; it
-                // also lands in _correctNotes while the key is held. Either
-                // way it counts as "hit" → green; the rest stay blue.
+        const isPressed = p => !!(pressed && pressed.has(p));
+        const baseColor = h => h.getAttribute('data-base-color') || '#222';
+        // The colour a notehead should have ignoring any press, given whether
+        // it's part of the onset currently being followed.
+        const restColor = (pitch, onsetIdx) => {
+            if (onsetIdx !== idx) return null;            // not the current onset → base
+            if (practiceActive) {
                 const hit = !_practicePending.has(pitch) || _correctNotes.has(pitch);
-                h.setAttribute('fill', hit ? SHEET_HIT : SHEET_TOHIT);
-            } else {
-                h.setAttribute('fill', SHEET_NOW);
+                return hit ? SHEET_HIT : SHEET_TOHIT;
+            }
+            return SHEET_NOW;
+        };
+
+        // === Now-playing / practice layer (current onset only) ============
+        // On onset change: clear the old onset (unless a key for it is held)
+        // and page-turn if the new note ran off-screen.
+        if (idx !== _sheetLastHighlightIdx) {
+            if (_sheetLastHighlightIdx >= 0) {
+                const prev = _sheetLayout.onsets[_sheetLastHighlightIdx];
+                if (prev) for (const h of prev.noteheads) {
+                    if (!isPressed(Number(h.getAttribute('data-pitch')))) {
+                        h.setAttribute('fill', baseColor(h));
+                    }
+                }
+            }
+            if (idx >= 0) {
+                const cur0 = _sheetLayout.onsets[idx];
+                const clientW = pianoSheetStaff.clientWidth;
+                const viewLeft = _sheetScrollTarget != null
+                    ? _sheetScrollTarget : pianoSheetStaff.scrollLeft;
+                const offRight = cur0.xCenter > viewLeft + clientW - SHEET_NOTE_GAP;
+                const offLeft = cur0.xCenter < viewLeft + SHEET_LEFT_PAD;
+                if (offRight || offLeft) {
+                    _sheetScrollTarget = Math.max(0, cur0.xCenter - SHEET_LEFT_PAD - SHEET_NOTE_GAP);
+                }
+            }
+            _sheetLastHighlightIdx = idx;
+        }
+        // Recolour the current onset every frame (cheap — a few heads): the
+        // practice blue→green split and the red press tint both change here
+        // without the onset index moving. Red wins.
+        if (idx >= 0) {
+            for (const h of _sheetLayout.onsets[idx].noteheads) {
+                const pitch = Number(h.getAttribute('data-pitch'));
+                h.setAttribute('fill', isPressed(pitch) ? SHEET_PRESSED : restColor(pitch, idx));
             }
         }
-        // Page-turn, not continuous scroll. Leave the staff where it is
-        // while the highlighted note is still on-screen; only when it would
-        // run off the right edge (or sits behind the left edge after a seek)
-        // do we set a new page target so the note re-appears near the left.
-        if (onsetChanged) {
-            const clientW = pianoSheetStaff.clientWidth;
-            const viewLeft = _sheetScrollTarget != null
-                ? _sheetScrollTarget : pianoSheetStaff.scrollLeft;
-            const offRight = cur.xCenter > viewLeft + clientW - SHEET_NOTE_GAP;
-            const offLeft = cur.xCenter < viewLeft + SHEET_LEFT_PAD;
-            if (offRight || offLeft) {
-                // New page: park the current note one clef-width in from the
-                // left so there's room for ledger lines / accidentals.
-                _sheetScrollTarget = Math.max(0, cur.xCenter - SHEET_LEFT_PAD - SHEET_NOTE_GAP);
+
+        // === Pressed-red layer (whole sheet; only when the held set changes) =
+        // Pressing a key reddens every notehead of that pitch anywhere on the
+        // staff, so you see what you're playing even when it isn't the note
+        // you're "supposed" to be on. Diffed against last frame so this only
+        // touches heads when keys actually go down or up.
+        const key = (pressed && pressed.size)
+            ? [...pressed].sort((a, b) => a - b).join(',') : '';
+        if (key !== _sheetPressedKey && _sheetHeadsByPitch) {
+            const prevSet = _sheetPressedKey
+                ? new Set(_sheetPressedKey.split(',').map(Number)) : null;
+            // Released pitches → restore (current-onset colour or base).
+            if (prevSet) for (const p of prevSet) {
+                if (pressed && pressed.has(p)) continue;
+                const arr = _sheetHeadsByPitch.get(p);
+                if (arr) for (const { head, onsetIdx } of arr) {
+                    head.setAttribute('fill', restColor(p, onsetIdx) || baseColor(head));
+                }
             }
+            // Newly-pressed pitches → red everywhere.
+            if (pressed) for (const p of pressed) {
+                if (prevSet && prevSet.has(p)) continue;
+                const arr = _sheetHeadsByPitch.get(p);
+                if (arr) for (const { head } of arr) head.setAttribute('fill', SHEET_PRESSED);
+            }
+            _sheetPressedKey = key;
         }
     }
 
