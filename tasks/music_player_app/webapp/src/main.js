@@ -5728,7 +5728,10 @@ const pianoMode = installPiano({
     getPlayerTracks: () => playerTracks,
     getPlayerGroupId: () => playerGroupId,
     requestWakeLock: _requestWakeLock,
-    getMidiActiveNotes: () => midiKeyboard.getActiveNotes(),
+    // Physical key presses only — NOT synth voices fired by MIDI-file
+    // playback — so the red "you're pressing this" highlight never lights
+    // up the song's own notes.
+    getMidiActiveNotes: () => midiKeyboard.getPhysicalActiveNotes(),
     subscribeMidiNoteOn: midiKeyboard.subscribeNoteOn,
     midiKeyboard, // expose ensureLoaded / playNote / stopNote for MIDI-file source
 });

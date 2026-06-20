@@ -1213,7 +1213,9 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         return '#222';                              // right hand or auto → black
     }
     const SHEET_HIGHLIGHT = '#1f7be0';              // current note glow
-    const SHEET_NOW = '#1fb3e0';                    // passive "now playing" tint
+    // "Now playing" tint, by hand — same blue/orange language as the keyboard.
+    const SHEET_NOW_RIGHT = '#2f86e0';              // right-hand current note
+    const SHEET_NOW_LEFT = '#d4801f';               // left-hand current note
     // Practice-mode colours mirror the on-screen keyboard: the note(s) you
     // still have to play glow blue, and each turns green the instant its
     // key is pressed correctly.
@@ -1295,8 +1297,10 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                     fill: color,
                     'data-base-color': color,
                     // Pitch tag so the practice highlighter can colour each
-                    // notehead by whether its key has been played yet.
+                    // notehead by whether its key has been played yet; hand
+                    // tag so the "now playing" tint matches the keyboard.
                     'data-pitch': String(p.pitch),
+                    'data-hand': p.hand === 'left' ? 'left' : 'right',
                     transform: `rotate(-18 ${xCenter} ${p.y})`,
                 }, group);
                 noteheads.push(head);
@@ -1385,14 +1389,16 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         const isPressed = p => !!(pressed && pressed.has(p));
         const baseColor = h => h.getAttribute('data-base-color') || '#222';
         // The colour a notehead should have ignoring any press, given whether
-        // it's part of the onset currently being followed.
-        const restColor = (pitch, onsetIdx) => {
+        // it's part of the onset currently being followed. The "now playing"
+        // tint is hand-coloured (blue right / orange left) to match the keys.
+        const restColor = (head, onsetIdx) => {
             if (onsetIdx !== idx) return null;            // not the current onset → base
             if (practiceActive) {
+                const pitch = Number(head.getAttribute('data-pitch'));
                 const hit = !_practicePending.has(pitch) || _correctNotes.has(pitch);
                 return hit ? SHEET_HIT : SHEET_TOHIT;
             }
-            return SHEET_NOW;
+            return head.getAttribute('data-hand') === 'left' ? SHEET_NOW_LEFT : SHEET_NOW_RIGHT;
         };
 
         // === Now-playing / practice layer (current onset only) ============
@@ -1426,7 +1432,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         if (idx >= 0) {
             for (const h of _sheetLayout.onsets[idx].noteheads) {
                 const pitch = Number(h.getAttribute('data-pitch'));
-                h.setAttribute('fill', isPressed(pitch) ? SHEET_PRESSED : restColor(pitch, idx));
+                h.setAttribute('fill', isPressed(pitch) ? SHEET_PRESSED : restColor(h, idx));
             }
         }
 
@@ -1445,7 +1451,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                 if (pressed && pressed.has(p)) continue;
                 const arr = _sheetHeadsByPitch.get(p);
                 if (arr) for (const { head, onsetIdx } of arr) {
-                    head.setAttribute('fill', restColor(p, onsetIdx) || baseColor(head));
+                    head.setAttribute('fill', restColor(head, onsetIdx) || baseColor(head));
                 }
             }
             // Newly-pressed pitches → red everywhere.

@@ -88,6 +88,11 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     // Pending setTimeout handles for slider-driven delayed releases. Keyed
     // by pitch so a re-strike of the same key cancels its pending stop.
     const pendingReleaseTimers = new Map();
+    // Pitches the user is physically holding on the connected MIDI device.
+    // Distinct from activeStops, which ALSO contains synth voices fired by
+    // the MIDI-file playback scheduler (playNote). Only this set should drive
+    // the red "you're pressing this" highlight.
+    const physicalNotes = new Set();
 
     function isAvailable() {
         return typeof navigator !== 'undefined'
@@ -96,6 +101,7 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
     function isEnabled() { return enabled; }
     function getInstrumentId() { return instrumentId; }
     function getActiveNotes() { return new Set(activeStops.keys()); }
+    function getPhysicalActiveNotes() { return new Set(physicalNotes); }
     function getSustainHoldMs() { return sustainHoldMs; }
     function getVelocitySensitivity() { return velocitySensitivity; }
     function getVelocityMode() { return velocityMode; }
@@ -356,8 +362,10 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         const d2 = data[2] || 0;
 
         if (cmd === 0x90 && d2 > 0) {
+            physicalNotes.add(d1);   // real key down (pedal-independent)
             _noteOn(d1, d2);
         } else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) {
+            physicalNotes.delete(d1); // real key up, even if the pedal sustains
             _noteOff(d1);
         } else if (cmd === 0xb0 && d1 === 64) {
             // Sustain pedal. Convention: ≥64 = down, <64 = up.
@@ -472,6 +480,7 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         }
         activeStops.clear();
         sustainPending.clear();
+        physicalNotes.clear();
         if (notify && onActiveNotesChange) onActiveNotesChange();
     }
 
@@ -510,7 +519,7 @@ export function installMidiKeyboard({ onActiveNotesChange, onInstrumentLoading }
         setSustainHoldMs, setVelocitySensitivity, setReverbMix, setVelocityMode,
         subscribeNoteOn, playNote, stopNote, allNotesOff,
         isAvailable, isEnabled,
-        getActiveNotes, getInstrumentId,
+        getActiveNotes, getPhysicalActiveNotes, getInstrumentId,
         getSustainHoldMs, getVelocitySensitivity, getReverbMix, getVelocityMode,
     };
 }
