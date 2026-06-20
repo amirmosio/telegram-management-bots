@@ -3308,9 +3308,9 @@ body.coplay-follower #progress-bar {
     top: 56px;
     left: 12px;
     right: 12px;
-    /* Narrow strip — just enough for the treble staff + a bit of
-       padding for ledger lines. Waterfall stays visible below. */
-    height: 110px;
+    /* Strip tall enough for the full grand staff (treble + bass) plus a
+       little ledger-line padding. Waterfall stays visible below. */
+    height: 156px;
     display: none;
     flex-direction: column;
     background: rgba(255, 255, 255, 0.96);

@@ -570,15 +570,30 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             if (idx >= 0) _speedIdx = idx;
         }
     } catch (_) {}
-    function _applySpeed() {
-        const rate = SPEED_STEPS[_speedIdx];
+    // Push the current rate onto the shared <audio>. defaultPlaybackRate
+    // matters: the HTML spec resets playbackRate to defaultPlaybackRate on
+    // every resource load, so without it a track change snaps back to 1×
+    // (the "shows 0.5× but plays at 1×" bug).
+    function _applyRateToAudio(rate) {
         try { audio.preservesPitch = true; } catch (_) {}
         try { audio.mozPreservesPitch = true; } catch (_) {}
         try { audio.webkitPreservesPitch = true; } catch (_) {}
+        try { audio.defaultPlaybackRate = rate; } catch (_) {}
         audio.playbackRate = rate;
+    }
+    function _applySpeed() {
+        const rate = SPEED_STEPS[_speedIdx];
         if (pianoSpeedLabel) pianoSpeedLabel.textContent = (rate === 1 ? '1×' : (rate + '×'));
         pianoSpeedToggle?.classList.toggle('active', rate !== 1);
         try { localStorage.setItem('piano_playback_speed', String(rate)); } catch (_) {}
+        // Only drive the audio element while piano mode owns it — otherwise
+        // normal radio/listening would inherit the practice speed.
+        if (pianoOverlay?.classList.contains('open')) _applyRateToAudio(rate);
+    }
+    // Re-assert the practice speed (called on enter + on track load while
+    // open, since a fresh resource resets the rate).
+    function _reassertSpeed() {
+        if (pianoOverlay?.classList.contains('open')) _applyRateToAudio(SPEED_STEPS[_speedIdx]);
     }
     _applySpeed();
     pianoSpeedToggle?.addEventListener('click', () => {
@@ -998,6 +1013,10 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         // No requestFullscreen() — the overlay covers the webapp viewport
         // via position: fixed; inset: 0.
 
+        // Apply the persisted practice speed now that piano mode owns the
+        // audio element (the install-time _applySpeed only set the label).
+        _reassertSpeed();
+
         try { requestWakeLock(); } catch (_) {}
 
         if (_pianoRafId == null) _pianoRafId = requestAnimationFrame(_pianoTick);
@@ -1016,6 +1035,10 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         pianoOverlay.classList.remove('piano-view-sheet');
         pianoOverlay.setAttribute('aria-hidden', 'true');
         _deactivateMidiPlayback();
+        // Hand the audio element back to the normal player at 1× — the
+        // practice speed only applies inside piano mode.
+        try { audio.defaultPlaybackRate = 1.0; } catch (_) {}
+        if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
 
         if (_pianoRafId != null) { cancelAnimationFrame(_pianoRafId); _pianoRafId = null; }
         _detachPianoGestures();
@@ -1054,6 +1077,11 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     let _sheetLayout = null;     // { onsets:[{xCenter, step, accidental, ...}], width }
     let _sheetSvg = null;
     let _sheetLastHighlightIdx = -1;
+    // Target scrollLeft for the page-turn animation (null = settled). The
+    // staff stays put as notes highlight in place; when the current note
+    // runs off the right edge we set a new target one page over and the
+    // per-frame lerp in _sheetTick slides there.
+    let _sheetScrollTarget = null;
 
     // Grand staff geometry. Step 0 = E4 (treble bottom). Each step is
     // a half-line (5px). Treble lines = steps 0/2/4/6/8. Bass lines =
@@ -1065,6 +1093,8 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     const SHEET_NOTE_GAP = 36;
     const SHEET_NOTE_RADIUS = 5;
     const SHEET_TREBLE_BOTTOM_Y = 60;  // y of E4 (step 0)
+    const SHEET_STAFF_HEIGHT = 150;    // svg height — fits treble+bass+ledgers
+    const SHEET_STAFF_INK = '#3b4453'; // staff lines, clefs, ledgers, stems
 
     function _svg(tag, attrs = {}, parent = null) {
         const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -1080,6 +1110,45 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     // bass owns steps <= -2 (middle C down).
     function _staffFor(step) {
         return step >= -2 ? 'treble' : 'bass';
+    }
+
+    // Ledger lines for a note sitting outside its own staff's five lines.
+    // Treble owns 0..8 (ledgers above from step 10, plus middle-C at -2);
+    // bass owns -12..-4 (ledgers below from step -14). Notes in the gap
+    // between the staves hang off whichever staff _staffFor assigned them.
+    function _drawLedgers(parent, xCenter, step, staff) {
+        const x1 = xCenter - SHEET_NOTE_RADIUS - 3;
+        const x2 = xCenter + SHEET_NOTE_RADIUS + 3;
+        const line = s => _svg('line', {
+            x1, y1: _yForStaffStep(s), x2, y2: _yForStaffStep(s),
+            stroke: SHEET_STAFF_INK, 'stroke-width': 1.2,
+        }, parent);
+        if (staff === 'treble') {
+            if (step >= 10) for (let s = 10; s <= step; s += 2) line(s);
+            else if (step <= -2) for (let s = -2; s >= step; s -= 2) line(s);
+        } else if (step <= -14) {
+            for (let s = -14; s >= step; s -= 2) line(s);
+        }
+    }
+
+    // One stem for a set of noteheads on the same staff. Direction follows
+    // the staff's middle line (treble = B4 step 4, bass = D3 step -8):
+    // notes mostly above it stem down, below it stem up. Coloured by the
+    // dominant hand in the group so left-hand voices stay orange.
+    function _drawStem(parent, xCenter, placed, midStep) {
+        const steps = placed.map(p => p.step);
+        const lo = Math.min(...steps), hi = Math.max(...steps);
+        const down = (lo + hi) / 2 > midStep;
+        const counts = placed.reduce((a, p) => {
+            const h = p.hand || 'none'; a[h] = (a[h] || 0) + 1; return a;
+        }, {});
+        const hand = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+        const color = _handColor(hand === 'none' ? null : hand);
+        const STEM = 7; // half-steps ≈ 3.5 spaces, a standard stem length
+        const x = down ? xCenter - SHEET_NOTE_RADIUS - 0.5 : xCenter + SHEET_NOTE_RADIUS + 0.5;
+        const y1 = down ? _yForStaffStep(hi) : _yForStaffStep(lo);
+        const y2 = down ? _yForStaffStep(lo - STEM) : _yForStaffStep(hi + STEM);
+        _svg('line', { x1: x, y1, x2: x, y2, stroke: color, 'stroke-width': 1.5 }, parent);
     }
 
     function _collectOnsets(notes, windowSec) {
@@ -1115,115 +1184,93 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         _sheetOnsets = onsets;
 
         const totalWidth = Math.max(800, SHEET_LEFT_PAD + onsets.length * SHEET_NOTE_GAP + 60);
-        const totalHeight = 200;
+        const totalHeight = SHEET_STAFF_HEIGHT;
         const svg = _svg('svg', {
             width: totalWidth,
             height: totalHeight,
             viewBox: `0 0 ${totalWidth} ${totalHeight}`,
             xmlns: 'http://www.w3.org/2000/svg',
         });
-        // Five staff lines: F5 (top, step 8), D5 (6), B4 (4), G4 (2), E4 (0, bottom).
-        for (let step = 0; step <= 8; step += 2) {
-            const y = _yForStaffStep(step);
-            _svg('line', {
-                x1: 10, y1: y, x2: totalWidth - 10, y2: y,
-                stroke: '#222', 'stroke-width': 1.2,
-            }, svg);
-        }
-        // Treble-clef glyph (unicode). Position the centre on the G4 line (step 2).
-        const trebleY = _yForStaffStep(2) + 18;
-        const clef = _svg('text', {
-            x: 16, y: trebleY,
-            'font-family': 'serif',
-            'font-size': 64,
-            fill: '#222',
+        // Grand staff. Treble lines: F5/D5/B4/G4/E4 (steps 8..0). Bass
+        // lines: A3/F3/D3/B2/G2 (steps -4..-12). Low / left-hand notes now
+        // land on the bass clef instead of a tower of ledger lines.
+        const staffLine = (step) => _svg('line', {
+            x1: 10, y1: _yForStaffStep(step), x2: totalWidth - 10, y2: _yForStaffStep(step),
+            stroke: SHEET_STAFF_INK, 'stroke-width': 1.2,
         }, svg);
-        clef.textContent = '𝄞'; // 𝄞
+        for (let step = 0; step <= 8; step += 2) staffLine(step);
+        for (let step = -4; step >= -12; step -= 2) staffLine(step);
+        // Left barline tying the two staves into one system.
+        _svg('line', {
+            x1: 11, y1: _yForStaffStep(8), x2: 11, y2: _yForStaffStep(-12),
+            stroke: SHEET_STAFF_INK, 'stroke-width': 2.4,
+        }, svg);
+        // Clefs: treble centred on the G4 line (step 2), bass on F3 (step -6).
+        const trebleClef = _svg('text', {
+            x: 16, y: _yForStaffStep(2) + 19,
+            'font-family': 'serif', 'font-size': 58, fill: SHEET_STAFF_INK,
+        }, svg);
+        trebleClef.textContent = '𝄞';
+        const bassClef = _svg('text', {
+            x: 18, y: _yForStaffStep(-6) + 8,
+            'font-family': 'serif', 'font-size': 40, fill: SHEET_STAFF_INK,
+        }, svg);
+        bassClef.textContent = '𝄢';
 
         const onsetLayouts = [];
         for (let i = 0; i < onsets.length; i++) {
             const onset = onsets[i];
             const xCenter = SHEET_LEFT_PAD + i * SHEET_NOTE_GAP + SHEET_NOTE_GAP / 2;
-            // Render notehead(s) — every pitch in the onset becomes a small
-            // ellipse at its diatonic position. Sharp glyph (♯) to the
-            // left if needed. Ledger lines for steps outside [0, 8].
-            // Hand-aware colours when the note source supplies a `hand`
-            // field (i.e. MIDI uploads). Auto-transcribed notes have
-            // `hand: null` and stay in default black.
             const group = _svg('g', { 'data-onset-idx': String(i) }, svg);
             const noteheads = [];
-            for (const note of onset.notes) {
-                const pitch = note.pitch;
-                const step = _pitchToStaffStep(pitch);
-                const y = _yForStaffStep(step);
-                const pc = pitch % 12;
-                const color = _handColor(note.hand);
-                if (_PITCH_CLASS_IS_SHARP[pc]) {
+            // Resolve each pitch to a staff slot once; reused for noteheads,
+            // ledger lines and the per-staff stems below. Hand-aware colour
+            // when the source supplies `hand` (MIDI uploads); auto-transcribed
+            // notes carry hand: null and stay black.
+            const placed = onset.notes.map(note => {
+                const step = _pitchToStaffStep(note.pitch);
+                return {
+                    pitch: note.pitch, hand: note.hand || null,
+                    step, staff: _staffFor(step), y: _yForStaffStep(step),
+                };
+            });
+            for (const p of placed) {
+                const color = _handColor(p.hand);
+                if (_PITCH_CLASS_IS_SHARP[p.pitch % 12]) {
                     const acc = _svg('text', {
-                        x: xCenter - SHEET_NOTE_RADIUS - 10,
-                        y: y + 4,
-                        'font-family': 'serif',
-                        'font-size': 16,
-                        fill: color,
+                        x: xCenter - SHEET_NOTE_RADIUS - 10, y: p.y + 4,
+                        'font-family': 'serif', 'font-size': 16, fill: color,
                     }, group);
-                    acc.textContent = '♯'; // ♯
+                    acc.textContent = '♯';
                 }
-                if (step <= -2) {
-                    for (let s = -2; s >= step; s -= 2) {
-                        const ly = _yForStaffStep(s);
-                        _svg('line', {
-                            x1: xCenter - SHEET_NOTE_RADIUS - 3, y1: ly,
-                            x2: xCenter + SHEET_NOTE_RADIUS + 3, y2: ly,
-                            stroke: '#222', 'stroke-width': 1.2,
-                        }, group);
-                    }
-                } else if (step >= 10) {
-                    for (let s = 10; s <= step; s += 2) {
-                        const ly = _yForStaffStep(s);
-                        _svg('line', {
-                            x1: xCenter - SHEET_NOTE_RADIUS - 3, y1: ly,
-                            x2: xCenter + SHEET_NOTE_RADIUS + 3, y2: ly,
-                            stroke: '#222', 'stroke-width': 1.2,
-                        }, group);
-                    }
-                }
+                _drawLedgers(group, xCenter, p.step, p.staff);
                 const head = _svg('ellipse', {
-                    cx: xCenter, cy: y,
-                    rx: SHEET_NOTE_RADIUS + 1,
-                    ry: SHEET_NOTE_RADIUS,
+                    cx: xCenter, cy: p.y,
+                    rx: SHEET_NOTE_RADIUS + 1, ry: SHEET_NOTE_RADIUS,
                     fill: color,
                     'data-base-color': color,
                     // Pitch tag so the practice highlighter can colour each
                     // notehead by whether its key has been played yet.
-                    'data-pitch': String(pitch),
-                    transform: `rotate(-18 ${xCenter} ${y})`,
+                    'data-pitch': String(p.pitch),
+                    transform: `rotate(-18 ${xCenter} ${p.y})`,
                 }, group);
                 noteheads.push(head);
             }
-            // Stem on the lowest notehead going up. Use the dominant
-            // hand's colour (whichever has more pitches in this onset).
-            const pitches = onset.notes.map(n => n.pitch);
-            const lowestStep = Math.min(...pitches.map(p => _pitchToStaffStep(p)));
-            const highestStep = Math.max(...pitches.map(p => _pitchToStaffStep(p)));
-            const handCounts = onset.notes.reduce((acc, n) => {
-                acc[n.hand || 'none'] = (acc[n.hand || 'none'] || 0) + 1; return acc;
-            }, {});
-            const dominantHand = Object.entries(handCounts).sort((a, b) => b[1] - a[1])[0][0];
-            const stemColor = _handColor(dominantHand === 'none' ? null : dominantHand);
-            const stemDown = highestStep > 4;
-            const stemX = stemDown ? xCenter - SHEET_NOTE_RADIUS - 0.5 : xCenter + SHEET_NOTE_RADIUS + 0.5;
-            const stemTop = _yForStaffStep(stemDown ? lowestStep : (lowestStep + 7));
-            const stemBot = _yForStaffStep(stemDown ? (highestStep - 7) : highestStep);
-            _svg('line', {
-                x1: stemX, y1: stemTop, x2: stemX, y2: stemBot,
-                stroke: stemColor, 'stroke-width': 1.5,
-            }, group);
+            // One stem per staff — a both-hands onset no longer gets a single
+            // stem stretched across the empty gap between the two clefs.
+            const treble = placed.filter(p => p.staff === 'treble');
+            const bass = placed.filter(p => p.staff === 'bass');
+            if (treble.length) _drawStem(group, xCenter, treble, 4);
+            if (bass.length) _drawStem(group, xCenter, bass, -8);
             onsetLayouts.push({ xCenter, group, noteheads });
         }
         pianoSheetStaff.appendChild(svg);
         _sheetSvg = svg;
         _sheetLayout = { onsets: onsetLayouts, width: totalWidth };
         _sheetLastHighlightIdx = -1;
+        // Reset the page-turn animation for the freshly-rendered staff.
+        _sheetScrollTarget = null;
+        pianoSheetStaff.scrollLeft = 0;
     }
 
     function _sheetTick() {
@@ -1234,6 +1281,20 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
             .map(n => _midiPitchToName(n.pitch));
         pianoSheetNow.textContent = playing.length ? playing.join(' · ') : '—';
         if (!_sheetLayout || !_sheetOnsets || _sheetOnsets.length === 0) return;
+
+        // Page-turn animation. Runs every frame (before the unchanged-onset
+        // early-out) so the slide glides instead of jumping. Ease toward the
+        // target by a fixed fraction of the remaining distance per frame.
+        if (_sheetScrollTarget != null) {
+            const at = pianoSheetStaff.scrollLeft;
+            const dist = _sheetScrollTarget - at;
+            if (Math.abs(dist) <= 1) {
+                pianoSheetStaff.scrollLeft = _sheetScrollTarget;
+                _sheetScrollTarget = null;
+            } else {
+                pianoSheetStaff.scrollLeft = at + dist * 0.16;
+            }
+        }
 
         // When the practice game is waiting on a chord the song is paused,
         // so pin the sheet highlight to that chord (rather than to the
@@ -1287,11 +1348,21 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                 h.setAttribute('fill', SHEET_NOW);
             }
         }
-        // Only re-scroll when the highlighted onset actually moves, so the
-        // staff doesn't jitter every frame while waiting on a chord.
+        // Page-turn, not continuous scroll. Leave the staff where it is
+        // while the highlighted note is still on-screen; only when it would
+        // run off the right edge (or sits behind the left edge after a seek)
+        // do we set a new page target so the note re-appears near the left.
         if (onsetChanged) {
-            const target = cur.xCenter - pianoSheetStaff.clientWidth / 2;
-            pianoSheetStaff.scrollTo({ left: target, behavior: 'smooth' });
+            const clientW = pianoSheetStaff.clientWidth;
+            const viewLeft = _sheetScrollTarget != null
+                ? _sheetScrollTarget : pianoSheetStaff.scrollLeft;
+            const offRight = cur.xCenter > viewLeft + clientW - SHEET_NOTE_GAP;
+            const offLeft = cur.xCenter < viewLeft + SHEET_LEFT_PAD;
+            if (offRight || offLeft) {
+                // New page: park the current note one clef-width in from the
+                // left so there's room for ledger lines / accidentals.
+                _sheetScrollTarget = Math.max(0, cur.xCenter - SHEET_LEFT_PAD - SHEET_NOTE_GAP);
+            }
         }
     }
 
@@ -1354,7 +1425,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         _practicePausedByUs = false;
         _practicePending.clear();
         _correctNotes.clear();
-        if (pianoOverlay?.classList.contains('open')) _pianoAnalyzeCurrentTrack();
+        if (pianoOverlay?.classList.contains('open')) {
+            // A fresh resource resets playbackRate to defaultPlaybackRate;
+            // re-assert the practice speed so the new track keeps it.
+            _reassertSpeed();
+            _pianoAnalyzeCurrentTrack();
+        }
     });
 
     // Seek bar — its pointerdown/move/up handlers stop propagation so the
