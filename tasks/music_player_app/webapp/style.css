@@ -3308,9 +3308,9 @@ body.coplay-follower #progress-bar {
     top: 56px;
     left: 12px;
     right: 12px;
-    /* Strip tall enough for the full grand staff (treble + bass) plus a
-       little ledger-line padding. Waterfall stays visible below. */
-    height: 156px;
+    /* Strip tall enough for the full grand staff (treble + bass) plus
+       generous ledger-line headroom. Waterfall stays visible below. */
+    height: 200px;
     display: none;
     flex-direction: column;
     background: rgba(255, 255, 255, 0.96);
@@ -3331,7 +3331,9 @@ body.coplay-follower #progress-bar {
     flex: 1;
     overflow-x: auto;
     overflow-y: hidden;
-    padding: 0 6px;
+    /* Vertical padding gives the staff white breathing room; the SVG also
+       carries ~44px of internal margin so ledger notes never touch the edge. */
+    padding: 6px;
 }
 #piano-sheet-staff svg { display: block; }
 #piano-sheet-close {

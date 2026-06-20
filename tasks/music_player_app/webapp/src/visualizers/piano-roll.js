@@ -1092,8 +1092,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     const SHEET_LEFT_PAD = 60;
     const SHEET_NOTE_GAP = 36;
     const SHEET_NOTE_RADIUS = 5;
-    const SHEET_TREBLE_BOTTOM_Y = 60;  // y of E4 (step 0)
-    const SHEET_STAFF_HEIGHT = 150;    // svg height — fits treble+bass+ledgers
+    // E4 (step 0) sits at y=84. Treble top line (step 8) is then at y=44 and
+    // the bass bottom line (step -12) at y=144 — leaving ~44px of headroom
+    // above and below for ledger notes + stems so they don't clip against
+    // the SVG viewport (which hides anything outside its box).
+    const SHEET_TREBLE_BOTTOM_Y = 84;  // y of E4 (step 0)
+    const SHEET_STAFF_HEIGHT = 188;    // svg height — staff span + top/bottom margin
     const SHEET_STAFF_INK = '#3b4453'; // staff lines, clefs, ledgers, stems
 
     function _svg(tag, attrs = {}, parent = null) {
