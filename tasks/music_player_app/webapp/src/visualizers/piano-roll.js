@@ -31,6 +31,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     const pianoMidiFileInput = $('piano-midi-file');
     const pianoTabTranscribe = $('piano-tab-transcribe');
     const pianoTabUpload = $('piano-tab-upload');
+    const pianoTabShuffle = $('piano-tab-shuffle');
+    const pianoShuffleHandBtns = {
+        left: $('piano-shuffle-left'),
+        both: $('piano-shuffle-both'),
+        right: $('piano-shuffle-right'),
+    };
     const pianoSheetToggle = $('piano-sheet-toggle');
     const pianoSpeedToggle = $('piano-speed-toggle');
     const pianoSpeedLabel = $('piano-speed-label');
@@ -39,10 +45,17 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     const pianoSheetStaff = $('piano-sheet-staff');
     let _pianoSeeking = false;
     // Per-track source/view choices. Persisted via tg.updateTrackPianoNotes.
-    //  source: 'transcribed' | 'midi'
+    //  source: 'transcribed' | 'midi' | 'shuffle'
     //  view:   'piano'       | 'sheet'
+    // 'shuffle' is an ephemeral practice generator: random, musical single
+    // notes (one keystroke at a time) for a chosen hand, played by the synth
+    // just like 'midi'. It is never persisted — re-tapping reshuffles.
     let _pianoSource = 'transcribed';
     let _pianoView = 'piano';
+    let _shuffleHand = 'both';   // 'both' | 'left' | 'right'
+    // Both 'midi' and 'shuffle' are synth-driven: the track audio is muted
+    // and the scheduler fires the notes through the instrument.
+    const _isSynthSource = () => _pianoSource === 'midi' || _pianoSource === 'shuffle';
     // MIDI playback scheduling — tracks which note indices have been
     // started/stopped given the current audio.currentTime cursor.
     let _midiActiveNotes = new Set();   // indices of notes currently sounding
@@ -408,6 +421,71 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         _pianoSetLoading(null);
     }
 
+    // === Shuffle source ====================================================
+    // Generate a random-but-musical practice sequence: single notes (one
+    // keystroke at a time, never two pitches together) arpeggiating a
+    // I–V–vi–IV progression in a random key. For 'both' hands the active
+    // hand alternates per chord between a bass and a treble register; for a
+    // single hand every note stays in that hand's register. Played by the
+    // synth exactly like an uploaded MIDI, so the waterfall, sheet and
+    // practice game all work unchanged. Never persisted — re-running it (the
+    // Shuffle tab or a hand change) draws a fresh sequence.
+    const _SHUFFLE_MAJOR = [0, 2, 4, 5, 7, 9, 11];
+    const _SHUFFLE_PROG = [0, 4, 5, 3];                       // I V vi IV (scale degrees)
+    const _SHUFFLE_PATTERNS = [                               // arpeggio shapes per chord
+        [0, 2, 4, 7], [7, 4, 2, 0], [0, 2, 4, 2], [0, 4, 2, 4], [0, 2, 4, 9],
+    ];
+    const _shuffleRand = n => Math.floor(Math.random() * n);
+    function _buildShuffleNotes(hand) {
+        const STEP = 0.5;                                    // seconds between onsets (at 1x)
+        const dur = (audio && isFinite(audio.duration) && audio.duration > 0) ? audio.duration : 0;
+        const totalS = Math.max(30, Math.min(dur || 150, 600));
+        const root = _shuffleRand(12);                       // random key
+        const clamp = p => Math.max(36, Math.min(88, p));
+        // MIDI note for a scale-degree index relative to a base root note.
+        const noteFor = (base, deg) =>
+            base + 12 * Math.floor(deg / 7) + _SHUFFLE_MAJOR[((deg % 7) + 7) % 7];
+        const notes = [];
+        let t = 0, chordIdx = 0;
+        while (t < totalS) {
+            const cd = _SHUFFLE_PROG[chordIdx % _SHUFFLE_PROG.length];
+            let h, base;
+            if (hand === 'left') { h = 'left'; base = 43 + root; }
+            else if (hand === 'right') { h = 'right'; base = 60 + root; }
+            else { h = (chordIdx % 2 === 0) ? 'left' : 'right'; base = h === 'left' ? 43 + root : 60 + root; }
+            const pat = _SHUFFLE_PATTERNS[_shuffleRand(_SHUFFLE_PATTERNS.length)];
+            for (const off of pat) {
+                if (t >= totalS) break;
+                notes.push({
+                    t0: +t.toFixed(3), t1: +(t + STEP * 0.82).toFixed(3),
+                    pitch: clamp(noteFor(base, cd + off)), hand: h,
+                });
+                t += STEP;
+            }
+            chordIdx++;
+        }
+        return notes;
+    }
+
+    async function _activateShuffle() {
+        const trackId = getCurrentTrackId();
+        if (trackId == null) return;
+        const myToken = ++_pianoAnalysisToken;   // cancel any in-flight transcription
+        _pianoSource = 'shuffle';
+        _pianoSetWarning(false);
+        _pianoSetLoading('Loading instrument…');
+        try { await midiKeyboard?.ensureLoaded?.(); } catch (_) {}
+        if (myToken !== _pianoAnalysisToken) return;
+        const notes = _buildShuffleNotes(_shuffleHand);
+        _pianoInstallNotes(trackId, notes);       // ephemeral — not cached / persisted
+        _applySourceSideEffects();                // mutes audio + starts synth playback
+        try { audio.currentTime = 0; } catch (_) {}
+        _midiResync();
+        _practiceRefreshFromCurrentTime();
+        if (_pianoView === 'sheet') await _renderSheet(notes);
+        _pianoSetLoading(null);
+    }
+
     async function _pianoAnalyzeCurrentTrack() {
         const trackId = getCurrentTrackId();
         if (trackId == null) { _pianoSetLoading(null); return; }
@@ -473,7 +551,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     // back to 'transcribed' restores normal volume.
     function _applySourceSideEffects() {
         _setView(_pianoView);
-        if (_pianoSource === 'midi') _activateMidiPlayback();
+        if (_isSynthSource()) _activateMidiPlayback();
         else _deactivateMidiPlayback();
         _updateSourceTabs();
     }
@@ -509,7 +587,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         _midiSchedIdx = 0;
     }
     function _midiTick() {
-        if (_pianoSource !== 'midi' || !_pianoNotes || !midiKeyboard?.playNote) return;
+        if (!_isSynthSource() || !_pianoNotes || !midiKeyboard?.playNote) return;
         const t = audio.currentTime;
         // Start notes whose t0 has been reached.
         while (_midiSchedIdx < _pianoNotes.length && _pianoNotes[_midiSchedIdx].t0 <= t) {
@@ -533,7 +611,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     // After a seek, rebuild the scheduler cursor + drop any voices that
     // shouldn't be ringing at the new position.
     function _midiResync() {
-        if (_pianoSource !== 'midi' || !_pianoNotes) return;
+        if (!_isSynthSource() || !_pianoNotes) return;
         try { midiKeyboard?.allNotesOff?.(); } catch (_) {}
         _midiActiveNotes.clear();
         const t = audio.currentTime;
@@ -612,13 +690,31 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
     function _updateSourceTabs() {
         const transcribeActive = (_pianoSource === 'transcribed');
         const uploadActive = (_pianoSource === 'midi');
+        const shuffleActive = (_pianoSource === 'shuffle');
         const sheetActive = (_pianoView === 'sheet');
         pianoTabTranscribe?.classList.toggle('active', transcribeActive);
         pianoTabTranscribe?.setAttribute('aria-selected', String(transcribeActive));
         pianoTabUpload?.classList.toggle('active', uploadActive);
         pianoTabUpload?.setAttribute('aria-selected', String(uploadActive));
+        pianoTabShuffle?.classList.toggle('active', shuffleActive);
+        pianoTabShuffle?.setAttribute('aria-selected', String(shuffleActive));
         pianoSheetToggle?.classList.toggle('active', sheetActive);
         pianoSheetToggle?.setAttribute('aria-pressed', String(sheetActive));
+        // Reveal the hand picker only in shuffle mode.
+        pianoOverlay?.classList.toggle('piano-source-shuffle', shuffleActive);
+        for (const k of ['left', 'both', 'right']) {
+            pianoShuffleHandBtns[k]?.classList.toggle('active', _shuffleHand === k);
+            pianoShuffleHandBtns[k]?.setAttribute('aria-pressed', String(_shuffleHand === k));
+        }
+    }
+    pianoTabShuffle?.addEventListener('click', () => { _activateShuffle(); });
+    for (const k of ['left', 'both', 'right']) {
+        pianoShuffleHandBtns[k]?.addEventListener('click', () => {
+            _shuffleHand = k;
+            _updateSourceTabs();
+            // Changing hand while shuffling redraws a fresh sequence.
+            if (_pianoSource === 'shuffle') _activateShuffle();
+        });
     }
     pianoTabTranscribe?.addEventListener('click', async () => {
         if (_pianoSource === 'transcribed') return;
@@ -652,11 +748,12 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         const nextView = _pianoView === 'sheet' ? 'piano' : 'sheet';
         _setView(nextView);
         _updateSourceTabs();
-        // Persist the view choice alongside the source.
+        // Persist the view choice alongside the source. Shuffle is ephemeral
+        // — never write its random notes to IDB.
         try {
             const tid = getCurrentTrackId();
             const groupId = getPlayerGroupId();
-            if (tid != null && _pianoNotes) {
+            if (tid != null && _pianoNotes && _pianoSource !== 'shuffle') {
                 tg.updateTrackPianoNotes(groupId, tid, _pianoNotes, {
                     track: _pianoFindCurrentTrack(),
                     pianoNotesVersion: _pianoSource === 'midi' ? undefined : _PIANO_NOTES_VERSION,
@@ -667,7 +764,10 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
         } catch (_) {}
         if (nextView === 'sheet') {
             const tid = getCurrentTrackId();
-            let notes = _pianoCache.get(tid);
+            // Prefer the notes already installed (covers ephemeral shuffle
+            // notes that were never cached); otherwise fall back to cache,
+            // and only transcribe as a last resort.
+            let notes = (_pianoNotes && _pianoNotes.length) ? _pianoNotes : _pianoCache.get(tid);
             if (!notes || !notes.length) {
                 _pianoSource = 'transcribed';
                 const myToken = ++_pianoAnalysisToken;
@@ -906,7 +1006,7 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                 const k = layout.get(n.pitch);
                 if (!k) continue;
                 if (n.t0 <= t && t <= n.t1) {
-                    if (_pianoSource === 'midi' && n.hand === 'left') {
+                    if (_isSynthSource() && n.hand === 'left') {
                         activeLeftKeys.add(n.pitch);
                     } else {
                         activeKeys.add(n.pitch);
@@ -926,11 +1026,10 @@ export function installPiano({ audio, getCurrentTrackId, getPlayerTracks, getPla
                 const ww = Math.max(1, k.w - inset * 2);
 
                 const gr = ctx.createLinearGradient(0, drawTop, 0, drawBottom);
-                // Hand-aware coloring is ONLY honoured when the source
-                // is 'midi' — Auto-transcribed notes inherit no hand
-                // info, but to keep the renderer safe against stale
-                // cache leaks we gate explicitly.
-                const useHandColor = _pianoSource === 'midi' && n.hand === 'left';
+                // Hand-aware coloring is honoured for synth sources (midi /
+                // shuffle) which carry a `hand` field. Auto-transcribed notes
+                // inherit no hand info, so we gate explicitly.
+                const useHandColor = _isSynthSource() && n.hand === 'left';
                 if (useHandColor) {
                     if (k.isWhite) {
                         gr.addColorStop(0, '#f5c89e'); gr.addColorStop(1, '#955f3a');

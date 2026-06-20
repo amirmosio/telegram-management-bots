@@ -3297,6 +3297,35 @@ body.coplay-follower #progress-bar {
     color: #fff;
 }
 
+/* ── Shuffle hand picker (top-left, only in shuffle mode) ── */
+#piano-shuffle-controls {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    background: rgba(20,24,32,0.85);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 999px;
+    z-index: 12;
+}
+#piano-overlay.open.piano-source-shuffle:not(.piano-loading) #piano-shuffle-controls { display: inline-flex; }
+.piano-shuffle-hand {
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.piano-shuffle-hand:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.piano-shuffle-hand.active { background: var(--accent, #1f7be0); color: #fff; }
+
 /* ── Sheet-music view (top strip) ── */
 /* The sheet is a horizontal strip near the top of the overlay; the
    waterfall canvas underneath remains visible so the user can read the

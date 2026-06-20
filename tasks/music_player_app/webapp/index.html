@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=260">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=260">
-    <link rel="stylesheet" href="style.css?v=260">
+    <link rel="manifest" href="/manifest.json?v=261">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=261">
+    <link rel="stylesheet" href="style.css?v=261">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -611,6 +611,17 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 <span>MIDI</span>
             </button>
+            <button id="piano-tab-shuffle" type="button" class="piano-source-tab" role="tab" aria-selected="false" title="Random practice notes to play along">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+                <span>Shuffle</span>
+            </button>
+        </div>
+        <!-- Hand picker for Shuffle — only visible while the Shuffle source is
+             active (toggled via .piano-source-shuffle on the overlay). -->
+        <div id="piano-shuffle-controls" role="group" aria-label="Shuffle hand">
+            <button id="piano-shuffle-left" type="button" class="piano-shuffle-hand" aria-pressed="false">Left</button>
+            <button id="piano-shuffle-both" type="button" class="piano-shuffle-hand active" aria-pressed="true">Both</button>
+            <button id="piano-shuffle-right" type="button" class="piano-shuffle-hand" aria-pressed="false">Right</button>
         </div>
         <canvas id="piano-canvas"></canvas>
         <!-- Sheet-music view container — populated lazily on demand. -->
@@ -698,6 +709,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=260"></script>
+    <script src="app.bundle.js?v=261"></script>
 </body>
 </html>
