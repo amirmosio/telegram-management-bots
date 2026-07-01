@@ -11,7 +11,11 @@
 const APP_TOKEN = typeof __APP_TOKEN__ === 'string' ? __APP_TOKEN__ : '';
 
 const RADIO_TIMEOUT_MS = 60000; // upstream fans out N×2 YT calls; allow time
-const SEED_SAMPLE_SIZE = 30;    // server caps at 30 too — keep in sync
+// Keep this small: each seed is 2 upstream YouTube calls (search + radio),
+// run 4-at-a-time with a 10s per-call timeout. With ~30 seeds a throttled
+// burst stalls past the 60s abort and the whole request fails (empty list).
+// 8 seeds stays comfortably under the timeout and still merges 250+ picks.
+const SEED_SAMPLE_SIZE = 8;
 const CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
 // Versioned namespace so a future schema change can be invalidated by
 // bumping the prefix instead of asking users to clear storage.

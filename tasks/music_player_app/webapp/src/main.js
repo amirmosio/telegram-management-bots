@@ -2370,9 +2370,15 @@ function onTrackEnded() {
     // to its duration before we'll treat this as a real finish.
     const dur = audio.duration;
     const pos = audio.currentTime;
-    const realFinish = Number.isFinite(dur) && dur > 0 && pos >= dur - 1;
+    // A stream still downloading cannot have legitimately reached its true
+    // end — the <audio> element only has the bytes fetched so far, so its
+    // `duration` may reflect just the buffered portion. Firing `ended` here
+    // (common on freshly-streamed radio suggestions) previously passed the
+    // pos>=dur check and auto-skipped the track after only a few seconds.
+    const realFinish = !_streamDownloadActive
+        && Number.isFinite(dur) && dur > 0 && pos >= dur - 1;
     if (!realFinish) {
-        console.warn('[player] phantom ended (duration=' + dur + ', currentTime=' + pos + '); not auto-advancing');
+        console.warn('[player] phantom ended (duration=' + dur + ', currentTime=' + pos + ', streaming=' + _streamDownloadActive + '); not auto-advancing');
         btnPlay.classList.remove('loading-audio');
         _isLoadingAudio = false;
         iconPlay.style.display = 'block';
