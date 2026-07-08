@@ -9,9 +9,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music">
-    <link rel="manifest" href="/manifest.json?v=262">
-    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=262">
-    <link rel="stylesheet" href="style.css?v=262">
+    <link rel="manifest" href="/manifest.json?v=263">
+    <link rel="apple-touch-icon" href="/icons/icon-192.svg?v=263">
+    <link rel="stylesheet" href="style.css?v=263">
 </head>
 <body>
     <!-- LOGIN SCREEN -->
@@ -244,6 +244,15 @@
                     </svg>
                 </div>
                 <img id="artwork-img" style="display:none" alt="Album art">
+                <!-- Desktop "video mode": tapping the artwork swaps it for a
+                     YouTube music-video embed. The iframe is created/destroyed
+                     on the fly so closing it stops playback. -->
+                <div id="artwork-video">
+                    <button id="artwork-video-close" type="button" aria-label="Back to artwork" title="Back to artwork">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    </button>
+                    <div id="artwork-video-frame"></div>
+                </div>
                 <div id="artwork-overlay">
                     <div id="track-info">
                         <div id="track-title">No track loaded</div>
@@ -709,6 +718,6 @@
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
     </script>
-    <script src="app.bundle.js?v=262"></script>
+    <script src="app.bundle.js?v=263"></script>
 </body>
 </html>

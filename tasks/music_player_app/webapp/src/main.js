@@ -3241,8 +3241,61 @@ trackArtistEl.title = 'Tap to rename';
 // so the music video lands at or near the top. No API key needed — the
 // user picks the result. parseTrackInfo strips junk like "[MusicViral.in]"
 // or "official audio" suffixes that hurt the match.
-$('btn-youtube').addEventListener('click', () => {
+// === Desktop video mode ================================================
+// Tap the artwork (or the YouTube button) to swap it for an embedded
+// YouTube music-video result. We pause our own audio while the video
+// plays (so there aren't two soundtracks) and resume on close. Desktop
+// only (>700px); on mobile the YouTube button keeps opening a search tab.
+const _artworkEl = $('artwork');
+const _artworkVideoFrame = $('artwork-video-frame');
+let _videoModeWasPlaying = false;
+const _isDesktopVideo = () => window.innerWidth > 700;
+
+function _videoModeQuery() {
+    if (playerTracks.length === 0 || currentTrackIndex < 0) return '';
+    const track = playerTracks[currentTrackIndex];
+    const { title, artist } = parseTrackInfo(track.title || '', track.artist || '');
+    return [artist, title, 'official music video'].filter(Boolean).join(' ').trim();
+}
+
+function enterVideoMode() {
+    const query = _videoModeQuery();
+    if (!query || !_artworkEl || !_artworkVideoFrame) return;
+    // Pause our audio so the video's soundtrack isn't fighting the track.
+    _videoModeWasPlaying = !audio.paused;
+    if (_videoModeWasPlaying) audio.pause();
+    // No per-track videoId exists, so embed a search result. encodeURIComponent
+    // keeps the query safe inside the src.
+    const src = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1&rel=0`;
+    _artworkVideoFrame.innerHTML =
+        `<iframe src="${src}" title="Music video" frameborder="0" ` +
+        `allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+    _artworkEl.classList.add('artwork-video-on');
+}
+
+function exitVideoMode(resume = true) {
+    if (!_artworkEl || !_artworkEl.classList.contains('artwork-video-on')) return;
+    _artworkEl.classList.remove('artwork-video-on');
+    if (_artworkVideoFrame) _artworkVideoFrame.innerHTML = ''; // destroy iframe → stop playback
+    if (resume && _videoModeWasPlaying) audio.play().catch(() => {});
+    _videoModeWasPlaying = false;
+}
+
+_artworkEl?.addEventListener('click', (e) => {
+    if (!_isDesktopVideo()) return;
+    if (e.target.closest('button')) return;             // overlay/action buttons
+    if (_artworkEl.classList.contains('artwork-video-on')) return; // iframe/close own it
+    enterVideoMode();
+});
+$('artwork-video-close')?.addEventListener('click', (e) => { e.stopPropagation(); exitVideoMode(true); });
+// A new track (src swap) fires `emptied` — drop any open video without
+// resuming, since the track-load path handles playback itself.
+audio.addEventListener('emptied', () => exitVideoMode(false));
+
+$('btn-youtube').addEventListener('click', (e) => {
     if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+    // Desktop: open the in-place video instead of a new tab.
+    if (_isDesktopVideo()) { e.stopPropagation(); enterVideoMode(); return; }
     const track = playerTracks[currentTrackIndex];
     const { title, artist } = parseTrackInfo(track.title || '', track.artist || '');
     const query = [artist, title, 'official music video'].filter(Boolean).join(' ').trim();

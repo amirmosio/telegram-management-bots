@@ -1253,6 +1253,25 @@ body.radio-mode #playlist-tracks-container::before {
     position: absolute; inset: 0;
 }
 
+/* Desktop video mode — YouTube embed swapped in for the artwork. */
+#artwork-video { display: none; position: absolute; inset: 0; z-index: 3; background: #000; }
+#artwork.artwork-video-on #artwork-video { display: block; }
+#artwork.artwork-video-on #artwork-overlay,
+#artwork.artwork-video-on #artwork-icon { display: none; }
+#artwork-video-frame, #artwork-video-frame iframe {
+    width: 100%; height: 100%; border: 0; display: block;
+}
+#artwork-video-close {
+    position: absolute; top: 8px; right: 8px; z-index: 4;
+    width: 30px; height: 30px; border: none; border-radius: 50%;
+    background: rgba(0,0,0,0.55); color: #fff; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+}
+#artwork-video-close:hover { background: rgba(0,0,0,0.82); }
+/* Hint tappability on desktop, where tapping the art opens video mode. */
+@media (min-width: 701px) { #artwork { cursor: pointer; } }
+
 #artwork-overlay {
     position: absolute; bottom: 0; left: 0; right: 0;
     padding: 20px 16px 12px;
