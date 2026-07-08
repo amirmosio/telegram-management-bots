@@ -314,6 +314,47 @@ function readJsonBody(req, maxBytes) {
     });
 }
 
+// Regular-YouTube (not Music) video search → first videoId. YouTube Music
+// only returns "- Topic" audio uploads (a static image), which isn't a real
+// video; searching www.youtube.com filtered to Videos (sp=EgIQAQ%3D%3D)
+// gives an actual music video / live performance. Scrapes the first videoId
+// out of the results HTML. Resolves null on any failure. SSRF-guarded via
+// safeLookup and capped at 3 MB.
+function _firstVideoId(html) {
+    const m = html.match(/"videoId":"([0-9A-Za-z_-]{11})"/);
+    return m ? m[1] : null;
+}
+function searchYouTubeVideoId(query) {
+    const path = '/results?search_query=' + encodeURIComponent(query) + '&sp=EgIQAQ%3D%3D';
+    return new Promise((resolve) => {
+        let done = false;
+        const finish = (v) => { if (!done) { done = true; resolve(v); } };
+        const req = https.request({
+            method: 'GET', host: 'www.youtube.com', path,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+            timeout: 10000,
+            lookup: safeLookup,
+        }, (res) => {
+            let data = '';
+            res.setEncoding('utf8');
+            res.on('data', (c) => {
+                data += c;
+                const id = _firstVideoId(data);
+                if (id) { req.destroy(); finish(id); return; }   // got the top result; stop early
+                if (data.length > 3 * 1024 * 1024) { req.destroy(); finish(null); }
+            });
+            res.on('end', () => finish(_firstVideoId(data)));
+            res.on('error', () => finish(null));
+        });
+        req.on('timeout', () => { req.destroy(); finish(null); });
+        req.on('error', () => finish(null));
+        req.end();
+    });
+}
+
 async function handleYtmRadio(req, res) {
     const ip = clientIp(req);
     if (!rateLimit(ip)) {
@@ -360,7 +401,8 @@ async function handleYtmRadio(req, res) {
         try {
             const s = cleanSeeds[0];
             const q = [s.title, s.artist].filter(Boolean).join(' ').trim();
-            const videoId = q ? await ytm.searchSongVideoId(q, safeLookup) : null;
+            // Regular YouTube (video), not Music (audio-only "- Topic").
+            const videoId = q ? await searchYouTubeVideoId(q) : null;
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ videoId: videoId || null }));
         } catch (err) {

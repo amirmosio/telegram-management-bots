@@ -67,11 +67,9 @@ function sampleRandom(arr, k) {
     return copy.slice(0, k);
 }
 
-// Resolve the single best-matching YouTube videoId for a song (title +
-// artist), via the /ytm-radio endpoint's `resolve` mode. Used by desktop
-// "video mode" to embed the actual track — not a radio suggestion. Returns
-// the videoId string, or null on any failure/timeout.
-export async function resolveVideoId(title, artist) {
+// One resolve round-trip: ask the /ytm-radio endpoint's `resolve` mode for
+// the best-matching videoId for a {title, artist} seed. null on any failure.
+async function _resolveOnce(seed) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
@@ -81,7 +79,7 @@ export async function resolveVideoId(title, artist) {
                 'Content-Type': 'application/json',
                 ...(APP_TOKEN ? { 'X-App-Token': APP_TOKEN } : {}),
             },
-            body: JSON.stringify({ resolve: true, seeds: [{ title: title || '', artist: artist || '' }] }),
+            body: JSON.stringify({ resolve: true, seeds: [seed] }),
             signal: controller.signal,
         });
         if (!resp.ok) return null;
@@ -92,6 +90,23 @@ export async function resolveVideoId(title, artist) {
     } finally {
         clearTimeout(timer);
     }
+}
+
+// Resolve the YouTube videoId to embed for a song. First bias the search
+// toward the actual music video ("<title> music video"); if that finds
+// nothing, fall back to the plain title+artist search. Used by desktop
+// "video mode". Returns the videoId string, or null.
+export async function resolveVideoId(title, artist) {
+    const t = (title || '').trim();
+    const a = (artist || '').trim();
+    const attempts = [];
+    if (t) attempts.push({ title: `${t} music video`, artist: a });
+    attempts.push({ title: t, artist: a });
+    for (const seed of attempts) {
+        const id = await _resolveOnce(seed);
+        if (id) return id;
+    }
+    return null;
 }
 
 export async function generateRadio(tracks, cacheKey = null) {
