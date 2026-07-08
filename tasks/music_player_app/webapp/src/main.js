@@ -12,7 +12,7 @@ import { installHypnotise } from './visualizers/hypnotise.js';
 import { installButterchurn } from './visualizers/butterchurn.js';
 import { installPiano } from './visualizers/piano-roll.js';
 import { installMidiKeyboard } from './midi-keyboard.js';
-import { generateRadio } from './radio.js';
+import { generateRadio, resolveVideoId } from './radio.js';
 
 // ══════════════════════════════════════
 //  STATE
@@ -3249,32 +3249,39 @@ trackArtistEl.title = 'Tap to rename';
 const _artworkEl = $('artwork');
 const _artworkVideoFrame = $('artwork-video-frame');
 let _videoModeWasPlaying = false;
+let _videoModeGen = 0;  // guards against races (close / track change mid-resolve)
 const _isDesktopVideo = () => window.innerWidth > 700;
 
-function _videoModeQuery() {
-    if (playerTracks.length === 0 || currentTrackIndex < 0) return '';
+async function enterVideoMode() {
+    if (playerTracks.length === 0 || currentTrackIndex < 0) return;
+    if (!_artworkEl || !_artworkVideoFrame) return;
     const track = playerTracks[currentTrackIndex];
     const { title, artist } = parseTrackInfo(track.title || '', track.artist || '');
-    return [artist, title, 'official music video'].filter(Boolean).join(' ').trim();
-}
-
-function enterVideoMode() {
-    const query = _videoModeQuery();
-    if (!query || !_artworkEl || !_artworkVideoFrame) return;
+    if (!title && !artist) return;
+    const gen = ++_videoModeGen;
     // Pause our audio so the video's soundtrack isn't fighting the track.
     _videoModeWasPlaying = !audio.paused;
     if (_videoModeWasPlaying) audio.pause();
-    // No per-track videoId exists, so embed a search result. encodeURIComponent
-    // keeps the query safe inside the src.
-    const src = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(query)}&autoplay=1&rel=0`;
+    _artworkVideoFrame.innerHTML = '<div class="artwork-video-msg"><div class="loading"></div></div>';
+    _artworkEl.classList.add('artwork-video-on');
+    // Resolve the actual song's videoId server-side (search match), then
+    // embed it directly — reliable, unlike the deprecated search embed.
+    let videoId = null;
+    try { videoId = await resolveVideoId(title, artist); } catch (_) {}
+    if (gen !== _videoModeGen) return;  // user closed or track changed meanwhile
+    if (!videoId) {
+        _artworkVideoFrame.innerHTML = '<div class="artwork-video-msg">Couldn’t find a video</div>';
+        return;
+    }
+    const src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&rel=0`;
     _artworkVideoFrame.innerHTML =
         `<iframe src="${src}" title="Music video" frameborder="0" ` +
         `allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
-    _artworkEl.classList.add('artwork-video-on');
 }
 
 function exitVideoMode(resume = true) {
     if (!_artworkEl || !_artworkEl.classList.contains('artwork-video-on')) return;
+    _videoModeGen++;  // invalidate any in-flight resolve
     _artworkEl.classList.remove('artwork-video-on');
     if (_artworkVideoFrame) _artworkVideoFrame.innerHTML = ''; // destroy iframe → stop playback
     if (resume && _videoModeWasPlaying) audio.play().catch(() => {});

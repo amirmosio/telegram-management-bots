@@ -352,6 +352,24 @@ async function handleYtmRadio(req, res) {
         return;
     }
 
+    // Resolve mode: return the single best-matching videoId for the first
+    // seed (used by the webapp's desktop "video mode" to embed the actual
+    // song, NOT a radio suggestion — buildRadio intentionally drops the seed
+    // itself). One upstream search call; cheap.
+    if (body.resolve) {
+        try {
+            const s = cleanSeeds[0];
+            const q = [s.title, s.artist].filter(Boolean).join(' ').trim();
+            const videoId = q ? await ytm.searchSongVideoId(q, safeLookup) : null;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ videoId: videoId || null }));
+        } catch (err) {
+            console.warn(`[proxy] ytm-search failed ip=${ip} err=${err.message}`);
+            res.writeHead(502); res.end('Upstream error');
+        }
+        return;
+    }
+
     try {
         const tracks = await ytm.buildRadio({
             seeds: cleanSeeds,

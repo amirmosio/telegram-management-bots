@@ -67,6 +67,33 @@ function sampleRandom(arr, k) {
     return copy.slice(0, k);
 }
 
+// Resolve the single best-matching YouTube videoId for a song (title +
+// artist), via the /ytm-radio endpoint's `resolve` mode. Used by desktop
+// "video mode" to embed the actual track — not a radio suggestion. Returns
+// the videoId string, or null on any failure/timeout.
+export async function resolveVideoId(title, artist) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+        const resp = await fetch(`${window.location.origin}/ytm-radio`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(APP_TOKEN ? { 'X-App-Token': APP_TOKEN } : {}),
+            },
+            body: JSON.stringify({ resolve: true, seeds: [{ title: title || '', artist: artist || '' }] }),
+            signal: controller.signal,
+        });
+        if (!resp.ok) return null;
+        const data = await resp.json();
+        return data && typeof data.videoId === 'string' && data.videoId ? data.videoId : null;
+    } catch {
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 export async function generateRadio(tracks, cacheKey = null) {
     const usable = (tracks || []).filter((t) => t && (t.title || t.artist));
     if (usable.length === 0) return [];
